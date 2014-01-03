@@ -29,6 +29,10 @@
 #include <linux/module.h>
 #include <linux/magic.h>
 #include <linux/xattr.h>
+#include <linux/root_dev.h>
+#include <linux/syscalls.h>
+#include <linux/mtd/mtd.h>
+#include <linux/init_syscalls.h>
 
 #include "squashfs_fs.h"
 #include "squashfs_fs_sb.h"
@@ -480,8 +484,44 @@ failed_mount:
 	return err;
 }
 
+/* copy from init/do_mounts.h */
+static inline int create_dev(char *name, dev_t dev)
+{
+	init_unlink(name);
+	return init_mknod(name, S_IFBLK|0600, new_encode_dev(dev));
+}
+
+static void squashfs_mount(struct fs_context *fc)
+{
+	if (!strncmp(fc->source, "mtd:", 4) || !strncmp(fc->source, "ubi:", 4)) {
+		struct mtd_info *mtd = get_mtd_device_nm("ubi_rootfs");
+
+		if (!IS_ERR(mtd)) {
+			void *bdev;
+			char *dev;
+			dev = kmalloc(32, GFP_KERNEL);
+
+			scnprintf(dev, 32, "/dev/mtdblock%d", mtd->index);
+			bdev = blkdev_get_by_path(dev, FMODE_READ, fc->fs_type, NULL);
+
+			if (!IS_ERR(bdev)) {
+				kfree(fc->source);
+				fc->source = dev;
+			} else if (PTR_ERR(bdev) == -ENOENT) {
+				create_dev(dev,
+					MKDEV(MTD_BLOCK_MAJOR, mtd->index));
+				kfree(fc->source);
+				fc->source = dev;
+			} else
+				kfree(dev);
+		}
+	}
+
+}
+
 static int squashfs_get_tree(struct fs_context *fc)
 {
+	squashfs_mount(fc);
 	return get_tree_bdev(fc, squashfs_fill_super);
 }
 
