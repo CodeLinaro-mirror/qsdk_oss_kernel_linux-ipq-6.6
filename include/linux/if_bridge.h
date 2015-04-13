@@ -66,11 +66,13 @@ struct br_ip_list {
 #define BR_DEFAULT_AGEING_TIME	(300 * HZ)
 
 struct net_bridge;
+struct net_bridge_port;
 void brioctl_set(int (*hook)(struct net *net, struct net_bridge *br,
 			     unsigned int cmd, struct ifreq *ifr,
 			     void __user *uarg));
 int br_ioctl_call(struct net *net, struct net_bridge *br, unsigned int cmd,
 		  struct ifreq *ifr, void __user *uarg);
+
 extern struct net_device *br_port_dev_get(struct net_device *dev,
 					  unsigned char *addr,
 					  struct sk_buff *skb);
@@ -230,4 +232,8 @@ extern br_port_dev_get_hook_t __rcu *br_port_dev_get_hook;
 
 typedef void (br_notify_hook_t)(int group, int event, const void *ptr);
 extern br_notify_hook_t __rcu *br_notify_hook;
+typedef int (br_multicast_handle_hook_t)(const struct net_bridge_port *src,
+		struct sk_buff *skb);
+extern br_multicast_handle_hook_t __rcu *br_multicast_handle_hook;
+
 #endif
