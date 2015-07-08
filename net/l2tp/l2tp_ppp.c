@@ -243,6 +243,7 @@ static void pppol2tp_recv(struct l2tp_session *session, struct sk_buff *skb, int
 		struct pppox_sock *po;
 
 		po = pppox_sk(sk);
+		skb->skb_iif = ppp_dev_index(&po->chan);
 		ppp_input(&po->chan, skb);
 	} else {
 		if (sock_queue_rcv_skb(sk, skb) < 0) {
@@ -402,6 +403,9 @@ static int pppol2tp_xmit(struct ppp_channel *chan, struct sk_buff *skb)
 	__skb_push(skb, 2);
 	skb->data[0] = PPP_ALLSTATIONS;
 	skb->data[1] = PPP_UI;
+	/* set incoming interface as the ppp interface */
+	if (skb->skb_iif)
+		skb->skb_iif = ppp_dev_index(chan);
 
 	local_bh_disable();
 	l2tp_xmit_skb(session, skb);
