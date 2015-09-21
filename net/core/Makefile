@@ -41,4 +41,4 @@ obj-$(CONFIG_BPF_SYSCALL) += sock_map.o
 obj-$(CONFIG_BPF_SYSCALL) += bpf_sk_storage.o
 obj-$(CONFIG_OF)	+= of_net.o
 obj-$(CONFIG_SKB_RECYCLER) += skbuff_recycle.o
-obj-$(CONFIG_DEBUG_OBJECTS_SKBUFF) += skbuff_notifier.o
+obj-$(CONFIG_DEBUG_OBJECTS_SKBUFF) += skbuff_debug.o skbuff_notifier.o
