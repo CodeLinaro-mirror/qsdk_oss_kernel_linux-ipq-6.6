@@ -1070,6 +1070,10 @@ struct sk_buff {
 	/* only useable after checking ->active_extensions != 0 */
 	struct skb_ext		*extensions;
 #endif
+
+#ifdef CONFIG_DEBUG_OBJECTS_SKBUFF
+	void			*free_addr;
+#endif
 };
 
 /* if you move pkt_type around you also must adapt those constants */
