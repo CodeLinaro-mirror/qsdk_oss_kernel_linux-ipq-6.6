@@ -207,6 +207,9 @@ void rt6_multipath_rebalance(struct fib6_info *f6i);
 void rt6_uncached_list_add(struct rt6_info *rt);
 void rt6_uncached_list_del(struct rt6_info *rt);
 
+int rt6_register_notifier(struct notifier_block *nb);
+int rt6_unregister_notifier(struct notifier_block *nb);
+
 static inline const struct rt6_info *skb_rt6_info(const struct sk_buff *skb)
 {
 	const struct dst_entry *dst = skb_dst(skb);
