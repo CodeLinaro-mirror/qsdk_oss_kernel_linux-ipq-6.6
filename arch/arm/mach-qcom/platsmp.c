@@ -42,6 +42,12 @@
 #define APCS_SAW2_VCTL		0x14
 #define APCS_SAW2_2_VCTL	0x1c
 
+/* CPU power domain register offsets */
+#define CPU_HEAD_SWITCH_CTL 0x8
+#define CPU_SEQ_FORCE_PWR_CTL_EN 0x1c
+#define CPU_SEQ_FORCE_PWR_CTL_VAL 0x20
+#define CPU_PCHANNEL_FSM_CTL 0x44
+
 extern void secondary_startup_arm(void);
 
 #ifdef CONFIG_HOTPLUG_CPU
@@ -50,6 +56,105 @@ static void qcom_cpu_die(unsigned int cpu)
 	wfi();
 }
 #endif
+
+static inline void a55ss_unclamp_cpu(void __iomem *reg)
+{
+	/* Program skew between en_few and en_rest to 40 XO clk cycles (~2us) */
+	writel_relaxed(0x00000028, reg + CPU_HEAD_SWITCH_CTL);
+	mb();
+
+	/* Current sensors bypass */
+	writel_relaxed(0x00000000, reg + CPU_SEQ_FORCE_PWR_CTL_EN);
+	mb();
+
+	/* Close Core logic head switch */
+	writel_relaxed(0x00000642, reg + CPU_SEQ_FORCE_PWR_CTL_VAL);
+	mb();
+	mdelay(4);
+
+	/* Deassert Core Mem and Logic Clamp. (Clamp coremem is asserted by default) */
+	writel_relaxed(0x00000402, reg + CPU_SEQ_FORCE_PWR_CTL_VAL);
+	mb();
+
+	/* De-Assert Core memory slp_nret_n */
+	writel_relaxed(0x0000040A, reg + CPU_SEQ_FORCE_PWR_CTL_VAL);
+	mb();
+	mdelay(8);
+
+	/* De-Assert Core memory slp_ret_n */
+	writel_relaxed(0x0000040E, reg + CPU_SEQ_FORCE_PWR_CTL_VAL);
+	mb();
+	mdelay(8);
+
+	/* Assert wl_en_clk */
+	writel_relaxed(0x0000050E, reg + CPU_SEQ_FORCE_PWR_CTL_VAL);
+	mb();
+	mdelay(2);
+
+	/* De-assert wl_en_clk */
+	writel_relaxed(0x0000040E, reg + CPU_SEQ_FORCE_PWR_CTL_VAL);
+	mb();
+
+	/* Deassert ClkOff */
+	writel_relaxed(0x0000040C, reg + CPU_SEQ_FORCE_PWR_CTL_VAL);
+	mb();
+	mdelay(4);
+
+	/*Assert core pchannel power up request */
+	writel_relaxed(0x00000001, reg + CPU_PCHANNEL_FSM_CTL);
+	mb();
+
+	/* Deassert Core reset */
+	writel_relaxed(0x0000043C, reg + CPU_SEQ_FORCE_PWR_CTL_VAL);
+	mb();
+
+	/* Deassert core pchannel power up request */
+	writel_relaxed(0x00000000, reg + CPU_PCHANNEL_FSM_CTL);
+	mb();
+
+	/* Indicate OSM that core is ACTIVE */
+	writel_relaxed(0x0000443C, reg + CPU_SEQ_FORCE_PWR_CTL_VAL);
+	mb();
+
+	/* Assert CPU_PWRDUP */
+	writel_relaxed(0x00000428, reg + CPU_HEAD_SWITCH_CTL);
+	mb();
+}
+
+static int a55ss_release_secondary(unsigned int cpu)
+{
+	int ret = 0;
+	struct device_node *cpu_node, *acc_node;
+	void __iomem *reg;
+
+	cpu_node = of_get_cpu_node(cpu, NULL);
+	if (!cpu_node)
+		return -ENODEV;
+
+	acc_node = of_parse_phandle(cpu_node, "qcom,acc", 0);
+	if (!acc_node) {
+		ret = -ENODEV;
+		goto out_acc;
+	}
+
+	reg = of_iomap(acc_node, 0);
+	if (!reg) {
+		ret = -ENOMEM;
+		goto out_acc_reg;
+	}
+
+	a55ss_unclamp_cpu(reg);
+
+	/* Secondary CPU-N is now alive */
+	iounmap(reg);
+
+out_acc_reg:
+	of_node_put(acc_node);
+out_acc:
+	of_node_put(cpu_node);
+
+	return ret;
+}
 
 static int scss_release_secondary(unsigned int cpu)
 {
@@ -333,6 +438,11 @@ static int qcom_boot_secondary(unsigned int cpu, int (*func)(unsigned int))
 	return ret;
 }
 
+static int a55ss_boot_secondary(unsigned int cpu, struct task_struct *idle)
+{
+	return qcom_boot_secondary(cpu, a55ss_release_secondary);
+}
+
 static int msm8660_boot_secondary(unsigned int cpu, struct task_struct *idle)
 {
 	return qcom_boot_secondary(cpu, scss_release_secondary);
@@ -366,6 +476,16 @@ static void __init qcom_smp_prepare_cpus(unsigned int max_cpus)
 		pr_warn("Failed to set CPU boot address, disabling SMP\n");
 	}
 }
+
+static const struct smp_operations smp_a55ss_ops __initconst = {
+	.smp_prepare_cpus	= qcom_smp_prepare_cpus,
+	.smp_boot_secondary	= a55ss_boot_secondary,
+#ifdef CONFIG_HOTPLUG_CPU
+	.cpu_die		= qcom_cpu_die,
+#endif
+};
+
+CPU_METHOD_OF_DECLARE(qcom_smp_a55ss, "qcom,arm-cortex-acc", &smp_a55ss_ops);
 
 static const struct smp_operations smp_msm8660_ops __initconst = {
 	.smp_prepare_cpus	= qcom_smp_prepare_cpus,
