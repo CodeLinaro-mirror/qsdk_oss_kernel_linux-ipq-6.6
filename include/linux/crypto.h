@@ -365,7 +365,7 @@ struct crypto_alg {
 	int (*cra_init)(struct crypto_tfm *tfm);
 	void (*cra_exit)(struct crypto_tfm *tfm);
 	void (*cra_destroy)(struct crypto_alg *alg);
-	
+
 	struct module *cra_module;
 } CRYPTO_MINALIGN_ATTR;
 
@@ -425,9 +425,9 @@ struct crypto_tfm {
 	u32 crt_flags;
 
 	int node;
-	
+
 	void (*exit)(struct crypto_tfm *tfm);
-	
+
 	struct crypto_alg *__crt_alg;
 
 	void *__crt_ctx[] CRYPTO_MINALIGN_ATTR;
@@ -437,10 +437,10 @@ struct crypto_comp {
 	struct crypto_tfm base;
 };
 
-/* 
+/*
  * Transform user interface.
  */
- 
+
 struct crypto_tfm *crypto_alloc_base(const char *alg_name, u32 type, u32 mask);
 void crypto_destroy_tfm(void *mem, struct crypto_tfm *tfm);
 
@@ -460,6 +460,11 @@ static inline const char *crypto_tfm_alg_name(struct crypto_tfm *tfm)
 static inline const char *crypto_tfm_alg_driver_name(struct crypto_tfm *tfm)
 {
 	return tfm->__crt_alg->cra_driver_name;
+}
+
+static inline u32 crypto_tfm_alg_flags(struct crypto_tfm *tfm)
+{
+	return tfm->__crt_alg->cra_flags & ~CRYPTO_ALG_TYPE_MASK;
 }
 
 static inline unsigned int crypto_tfm_alg_blocksize(struct crypto_tfm *tfm)
