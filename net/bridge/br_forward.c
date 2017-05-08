@@ -63,7 +63,7 @@ EXPORT_SYMBOL_GPL(br_dev_queue_push_xmit);
 int br_forward_finish(struct net *net, struct sock *sk, struct sk_buff *skb)
 {
 	skb_clear_tstamp(skb);
-	return NF_HOOK(NFPROTO_BRIDGE, NF_BR_POST_ROUTING,
+	return BR_HOOK(NFPROTO_BRIDGE, NF_BR_POST_ROUTING,
 		       net, sk, skb, NULL, skb->dev,
 		       br_dev_queue_push_xmit);
 
@@ -112,7 +112,7 @@ static void __br_forward(const struct net_bridge_port *to,
 		indev = NULL;
 	}
 
-	NF_HOOK(NFPROTO_BRIDGE, br_hook,
+	BR_HOOK(NFPROTO_BRIDGE, br_hook,
 		net, NULL, skb, indev, skb->dev,
 		br_forward_finish);
 }
