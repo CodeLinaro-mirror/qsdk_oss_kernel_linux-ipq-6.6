@@ -659,6 +659,8 @@ static netdev_tx_t ipgre_xmit(struct sk_buff *skb,
 	if (gre_handle_offloads(skb, !!(tunnel->parms.o_flags & TUNNEL_CSUM)))
 		goto free_skb;
 
+	skb->skb_iif = dev->ifindex;
+
 	__gre_xmit(skb, dev, tnl_params, skb->protocol);
 	return NETDEV_TX_OK;
 
@@ -741,6 +743,8 @@ static netdev_tx_t gre_tap_xmit(struct sk_buff *skb,
 
 	if (skb_cow_head(skb, dev->needed_headroom))
 		goto free_skb;
+
+	skb->skb_iif = dev->ifindex;
 
 	__gre_xmit(skb, dev, &tunnel->parms.iph, htons(ETH_P_TEB));
 	return NETDEV_TX_OK;
