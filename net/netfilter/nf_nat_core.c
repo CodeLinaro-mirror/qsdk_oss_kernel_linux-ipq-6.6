@@ -24,6 +24,7 @@
 #include <net/netfilter/nf_nat.h>
 #include <net/netfilter/nf_nat_helper.h>
 #include <uapi/linux/netfilter/nf_nat.h>
+#include <linux/netfilter_bridge.h>
 
 #include "nf_internals.h"
 
@@ -820,6 +821,30 @@ nf_nat_inet_fn(void *priv, struct sk_buff *skb,
 	case IP_CT_RELATED_REPLY:
 		/* Only ICMPs can be IP_CT_IS_REPLY.  Fallthrough */
 	case IP_CT_NEW:
+#if IS_ENABLED(CONFIG_BRIDGE_NETFILTER)
+		/* when skb is forwarding between ports of a bridge,the
+		 * nf_bridge will be set and nf_bridge->physoutdev is not null,
+		 * We can assume that it is not expecting NAT operation.
+		 * when BR_HOOK is enabled, multicast packets will reach
+		 * postrouting twice,the first time is when it is forwarded
+		 * between ports of a bridge, the second time is that it is
+		 * forwarded to upstream port.
+		 *
+		 * It will perform traversing of the NAT table at the first
+		 * time, the next time, it will use the result of first time.
+		 * since forwarding betweeng ports of a bridge, it won't hit
+		 * rules of SNAT, it cause NO NAT operation on this skb when
+		 * forwarding to the upstream port.
+		 * To avoid the scenario above, accept it when it is forwarding
+		 * between ports of a bridge for multicast.
+		 */
+		if (skb->pkt_type == PACKET_MULTICAST) {
+			struct nf_bridge_info *nf_bridge =
+				nf_bridge_info_get(skb);
+			if (nf_bridge && nf_bridge->physoutdev)
+				return NF_ACCEPT;
+		}
+#endif
 		/* Seen it before?  This can happen for loopback, retrans,
 		 * or local packets.
 		 */
