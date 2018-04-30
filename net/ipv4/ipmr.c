@@ -1512,6 +1512,7 @@ static void mroute_clean_tables(struct mr_table *mrt, int flags)
 	struct net *net = read_pnet(&mrt->net);
 	struct mr_mfc *c, *tmp;
 	struct mfc_cache *cache;
+	u32 origin, group;
 	LIST_HEAD(list);
 	int i;
 
@@ -1536,10 +1537,14 @@ static void mroute_clean_tables(struct mr_table *mrt, int flags)
 			rhltable_remove(&mrt->mfc_hash, &c->mnode, ipmr_rht_params);
 			list_del_rcu(&c->list);
 			cache = (struct mfc_cache *)c;
+			origin = cache->mfc_origin;
+			group = cache->mfc_mcastgrp;
 			call_ipmr_mfc_entry_notifiers(net, FIB_EVENT_ENTRY_DEL, cache,
 						      mrt->id);
 			mroute_netlink_event(mrt, cache, RTM_DELROUTE);
 			mr_cache_put(c);
+			/* Inform offload modules of the delete event */
+			ipmr_sync_entry_delete(origin, group);
 		}
 	}
 
