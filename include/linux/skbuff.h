@@ -991,6 +991,8 @@ struct sk_buff {
 #endif
 	/* Linear packets processed by dev_fast_xmit() */
 	__u8			fast_xmit:1;
+	__u8			fast_forwarded:1;
+	/* 1 or 3 bit hole */
 
 #if defined(CONFIG_NET_SCHED) || defined(CONFIG_NET_XGRESS)
 	__u16			tc_index;	/* traffic control index */
