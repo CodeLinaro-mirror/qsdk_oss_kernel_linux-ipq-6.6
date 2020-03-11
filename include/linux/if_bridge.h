@@ -72,7 +72,8 @@ void brioctl_set(int (*hook)(struct net *net, struct net_bridge *br,
 int br_ioctl_call(struct net *net, struct net_bridge *br, unsigned int cmd,
 		  struct ifreq *ifr, void __user *uarg);
 extern struct net_device *br_port_dev_get(struct net_device *dev,
-					  unsigned char *addr);
+					  unsigned char *addr,
+					  struct sk_buff *skb);
 extern void br_refresh_fdb_entry(struct net_device *dev, const char *addr);
 extern void br_dev_update_stats(struct net_device *dev,
 				struct rtnl_link_stats64 *nlstats);
@@ -223,4 +224,10 @@ static inline clock_t br_get_ageing_time(const struct net_device *br_dev)
 }
 #endif
 
+typedef struct net_bridge_port *br_port_dev_get_hook_t(struct net_device *dev,
+		struct sk_buff *skb);
+extern br_port_dev_get_hook_t __rcu *br_port_dev_get_hook;
+
+typedef void (br_notify_hook_t)(int group, int event, const void *ptr);
+extern br_notify_hook_t __rcu *br_notify_hook;
 #endif
