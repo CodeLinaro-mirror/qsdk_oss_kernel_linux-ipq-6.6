@@ -574,7 +574,7 @@ void br_fdb_cleanup(struct work_struct *work)
 	unsigned long delay = hold_time(br);
 	unsigned long work_delay = delay;
 	unsigned long now = jiffies;
-	u8 mac_addr[6];
+	struct br_fdb_event fdb_event;
 
 	/* this part is tricky, in order to avoid blocking learning and
 	 * consequently forwarding, we rely on rcu to delete objects with
@@ -602,10 +602,11 @@ void br_fdb_cleanup(struct work_struct *work)
 		} else {
 			spin_lock_bh(&br->hash_lock);
 			if (!hlist_unhashed(&f->fdb_node)) {
-			    ether_addr_copy(mac_addr, f->key.addr.addr);
+			    memset(&fdb_event, 0, sizeof(fdb_event));
+			    ether_addr_copy(fdb_event.addr, f->key.addr.addr);
 			    fdb_delete(br, f, true);
 			    atomic_notifier_call_chain(&br_fdb_update_notifier_list, 0,
-						       (void *)mac_addr);
+						       (void *)&fdb_event);
 			}
 			spin_unlock_bh(&br->hash_lock);
 		}
@@ -902,10 +903,19 @@ static bool __fdb_mark_active(struct net_bridge_fdb_entry *fdb)
 		  test_and_clear_bit(BR_FDB_NOTIFY_INACTIVE, &fdb->flags));
 }
 
+/* Get the bridge device */
+struct net_device *br_fdb_bridge_dev_get_and_hold(struct net_bridge *br)
+{
+	dev_hold(br->dev);
+	return br->dev;
+}
+EXPORT_SYMBOL_GPL(br_fdb_bridge_dev_get_and_hold);
+
 void br_fdb_update(struct net_bridge *br, struct net_bridge_port *source,
 		   const unsigned char *addr, u16 vid, unsigned long flags)
 {
 	struct net_bridge_fdb_entry *fdb;
+	struct br_fdb_event fdb_event;
 
 	/* some users want to always flood. */
 	if (hold_time(br) == 0)
@@ -931,6 +941,10 @@ void br_fdb_update(struct net_bridge *br, struct net_bridge_port *source,
 			if (unlikely(source != READ_ONCE(fdb->dst) &&
 				     !test_bit(BR_FDB_STICKY, &fdb->flags))) {
 				br_switchdev_fdb_notify(br, fdb, RTM_DELNEIGH);
+				ether_addr_copy(fdb_event.addr, addr);
+				fdb_event.br = br;
+				fdb_event.orig_dev = fdb->dst->dev;
+				fdb_event.dev = source->dev;
 				WRITE_ONCE(fdb->dst, source);
 				fdb_modified = true;
 
@@ -947,7 +961,7 @@ void br_fdb_update(struct net_bridge *br, struct net_bridge_port *source,
 
 				atomic_notifier_call_chain(
 					&br_fdb_update_notifier_list,
-					0, (void *)addr);
+					0, (void *)&fdb_event);
 			}
 
 			if (unlikely(test_bit(BR_FDB_ADDED_BY_USER, &flags)))
