@@ -47,6 +47,9 @@
 #define MDIO_PHYXS_VEND_IF_STATUS_TYPE_RXAUI	7
 #define MDIO_PHYXS_VEND_IF_STATUS_TYPE_OCSGMII	10
 
+#define MDIO_PHYXS_VEND_USX_AUTONEG_STATUS	0xc441
+#define MDIO_PHYXS_VEND_USX_AUTONEG_STATUS_ENABLE	BIT(3)
+
 #define MDIO_AN_VEND_PROV			0xc400
 #define MDIO_AN_VEND_PROV_1000BASET_FULL	BIT(15)
 #define MDIO_AN_VEND_PROV_1000BASET_HALF	BIT(14)
@@ -265,6 +268,14 @@ static void aqr107_get_stats(struct phy_device *phydev,
 
 		data[i] = priv->sgmii_stats[i];
 	}
+}
+
+static int aqr107_autoneg_ctrl_init(struct phy_device *phydev)
+{
+	return phy_modify_mmd(phydev, MDIO_MMD_PHYXS,
+		MDIO_PHYXS_VEND_USX_AUTONEG_STATUS,
+		MDIO_PHYXS_VEND_USX_AUTONEG_STATUS_ENABLE,
+		MDIO_PHYXS_VEND_USX_AUTONEG_STATUS_ENABLE);
 }
 
 static int aqr_config_aneg(struct phy_device *phydev)
@@ -709,6 +720,8 @@ static int aqr107_config_init(struct phy_device *phydev)
 	ret = aqr107_wait_reset_complete(phydev);
 	if (!ret)
 		aqr107_chip_info(phydev);
+
+	aqr107_autoneg_ctrl_init(phydev);
 
 	return aqr107_set_downshift(phydev, MDIO_AN_VEND_PROV_DOWNSHIFT_DFLT);
 }
