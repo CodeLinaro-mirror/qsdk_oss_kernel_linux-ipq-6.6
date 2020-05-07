@@ -12,6 +12,7 @@
 #include <crypto/aes.h>
 #include <crypto/internal/des.h>
 #include <crypto/internal/skcipher.h>
+#include <linux/firmware/qcom/qcom_scm.h>
 
 #include "cipher.h"
 
@@ -23,6 +24,14 @@ MODULE_PARM_DESC(aes_sw_max_len,
 		 __stringify(CONFIG_CRYPTO_DEV_QCE_SW_MAX_LEN)"]");
 
 static LIST_HEAD(skcipher_algs);
+
+static int qce_setkey_sec(struct qce_device *qce, unsigned int keylen)
+{
+	struct qce_config_key_sec key;
+
+	key.keylen = keylen;
+	return qti_set_qcekey_sec(&key, sizeof(struct qce_config_key_sec));
+}
 
 static void qce_skcipher_done(void *data)
 {
@@ -174,11 +183,18 @@ static int qce_skcipher_setkey(struct crypto_skcipher *ablk, const u8 *key,
 	struct qce_cipher_ctx *ctx = crypto_tfm_ctx(tfm);
 	unsigned long flags = to_cipher_tmpl(ablk)->alg_flags;
 	unsigned int __keylen;
+	struct qce_alg_template *tmpl = to_cipher_tmpl(ablk);
+	struct qce_device *qce = tmpl->qce;
 	int ret;
 
 	if (!key || !keylen)
 		return -EINVAL;
 
+	if (qce->use_fixed_key) {
+		ret = qce_setkey_sec(qce, keylen);
+		if (ret)
+			return ret;
+	}
 	/*
 	 * AES XTS key1 = key2 not supported by crypto engine.
 	 * Revisit to request a fallback cipher in this case.

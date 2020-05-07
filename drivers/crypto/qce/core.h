@@ -70,6 +70,9 @@ struct qce_stat {
  * @qce_debug_read_buf: buffer to store the qce stats
  * @async_req_enqueue: invoked by every algorithm to enqueue a request
  * @async_req_done: invoked by every algorithm to finish its request
+ * @use_fixed_key: bool variable to generate key from TZ
+ * @kobj pointer to sysfs entry
+ * @kobj_parent partent sysfs entry
  */
 struct qce_device {
 	struct crypto_queue queue;
@@ -90,6 +93,9 @@ struct qce_device {
 	int (*async_req_enqueue)(struct qce_device *qce,
 				 struct crypto_async_request *req);
 	void (*async_req_done)(struct qce_device *qce, int ret);
+	bool use_fixed_key;
+	struct kobject kobj;
+	struct kobject *kobj_parent;
 };
 
 /**
