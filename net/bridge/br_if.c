@@ -862,3 +862,14 @@ void br_dev_update_stats(struct net_device *dev,
 	u64_stats_update_end(&stats->syncp);
 }
 EXPORT_SYMBOL_GPL(br_dev_update_stats);
+
+/* API to know if hairpin feature is enabled/disabled on this bridge port */
+bool br_is_hairpin_enabled(struct net_device *dev)
+{
+	struct net_bridge_port *port = br_port_get_check_rcu(dev);
+
+	if (likely(port))
+		return port->flags & BR_HAIRPIN_MODE;
+	return false;
+}
+EXPORT_SYMBOL_GPL(br_is_hairpin_enabled);

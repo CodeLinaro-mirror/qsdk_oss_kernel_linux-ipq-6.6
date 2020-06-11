@@ -85,6 +85,7 @@ extern struct net_bridge_fdb_entry *br_fdb_has_entry(struct net_device *dev,
 						     __u16 vid);
 extern void br_fdb_update_register_notify(struct notifier_block *nb);
 extern void br_fdb_update_unregister_notify(struct notifier_block *nb);
+extern bool br_is_hairpin_enabled(struct net_device *dev);
 
 #if IS_ENABLED(CONFIG_BRIDGE) && IS_ENABLED(CONFIG_BRIDGE_IGMP_SNOOPING)
 int br_multicast_list_adjacent(struct net_device *dev,
