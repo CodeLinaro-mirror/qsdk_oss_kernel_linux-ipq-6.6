@@ -278,6 +278,7 @@ enum ovs_vport_attr {
 	OVS_VPORT_ATTR_IFINDEX,
 	OVS_VPORT_ATTR_NETNSID,
 	OVS_VPORT_ATTR_UPCALL_STATS,
+	OVS_VPORT_ATTR_MASTER,	/* Master device for this vport, device name */
 	__OVS_VPORT_ATTR_MAX
 };
 
@@ -303,7 +304,6 @@ enum {
 };
 
 #define OVS_VXLAN_EXT_MAX (__OVS_VXLAN_EXT_MAX - 1)
-
 
 /* OVS_VPORT_ATTR_OPTIONS attributes for tunnels.
  */
