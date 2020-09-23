@@ -3015,7 +3015,10 @@ static int crypt_ctr_cipher_old(struct dm_target *ti, char *cipher_in, char *key
 	if (!cipher_api)
 		goto bad_mem;
 
-	if (*ivmode && !strcmp(*ivmode, "essiv")) {
+	if (qcengine) {
+		ret = snprintf(cipher_api, CRYPTO_MAX_ALG_NAME,
+			"%s-%s-%s", chainmode, cipher, qcengine);
+	} else if (*ivmode && !strcmp(*ivmode, "essiv")) {
 		if (!*ivopts) {
 			ti->error = "Digest algorithm missing for ESSIV mode";
 			kfree(cipher_api);
