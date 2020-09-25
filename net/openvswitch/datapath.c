@@ -377,6 +377,8 @@ void ovs_dp_process_packet(struct sk_buff *skb, struct sw_flow_key *key)
 
 	stats = this_cpu_ptr(dp->stats_percpu);
 
+	ovs_dp_pkt_process_notify(dp, skb, key, NULL, NULL);
+
 	/* Look up flow. */
 	flow = ovs_flow_tbl_lookup_stats(&dp->table, key, skb_get_hash(skb),
 					 &n_mask_hit, &n_cache_hit);
