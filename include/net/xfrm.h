@@ -396,6 +396,7 @@ int xfrm_state_register_afinfo(struct xfrm_state_afinfo *afinfo);
 int xfrm_state_unregister_afinfo(struct xfrm_state_afinfo *afinfo);
 struct xfrm_state_afinfo *xfrm_state_get_afinfo(unsigned int family);
 struct xfrm_state_afinfo *xfrm_state_afinfo_get_rcu(unsigned int family);
+struct xfrm_state_afinfo *xfrm_state_update_afinfo(unsigned int family, struct xfrm_state_afinfo *new);
 
 struct xfrm_input_afinfo {
 	u8			family;
