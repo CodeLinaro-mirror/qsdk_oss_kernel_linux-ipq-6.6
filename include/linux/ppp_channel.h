@@ -81,6 +81,8 @@ extern int ppp_hold_channels(struct net_device *dev,
 			     struct ppp_channel *channels[],
 			     unsigned int chan_sz);
 
+bool ppp_is_cp_enabled(struct net_device *dev);
+
 /* Test if the ppp device is a multi-link ppp device */
 extern int ppp_is_multilink(struct net_device *dev);
 
