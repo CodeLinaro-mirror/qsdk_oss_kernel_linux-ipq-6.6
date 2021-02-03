@@ -153,7 +153,7 @@ static void br_stp_start(struct net_bridge *br)
 		err = br_stp_call_user(br, "start");
 
 	if (err && err != -ENOENT)
-		br_err(br, "failed to start userspace STP (%d)\n", err);
+		br_debug(br, "failed to start userspace STP (%d)\n", err);
 
 	spin_lock_bh(&br->lock);
 
@@ -164,10 +164,10 @@ static void br_stp_start(struct net_bridge *br)
 
 	if (!err) {
 		br->stp_enabled = BR_USER_STP;
-		br_debug(br, "userspace STP started\n");
+		br_info(br, "userspace STP started\n");
 	} else {
 		br->stp_enabled = BR_KERNEL_STP;
-		br_debug(br, "using kernel STP\n");
+		br_info(br, "using kernel STP\n");
 
 		/* To start timers on any ports left in blocking */
 		if (br->dev->flags & IFF_UP)
