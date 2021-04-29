@@ -88,6 +88,12 @@
 #include "sock_destructor.h"
 
 struct kmem_cache *skbuff_cache __ro_after_init;
+
+#if defined(CONFIG_SKB_FIXED_SIZE_2K) && !defined(__LP64__)
+struct kmem_cache *skb_data_cache;
+#define SKB_DATA_CACHE_SIZE	2176
+#endif
+
 static struct kmem_cache *skbuff_fclone_cache __ro_after_init;
 #ifdef CONFIG_SKB_EXTENSIONS
 static struct kmem_cache *skbuff_ext_cache __ro_after_init;
@@ -578,7 +584,14 @@ static void *kmalloc_reserve(unsigned int *size, gfp_t flags, int node,
 	 * Try a regular allocation, when that fails and we're not entitled
 	 * to the reserves, fail.
 	 */
-	obj = kmalloc_node_track_caller(obj_size,
+#if defined(CONFIG_SKB_FIXED_SIZE_2K) && !defined(__LP64__)
+	if (size > SZ_2K && size <= SKB_DATA_CACHE_SIZE)
+		obj = kmem_cache_alloc_node(skb_data_cache,
+						flags | __GFP_NOMEMALLOC | __GFP_NOWARN,
+						node);
+	else
+#endif
+		obj = kmalloc_node_track_caller(obj_size,
 					flags | __GFP_NOMEMALLOC | __GFP_NOWARN,
 					node);
 	if (obj || !(gfp_pfmemalloc_allowed(flags)))
@@ -586,7 +599,12 @@ static void *kmalloc_reserve(unsigned int *size, gfp_t flags, int node,
 
 	/* Try again but now we are using pfmemalloc reserves */
 	ret_pfmemalloc = true;
-	obj = kmalloc_node_track_caller(obj_size, flags, node);
+#if defined(CONFIG_SKB_FIXED_SIZE_2K) && !defined(__LP64__)
+	if (size > SZ_2K && size <= SKB_DATA_CACHE_SIZE)
+		obj = kmem_cache_alloc_node(skb_data_cache, flags, node);
+	else
+#endif
+		obj = kmalloc_node_track_caller(obj_size, flags, node);
 
 out:
 	if (pfmemalloc)
@@ -4872,6 +4890,13 @@ static void skb_extensions_init(void) {}
 
 void __init skb_init(void)
 {
+#if defined(CONFIG_SKB_FIXED_SIZE_2K) && !defined(__LP64__)
+	skb_data_cache = kmem_cache_create_usercopy("skb_data_cache",
+						SKB_DATA_CACHE_SIZE,
+						0, 0, 0, SKB_DATA_CACHE_SIZE,
+						NULL);
+#endif
+
 	skbuff_cache = kmem_cache_create_usercopy("skbuff_head_cache",
 					      sizeof(struct sk_buff),
 					      0,
