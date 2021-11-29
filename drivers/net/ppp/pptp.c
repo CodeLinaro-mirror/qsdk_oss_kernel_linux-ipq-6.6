@@ -312,14 +312,18 @@ static int pptp_xmit(struct ppp_channel *chan, struct sk_buff *skb)
 
 	pptp_ifindex = ppp_dev_index(chan);
 
-	/* set incoming interface as the ppp interface */
-	if (skb->skb_iif)
-		skb->skb_iif = pptp_ifindex;
-
 	/* If the PPTP GRE seq number offload module is not enabled yet
 	 * then sends all PPTP GRE packets through linux network stack
 	 */
 	if (!opt->pptp_offload_mode) {
+		/* set incoming interface as the ppp interface */
+		pptp_dev = dev_get_by_index(&init_net, pptp_ifindex);
+		if (pptp_dev) {
+			skb->dev = pptp_dev;
+			skb->skb_iif = pptp_ifindex;
+			dev_put(pptp_dev);
+		}
+
 		ip_local_out(net, skb->sk, skb);
 		return 1;
 	}
