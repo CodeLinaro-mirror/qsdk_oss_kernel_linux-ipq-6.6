@@ -4254,6 +4254,80 @@ struct netdev_queue *netdev_core_pick_tx(struct net_device *dev,
 }
 
 /**
+ *	dev_fast_xmit - fast xmit the skb
+ *	@skb:buffer to transmit
+ *	@dev: the device to be transmited to
+ *	@features: the skb features could bed used
+ *	sucessful return true
+ *	failed return false
+ */
+bool dev_fast_xmit(struct sk_buff *skb,
+		struct net_device *dev,
+		netdev_features_t features)
+{
+	struct netdev_queue *txq;
+	int cpu;
+	netdev_tx_t rc;
+
+	if (unlikely(!(dev->flags & IFF_UP))) {
+		return false;
+	}
+
+	if (unlikely(skb_needs_linearize(skb, features))) {
+		return false;
+	}
+
+	rcu_read_lock_bh();
+	cpu = smp_processor_id();
+
+	/* If device don't need the dst, release it now, otherwise make sure
+	 * the refcount increased.
+	 */
+	if (likely(dev->priv_flags & IFF_XMIT_DST_RELEASE)) {
+		skb_dst_drop(skb);
+	} else {
+		skb_dst_force(skb);
+	}
+
+	txq = netdev_core_pick_tx(dev, skb, NULL);
+
+	if (likely(txq->xmit_lock_owner != cpu)) {
+#define FAST_HARD_TX_LOCK(features, txq, cpu) {		\
+	if ((features & NETIF_F_LLTX) == 0) {		\
+		__netif_tx_lock(txq, cpu);		\
+	} else {					\
+		__netif_tx_acquire(txq);		\
+	}						\
+}
+
+#define FAST_HARD_TX_UNLOCK(features, txq) {		\
+	if ((features & NETIF_F_LLTX) == 0) {		\
+		__netif_tx_unlock(txq);			\
+	} else {					\
+		__netif_tx_release(txq);		\
+	}						\
+}
+		netdev_features_t dev_features = dev->features;
+		FAST_HARD_TX_LOCK(dev_features, txq, cpu);
+		if (likely(!netif_xmit_stopped(txq))) {
+			rc = netdev_start_xmit(skb, dev, txq, 0);
+			if (unlikely(!dev_xmit_complete(rc))) {
+				FAST_HARD_TX_UNLOCK(dev_features, txq);
+				goto fail;
+			}
+			FAST_HARD_TX_UNLOCK(dev_features, txq);
+			rcu_read_unlock_bh();
+			return true;
+		}
+		FAST_HARD_TX_UNLOCK(dev_features, txq);
+	}
+fail:
+	rcu_read_unlock_bh();
+	return false;
+}
+EXPORT_SYMBOL(dev_fast_xmit);
+
+/**
  * __dev_queue_xmit() - transmit a buffer
  * @skb:	buffer to transmit
  * @sb_dev:	suboordinate device used for L2 forwarding offload
