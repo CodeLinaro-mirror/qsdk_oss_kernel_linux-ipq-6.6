@@ -87,11 +87,32 @@
 #include "dev.h"
 #include "sock_destructor.h"
 
+
 struct kmem_cache *skbuff_cache __ro_after_init;
 
-#if defined(CONFIG_SKB_FIXED_SIZE_2K) && !defined(__LP64__)
 struct kmem_cache *skb_data_cache;
-#define SKB_DATA_CACHE_SIZE	2176
+
+/*
+ * For low memory profile, NSS_SKB_FIXED_SIZE_2K is enabled and
+ * CONFIG_SKB_RECYCLER is disabled. For premium and enterprise profile
+ * CONFIG_SKB_RECYCLER is enabled and NSS_SKB_FIXED_SIZE_2K is disabled.
+ * Irrespective of NSS_SKB_FIXED_SIZE_2K enabled/disabled, the
+ * CONFIG_SKB_RECYCLER and __LP64__ determines the value of SKB_DATA_CACHE_SIZE
+ */
+#if defined(CONFIG_SKB_RECYCLER)
+/*
+ * 2688 for 64bit arch, 2624 for 32bit arch
+ */
+#define SKB_DATA_CACHE_SIZE (SKB_DATA_ALIGN(SKB_RECYCLE_SIZE + NET_SKB_PAD) + SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
+#else
+/*
+ * 2368 for 64bit arch, 2176 for 32bit arch
+ */
+#if defined(__LP64__)
+#define SKB_DATA_CACHE_SIZE ((SKB_DATA_ALIGN(1984 + NET_SKB_PAD)) + SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
+#else
+#define SKB_DATA_CACHE_SIZE ((SKB_DATA_ALIGN(1856 + NET_SKB_PAD)) + SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
+#endif
 #endif
 
 static struct kmem_cache *skbuff_fclone_cache __ro_after_init;
@@ -584,13 +605,11 @@ static void *kmalloc_reserve(unsigned int *size, gfp_t flags, int node,
 	 * Try a regular allocation, when that fails and we're not entitled
 	 * to the reserves, fail.
 	 */
-#if defined(CONFIG_SKB_FIXED_SIZE_2K) && !defined(__LP64__)
 	if (size > SZ_2K && size <= SKB_DATA_CACHE_SIZE)
 		obj = kmem_cache_alloc_node(skb_data_cache,
 						flags | __GFP_NOMEMALLOC | __GFP_NOWARN,
 						node);
 	else
-#endif
 		obj = kmalloc_node_track_caller(obj_size,
 					flags | __GFP_NOMEMALLOC | __GFP_NOWARN,
 					node);
@@ -599,11 +618,9 @@ static void *kmalloc_reserve(unsigned int *size, gfp_t flags, int node,
 
 	/* Try again but now we are using pfmemalloc reserves */
 	ret_pfmemalloc = true;
-#if defined(CONFIG_SKB_FIXED_SIZE_2K) && !defined(__LP64__)
 	if (size > SZ_2K && size <= SKB_DATA_CACHE_SIZE)
 		obj = kmem_cache_alloc_node(skb_data_cache, flags, node);
 	else
-#endif
 		obj = kmalloc_node_track_caller(obj_size, flags, node);
 
 out:
@@ -4890,12 +4907,11 @@ static void skb_extensions_init(void) {}
 
 void __init skb_init(void)
 {
-#if defined(CONFIG_SKB_FIXED_SIZE_2K) && !defined(__LP64__)
+
 	skb_data_cache = kmem_cache_create_usercopy("skb_data_cache",
 						SKB_DATA_CACHE_SIZE,
-						0, 0, 0, SKB_DATA_CACHE_SIZE,
+						0, SLAB_PANIC, 0, SKB_DATA_CACHE_SIZE,
 						NULL);
-#endif
 
 	skbuff_cache = kmem_cache_create_usercopy("skbuff_head_cache",
 					      sizeof(struct sk_buff),
