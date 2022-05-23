@@ -3559,6 +3559,260 @@ netdev_features_t netif_skb_features(struct sk_buff *skb)
 }
 EXPORT_SYMBOL(netif_skb_features);
 
+/**
+ *	netdev_sawf_deinit - free sawf statistics.
+ *	@dev: Device to free sawf statistics.
+ *
+ *	Returns true on success, false on failure.
+ */
+bool netdev_sawf_deinit(struct net_device *dev)
+{
+	struct pcpu_sawf_stats __percpu *stats_to_delete;
+
+	if ((!dev->sawf_stats)) {
+		return false;
+	}
+
+	stats_to_delete = dev->sawf_stats;
+	dev->sawf_stats = NULL;
+
+	free_percpu(stats_to_delete);
+
+	return true;
+}
+EXPORT_SYMBOL(netdev_sawf_deinit);
+
+/**
+ *	netdev_sawf_init - Allocate netdev SAWF statistics.
+ *	@dev:  Device to allocate statistics on.
+ *	@mode: Initial flags to be set.
+ */
+bool netdev_sawf_init(struct net_device *dev, uint16_t mode)
+{
+	int cpu;
+
+	if (dev->sawf_stats) {
+		return false;
+	}
+
+	dev->sawf_stats = netdev_alloc_pcpu_stats(struct pcpu_sawf_stats);
+	if (!dev->sawf_stats) {
+		return false;
+	}
+
+	for_each_possible_cpu(cpu) {
+		struct pcpu_sawf_stats *stats = per_cpu_ptr(dev->sawf_stats, cpu);
+		memset(stats, 0, sizeof(*stats));
+	}
+
+	dev->sawf_flags = mode;
+
+	return true;
+}
+EXPORT_SYMBOL(netdev_sawf_init);
+
+/**
+ *	netdev_sawf_flags_update - Set SAWF flags.
+ *	@dev: Device to update
+ *	@flags: New value of flags
+ */
+bool netdev_sawf_flags_update(struct net_device *dev, uint16_t flags)
+{
+	if (!dev->sawf_stats) {
+		return false;
+	}
+
+	dev->sawf_flags = flags;
+
+	return true;
+}
+EXPORT_SYMBOL(netdev_sawf_flags_update);
+
+/**
+ *	netdev_sawf_enable - Re-enable SAWF statistics.
+ *	@dev: Device to enable.
+ */
+bool netdev_sawf_enable(struct net_device *dev)
+{
+	int cpu;
+	if (!dev->sawf_stats) {
+		return false;
+	}
+
+	for_each_possible_cpu(cpu) {
+		struct pcpu_sawf_stats *stats = per_cpu_ptr(dev->sawf_stats, cpu);
+		memset(stats, 0, sizeof(*stats));
+	}
+
+	dev->sawf_flags |= NETDEV_SAWF_FLAG_ENABLED;
+
+	return true;
+}
+EXPORT_SYMBOL(netdev_sawf_enable);
+
+/**
+ *	netdev_sawf_disable - Disable SAWF statistics collection.
+ *	@dev: device to disable statistics.
+ */
+bool netdev_sawf_disable(struct net_device *dev)
+{
+	if (!dev->sawf_stats) {
+		return false;
+	}
+
+	dev->sawf_flags &= ~NETDEV_SAWF_FLAG_ENABLED;
+
+	return true;
+}
+EXPORT_SYMBOL(netdev_sawf_disable);
+
+/**
+ *	netdev_sawf_debug_set - Sets the debug service class.
+ *	@dev: Device to configure
+ *	@sid: Service class ID to keep debug information.
+ */
+bool netdev_sawf_debug_set(struct net_device *dev, uint8_t sid)
+{
+	int cpu;
+
+	if (!dev->sawf_stats) {
+		return false;
+	}
+
+	for_each_possible_cpu(cpu) {
+		struct pcpu_sawf_stats *stats = per_cpu_ptr(dev->sawf_stats, cpu);
+		stats->debug_lat_max = 0;
+		stats->debug_lat_min = 0;
+		stats->debug_lat_ewma = 0;
+		stats->debug_lat_last = 0;
+	}
+
+	dev->sawf_flags = (dev->sawf_flags & ~(NETDEV_SAWF_FLAG_DEBUG_MASK)) | (sid << NETDEV_SAWF_FLAG_DEBUG_SHIFT) | (NETDEV_SAWF_FLAG_DEBUG);
+
+	return true;
+}
+EXPORT_SYMBOL(netdev_sawf_debug_set);
+
+/**
+ *	netdev_sawf_debug_set - Clears the debug service class.
+ *	@dev: Device to configure
+ */
+bool netdev_sawf_debug_unset(struct net_device *dev)
+{
+	if (!dev->sawf_stats) {
+		return false;
+	}
+
+	dev->sawf_flags &= ~NETDEV_SAWF_FLAG_DEBUG;
+
+	return true;
+}
+EXPORT_SYMBOL(netdev_sawf_debug_unset);
+
+/**
+ *	netdev_sawf_debug_get - Gets the debug SAWF information.
+ *	@dev:  Device to read debug information
+ *	@sid:  Pointer where service class id is written
+ *	@max:  Pointer where max latency is written
+ *	@min:  Pointer where min latency is written
+ *	@avg:  Pointer where average (exponential moving average) is written
+ *	@last: Pointer where last latency value is written.
+ */
+bool netdev_sawf_debug_get(struct net_device *dev, uint8_t *sid, uint32_t *max, uint32_t *min, uint32_t *avg, uint32_t *last)
+{
+	uint32_t cpu, avg_sum = 0, avg_count = 0;
+
+	if (!dev->sawf_stats || !(dev->sawf_flags & NETDEV_SAWF_FLAG_DEBUG)) {
+		return false;
+	}
+
+	/*
+	 * Initialize minimum to max value of uint32 so any valid value is less than it.
+	 * Initialize maximum to 0 so any valid value is greater than it.
+	 */
+	*min = 0xFFFFFFFF;
+	*max = 0;
+
+	*sid = dev->sawf_flags >> NETDEV_SAWF_FLAG_DEBUG_SHIFT;
+	for_each_possible_cpu(cpu) {
+		struct pcpu_sawf_stats *sawf_stats = per_cpu_ptr(dev->sawf_stats, cpu);
+
+		if (*min > sawf_stats->debug_lat_min && sawf_stats->debug_lat_min != 0) {
+			*min = sawf_stats->debug_lat_min;
+		}
+
+		if (*max < sawf_stats->debug_lat_max) {
+			*max = sawf_stats->debug_lat_max;
+		}
+
+		if (sawf_stats->debug_lat_last) {
+			*last = sawf_stats->debug_lat_last;
+		}
+
+		if (sawf_stats->debug_lat_ewma) {
+			avg_sum += sawf_stats->debug_lat_ewma;
+			avg_count++;
+		}
+	}
+
+	if (avg_count) {
+		*avg = avg_sum / avg_count;
+	}
+
+	/*
+	 * If minimum hasn't been updated, set it to 0.
+	 */
+	if (*min == 0xFFFFFFFF) {
+		*min = 0;
+	}
+
+	return true;
+}
+EXPORT_SYMBOL(netdev_sawf_debug_get);
+
+/**
+ *	netdev_sawf_debug_get - Gets latency statistics for a service class.
+ *	@dev:  Device to read latency statistics
+ *	@sid:  Service class ID to get
+ *	@hist: Pointer to array where histogram data is written.
+ *	@avg:  Pointer where mean latency is written.
+ */
+bool netdev_sawf_lat_get(struct net_device *dev, uint8_t sid, uint64_t *hist, uint64_t *avg)
+{
+	uint32_t bucket = 0, cpu = 0;
+	uint64_t total_lat = 0, total_packets = 0;
+
+	if (!dev->sawf_stats) {
+		return false;
+	}
+
+	if (!(dev->sawf_flags & NETDEV_SAWF_FLAG_ENABLED)) {
+		return false;
+	}
+
+	for (bucket = 0; bucket < NETDEV_SAWF_DELAY_BUCKETS; bucket++) {
+		hist[bucket] = 0;
+	}
+
+	for_each_possible_cpu(cpu) {
+		unsigned int start;
+		struct pcpu_sawf_stats *sawf_stats = per_cpu_ptr(dev->sawf_stats, cpu);
+		do {
+			start = u64_stats_fetch_begin(&sawf_stats->syncp);
+			for (bucket = 0; bucket < NETDEV_SAWF_DELAY_BUCKETS; bucket++) {
+				hist[bucket] += sawf_stats->delay[sid][bucket];
+			}
+
+			total_packets += sawf_stats->tx_packets[sid];
+			total_lat += sawf_stats->total_delay[sid];
+		} while (u64_stats_fetch_retry(&sawf_stats->syncp, start));
+	}
+
+	*avg = div64_u64(total_lat, total_packets);
+	return true;
+}
+EXPORT_SYMBOL(netdev_sawf_lat_get);
+
 static int xmit_one(struct sk_buff *skb, struct net_device *dev,
 		    struct netdev_queue *txq, bool more)
 {
@@ -5135,11 +5389,23 @@ out_redir:
 }
 EXPORT_SYMBOL_GPL(do_xdp_generic);
 
+static inline void netif_sawf_timestamp(struct sk_buff *skb, struct net_device *dev)
+{
+	if (!(dev->sawf_flags & NETDEV_SAWF_FLAG_RX_LAT)) {
+		__net_timestamp(skb);
+	}
+}
+
 static int netif_rx_internal(struct sk_buff *skb)
 {
 	int ret;
+	struct net_device *dev = skb->dev;
 
-	net_timestamp_check(READ_ONCE(netdev_tstamp_prequeue), skb);
+	if (dev->sawf_flags & NETDEV_SAWF_FLAG_ENABLED) {
+		netif_sawf_timestamp(skb, dev);
+	} else {
+		net_timestamp_check(READ_ONCE(netdev_tstamp_prequeue), skb);
+	}
 
 	trace_netif_rx(skb);
 
@@ -5814,7 +6080,12 @@ static int netif_receive_skb_internal(struct sk_buff *skb)
 {
 	int ret;
 
-	net_timestamp_check(READ_ONCE(netdev_tstamp_prequeue), skb);
+	struct net_device *dev = skb->dev;
+	if (dev->sawf_flags & NETDEV_SAWF_FLAG_ENABLED) {
+		netif_sawf_timestamp(skb, dev);
+	} else {
+		net_timestamp_check(READ_ONCE(netdev_tstamp_prequeue), skb);
+	}
 
 	if (skb_defer_rx_timestamp(skb))
 		return NET_RX_SUCCESS;
@@ -5844,7 +6115,13 @@ void netif_receive_skb_list_internal(struct list_head *head)
 
 	INIT_LIST_HEAD(&sublist);
 	list_for_each_entry_safe(skb, next, head, list) {
-		net_timestamp_check(READ_ONCE(netdev_tstamp_prequeue), skb);
+		struct net_device *dev = skb->dev;
+		if (dev->sawf_flags & NETDEV_SAWF_FLAG_ENABLED) {
+			netif_sawf_timestamp(skb, dev);
+		} else {
+			net_timestamp_check(READ_ONCE(netdev_tstamp_prequeue), skb);
+		}
+
 		skb_list_del_init(skb);
 		if (!skb_defer_rx_timestamp(skb))
 			list_add_tail(&skb->list, &sublist);
