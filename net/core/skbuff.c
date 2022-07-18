@@ -1286,6 +1286,44 @@ EXPORT_SYMBOL(consume_skb);
 #endif
 
 /**
+ *	consume_skb_list_fast - free a list of skbs
+ *	@skb_list: head of the buffer list
+ *
+ *	Add the list of given SKBs to CPU list. Assumption is that these buffers
+ *	have been allocated originally from the skb recycler and have been transmitted
+ *	through a controlled fast xmit path, thus removing the need for additional checks
+ *	before recycling the buffers back to pool
+ */
+void consume_skb_list_fast(struct sk_buff_head *skb_list)
+{
+	struct sk_buff *skb = NULL;
+
+	if (likely(skb_recycler_consume_list_fast(skb_list))) {
+		return;
+	}
+
+	while ((skb = skb_dequeue(skb_list)) != NULL) {
+		/*
+		 * Check if release head state is needed
+		 */
+		skb_release_head_state(skb);
+
+		trace_consume_skb(skb, __builtin_return_address(0));
+
+		/*
+		 * We're not recycling so now we need to do the rest of what we would
+		 * have done in __kfree_skb (above and beyond the skb_release_head_state
+		 * that we already did).
+		 */
+		if (likely(skb->head))
+			skb_release_data(skb, SKB_CONSUMED, false);
+
+		kfree_skbmem(skb);
+	}
+}
+EXPORT_SYMBOL(consume_skb_list_fast);
+
+/**
  *	__consume_stateless_skb - free an skbuff, assuming it is stateless
  *	@skb: buffer to free
  *

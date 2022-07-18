@@ -1264,6 +1264,7 @@ static inline void consume_skb(struct sk_buff *skb)
 }
 #endif
 
+void consume_skb_list_fast(struct sk_buff_head *skb_list);
 void __consume_stateless_skb(struct sk_buff *skb);
 void  __kfree_skb(struct sk_buff *skb);
 extern struct kmem_cache *skbuff_cache;
@@ -1389,6 +1390,7 @@ static inline int skb_pad(struct sk_buff *skb, int pad)
 	return __skb_pad(skb, pad, true);
 }
 #define dev_kfree_skb(a)	consume_skb(a)
+#define dev_kfree_skb_list_fast(a)	consume_skb_list_fast(a)
 
 int skb_append_pagefrags(struct sk_buff *skb, struct page *page,
 			 int offset, size_t size, size_t max_frags);
