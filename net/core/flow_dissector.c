@@ -1627,9 +1627,10 @@ ip_proto_again:
 		break;
 	}
 
-	if (!(key_control->flags & FLOW_DIS_IS_FRAGMENT))
+	if (!(key_control->flags & FLOW_DIS_IS_FRAGMENT) || (key_control->flags & FLOW_DIS_FIRST_FRAG)) {
 		__skb_flow_dissect_ports(skb, flow_dissector, target_container,
 					 data, nhoff, ip_proto, hlen);
+	}
 
 	/* Process result of IP proto processing */
 	switch (fdret) {
