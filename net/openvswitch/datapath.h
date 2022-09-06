@@ -289,6 +289,7 @@ void ovs_dp_detach_port(struct vport *);
 int ovs_dp_upcall(struct datapath *, struct sk_buff *,
 		  const struct sw_flow_key *, const struct dp_upcall_info *,
 		  uint32_t cutlen);
+void ovs_dp_port_del_notify(struct datapath *dp, struct vport *vp);
 
 u32 ovs_dp_get_upcall_portid(const struct datapath *dp, uint32_t cpu_id);
 
