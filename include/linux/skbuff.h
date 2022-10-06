@@ -993,6 +993,10 @@ struct sk_buff {
 	__u8			fast_xmit:1;
 	__u8			fast_forwarded:1;
 	/* 1 or 3 bit hole */
+	/* Flag to check if skb is allocated from recycler */
+	__u8			is_from_recycler:1;
+	/* Flag for fast recycle in fast xmit path */
+	__u8			fast_recycled:1;
 	/* Flag for recycle in PPE DS */
 	__u8			recycled_for_ds:1;
 
