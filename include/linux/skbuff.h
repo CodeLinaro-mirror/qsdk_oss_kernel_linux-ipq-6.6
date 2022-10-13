@@ -993,6 +993,8 @@ struct sk_buff {
 	__u8			fast_xmit:1;
 	__u8			fast_forwarded:1;
 	/* 1 or 3 bit hole */
+	/* Flag for recycle in PPE DS */
+	__u8			recycled_for_ds:1;
 
 #if defined(CONFIG_NET_SCHED) || defined(CONFIG_NET_XGRESS)
 	__u16			tc_index;	/* traffic control index */
