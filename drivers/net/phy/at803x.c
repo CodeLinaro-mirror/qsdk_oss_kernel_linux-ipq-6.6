@@ -1316,13 +1316,23 @@ static int at803x_config_aneg(struct phy_device *phydev)
 	ret = 0;
 
 	if (phydev->drv->phy_id == QCA8081_PHY_ID) {
-		int phy_ctrl = 0;
+		int phy_ctrl = 0, duplex = 0;
 
 		/* The reg MII_BMCR also needs to be configured for force mode, the
 		 * genphy_config_aneg is also needed.
 		 */
-		if (phydev->autoneg == AUTONEG_DISABLE)
+		if (phydev->autoneg == AUTONEG_DISABLE) {
+			/*QCA8081 PHY support force duplex half, but genphy_c45_pma_setup_forced
+			 *only support duplex full, so need to set duplex as full to configure speed
+			 *when duplex is half
+			 */
+			duplex = phydev->duplex;
+			if(phydev->duplex == DUPLEX_HALF)
+				phydev->duplex = DUPLEX_FULL;
 			genphy_c45_pma_setup_forced(phydev);
+			phydev->duplex = duplex;
+
+		}
 
 		if (linkmode_test_bit(ETHTOOL_LINK_MODE_2500baseT_Full_BIT, phydev->advertising))
 			phy_ctrl = MDIO_AN_10GBT_CTRL_ADV2_5G;
