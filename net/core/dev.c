@@ -4440,6 +4440,7 @@ bool dev_fast_xmit_qdisc(struct sk_buff *skb, struct net_device *top_qdisc_dev, 
 
 	/* Update the dev so that we can transmit to bottom device after qdisc */
 	skb->dev = bottom_dev;
+	skb->fast_qdisc = 1;
 	rc = __dev_xmit_skb_qdisc(skb, q, top_qdisc_dev, txq);
 
 	rcu_read_unlock_bh();

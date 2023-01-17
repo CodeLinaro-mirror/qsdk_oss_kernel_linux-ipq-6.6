@@ -467,11 +467,14 @@ static inline bool qdisc_restart(struct Qdisc *q, int *packets)
 		struct sk_buff *next = skb->next;
 		skb->next = NULL;
 
-		if (likely(skb->fast_forwarded)) {
+		if (likely(skb->fast_qdisc)) {
 			/*
-			 * For SFE fast forwarded packets, we send packets directly
+			 * For SFE fast_qdisc marked packets, we send packets directly
 			 * to physical interface pointed to by skb->dev
+			 * We can clear fast_qdisc since we will not re-enqueue packet in this
+			 * path
 			 */
+			skb->fast_qdisc = 0;
 			if (!sch_direct_xmit_fast(skb, q, skb->dev, root_lock)) {
 				return false;
 			}
