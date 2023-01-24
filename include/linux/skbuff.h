@@ -1392,7 +1392,11 @@ static inline int skb_pad(struct sk_buff *skb, int pad)
 }
 #define dev_kfree_skb(a)	consume_skb(a)
 #define dev_kfree_skb_list_fast(a)	consume_skb_list_fast(a)
+#if defined(SKB_FAST_RECYCLABLE_DEBUG_ENABLE) && defined(CONFIG_SKB_RECYCLER)
 #define dev_check_skb_fast_recyclable(a)       check_skb_fast_recyclable(a)
+#else
+#define dev_check_skb_fast_recyclable(a)
+#endif
 
 int skb_append_pagefrags(struct sk_buff *skb, struct page *page,
 			 int offset, size_t size, size_t max_frags);
