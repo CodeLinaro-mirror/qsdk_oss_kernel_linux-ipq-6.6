@@ -1627,6 +1627,16 @@ static rx_handler_result_t bond_handle_frame(struct sk_buff **pskb)
 				  bond->dev->addr_len);
 	}
 
+	/*
+	 * Set the PACKET_HOST for MLO mode as
+	 * MLO bond netdevice needs to support routing
+	 */
+	if (BOND_MODE(bond) == BOND_MODE_MLO) {
+		if (ether_addr_equal(bond->dev->dev_addr, eth_hdr(skb)->h_dest)) {
+			skb->pkt_type = PACKET_HOST;
+		}
+	}
+
 	return ret;
 }
 
