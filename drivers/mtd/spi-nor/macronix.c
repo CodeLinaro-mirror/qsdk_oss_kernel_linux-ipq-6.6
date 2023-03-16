@@ -108,6 +108,7 @@ static const struct flash_info macronix_nor_parts[] = {
 static void macronix_nor_default_init(struct spi_nor *nor)
 {
 	nor->params->quad_enable = spi_nor_sr1_bit6_quad_enable;
+	nor->flags |= SNOR_F_HAS_LOCK;
 }
 
 static int macronix_nor_late_init(struct spi_nor *nor)
