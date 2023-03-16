@@ -382,7 +382,9 @@ int __init jffs2_compressors_init(void)
 	if (ret)
 		goto exit_dynrubin;
 
-
+#ifdef CONFIG_JFFS2_LZMA
+	jffs2_lzma_init();
+#endif
 /* Setting default compression mode */
 #ifdef CONFIG_JFFS2_CMODE_NONE
 	jffs2_compression_mode = JFFS2_COMPR_MODE_NONE;
@@ -417,6 +419,9 @@ exit:
 int jffs2_compressors_exit(void)
 {
 /* Unregistering compressors */
+#ifdef CONFIG_JFFS2_LZMA
+	jffs2_lzma_exit();
+#endif
 	jffs2_lzo_exit();
 	jffs2_dynrubin_exit();
 	jffs2_rubinmips_exit();
