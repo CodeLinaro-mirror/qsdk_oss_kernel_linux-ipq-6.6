@@ -460,16 +460,16 @@ config BCH_CONST_T
 # Textsearch support is select'ed if needed
 #
 config TEXTSEARCH
-	bool
+	bool "Textsearch support"
 
 config TEXTSEARCH_KMP
-	tristate
+	tristate "TEXTSEARCH KMP"
 
 config TEXTSEARCH_BM
-	tristate
+	tristate "TEXTSEARCH BM"
 
 config TEXTSEARCH_FSM
-	tristate
+	tristate "TEXTSEARCH FSM"
 
 config BTREE
 	bool
