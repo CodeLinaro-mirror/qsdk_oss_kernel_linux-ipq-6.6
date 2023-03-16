@@ -1197,6 +1197,7 @@ such as "arm/cortex-a34".''',
 #include "util/header.h"
 #include "util/pmu.h"
 #include <string.h>
+#include <strings.h>
 #include <stddef.h>
 
 struct compact_pmu_event {
