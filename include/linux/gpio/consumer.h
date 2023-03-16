@@ -648,11 +648,21 @@ int gpiod_export(struct gpio_desc *desc, bool direction_may_change);
 int gpiod_export_link(struct device *dev, const char *name,
 		      struct gpio_desc *desc);
 void gpiod_unexport(struct gpio_desc *desc);
-
+int __gpiod_export(struct gpio_desc *desc, bool direction_may_change, const char *name);
+static inline int gpio_export_with_name(unsigned gpio, bool direction_may_change, const char *name)
+{
+	return __gpiod_export(gpio_to_desc(gpio), direction_may_change, name);
+}
 #else  /* CONFIG_GPIOLIB && CONFIG_GPIO_SYSFS */
 
 #include <asm/errno.h>
 
+static inline int _gpiod_export(struct gpio_desc *desc,
+		bool direction_may_change,
+		const char *name)
+{
+	return -ENOSYS;
+}
 static inline int gpiod_export(struct gpio_desc *desc,
 			       bool direction_may_change)
 {
