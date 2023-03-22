@@ -37,6 +37,9 @@
 
 #define IPQ_PHY_SET_DELAY_US	100000
 
+#define IPQ_HIGH_ADDR_PREFIX	0x18
+#define IPQ_LOW_ADDR_PREFIX	0x10
+
 struct ipq4019_mdio_data {
 	void __iomem	*membase;
 	void __iomem *eth_ldo_rdy;
@@ -202,6 +205,59 @@ static int ipq4019_mdio_write_c22(struct mii_bus *bus, int mii_id, int regnum,
 
 	return 0;
 }
+
+static inline void split_addr(u32 regaddr, u16 *r1, u16 *r2, u16 *page, u16 *sw_addr)
+{
+	*r1 = regaddr & 0x1c;
+
+	regaddr >>= 5;
+	*r2 = regaddr & 0x7;
+
+	regaddr >>= 3;
+	*page = regaddr & 0xffff;
+
+	regaddr >>= 16;
+	*sw_addr = regaddr & 0xff;
+}
+
+u32 ipq_mii_read(struct mii_bus *bus, unsigned int reg)
+{
+	u16 r1, r2, page, sw_addr;
+	u16 lo, hi;
+
+	split_addr(reg, &r1, &r2, &page, &sw_addr);
+
+	/* There is no competition, so the lock is not needed.
+	 * since this function is only called before mii_bus registered.
+	 */
+	bus->write(bus, IPQ_HIGH_ADDR_PREFIX | (sw_addr >> 5), sw_addr & 0x1f, page);
+
+	lo = bus->read(bus, IPQ_LOW_ADDR_PREFIX | r2, r1);
+	hi = bus->read(bus, IPQ_LOW_ADDR_PREFIX | r2, r1 | BIT(1));
+
+	return hi << 16 | lo;
+};
+
+int ipq_mii_write(struct mii_bus *bus, unsigned int reg, unsigned int val)
+{
+	u16 r1, r2, page, sw_addr;
+	u16 lo, hi;
+
+	lo = val & 0xffff;
+	hi = (u16)(val >> 16);
+
+	split_addr(reg, &r1, &r2, &page, &sw_addr);
+
+	/* There is no competition, so the lock is not needed.
+	 * since this function is only called before mii_bus registered.
+	 */
+	bus->write(bus, IPQ_HIGH_ADDR_PREFIX | (sw_addr >> 5), sw_addr & 0x1f, page);
+
+	bus->write(bus, IPQ_LOW_ADDR_PREFIX | r2, r1, lo);
+	bus->write(bus, IPQ_LOW_ADDR_PREFIX | r2, r1 | BIT(1), hi);
+
+	return 0;
+};
 
 static int ipq_mdio_reset(struct mii_bus *bus)
 {
