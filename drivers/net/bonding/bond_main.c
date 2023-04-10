@@ -1446,6 +1446,10 @@ static netdev_features_t bond_fix_features(struct net_device *dev,
 	return features;
 }
 
+#define BOND_MLO_VLAN_FEATURES	(NETIF_F_SG | \
+				 NETIF_F_FRAGLIST | \
+				 NETIF_F_HIGHDMA | NETIF_F_LRO)
+
 #define BOND_VLAN_FEATURES	(NETIF_F_HW_CSUM | NETIF_F_SG | \
 				 NETIF_F_FRAGLIST | NETIF_F_GSO_SOFTWARE | \
 				 NETIF_F_HIGHDMA | NETIF_F_LRO)
@@ -1476,13 +1480,25 @@ static void bond_compute_features(struct bonding *bond)
 
 	if (!bond_has_slaves(bond))
 		goto done;
+
+	/*
+	 * Use features specific to bond MLO
+	 */
+	if (BOND_MODE(bond) == BOND_MODE_MLO) {
+		vlan_features = BOND_MLO_VLAN_FEATURES;
+	}
+
 	vlan_features &= NETIF_F_ALL_FOR_ALL;
 	mpls_features &= NETIF_F_ALL_FOR_ALL;
 
 	bond_for_each_slave(bond, slave, iter) {
-		vlan_features = netdev_increment_features(vlan_features,
-			slave->dev->vlan_features, BOND_VLAN_FEATURES);
-
+		if (BOND_MODE(bond) == BOND_MODE_MLO) {
+			vlan_features = netdev_increment_features(vlan_features,
+				slave->dev->vlan_features, BOND_MLO_VLAN_FEATURES);
+		} else {
+			vlan_features = netdev_increment_features(vlan_features,
+				slave->dev->vlan_features, BOND_VLAN_FEATURES);
+		}
 		enc_features = netdev_increment_features(enc_features,
 							 slave->dev->hw_enc_features,
 							 BOND_ENC_FEATURES);
@@ -6848,6 +6864,12 @@ struct net_device *bond_create_mlo(struct net *net, const char *name, struct mlo
 
 	memcpy((void *)&bond->mlo_info, (void *)mlo_info, sizeof(*mlo_info));
 	eth_hw_addr_random(bond_dev);
+
+	/*
+	 * Disable HW CSUM as wlan driver doesn't support
+	 */
+	bond_dev->hw_features &= ~(NETIF_F_HW_CSUM);
+	bond_dev->features &= ~(NETIF_F_HW_CSUM);
 
 	res = register_netdevice(bond_dev);
 	if (res < 0) {
