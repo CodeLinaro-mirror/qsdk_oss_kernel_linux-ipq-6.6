@@ -216,12 +216,14 @@ struct bond_ipsec {
  * @bond_get_mlo_tx_netdev: Callback function to get link interface from wifi driver for transmit
  * @bond_mlo_ctx: Private member for wifi driver
  * @wdev: ieee80211_ptr for wifi VAP
+ * @bond_mlo_netdev_priv_destructor: Callback function to remove wiphy instance from wifi driver
  */
 struct mlo_bond_info {
 	int (*bond_mlo_xmit_netdev)(struct sk_buff *skb, struct net_device *bond_dev);
 	struct net_device *(*bond_get_mlo_tx_netdev)(void *bond_mlo_ctx, void *dst);
 	void *bond_mlo_ctx;
 	struct wireless_dev *wdev;
+	void (*bond_mlo_netdev_priv_destructor)(struct net_device *bond_dev);
 };
 
 /*
