@@ -1321,6 +1321,7 @@ static int br_changelink(struct net_device *brdev, struct nlattr *tb[],
 		br_stp_set_bridge_priority(br, priority);
 	}
 
+#ifdef CONFIG_BRIDGE_VLAN_FILTERING
 	if (data[IFLA_BR_VLAN_FILTERING]) {
 		u8 vlan_filter = nla_get_u8(data[IFLA_BR_VLAN_FILTERING]);
 
@@ -1329,7 +1330,6 @@ static int br_changelink(struct net_device *brdev, struct nlattr *tb[],
 			return err;
 	}
 
-#ifdef CONFIG_BRIDGE_VLAN_FILTERING
 	if (data[IFLA_BR_VLAN_PROTOCOL]) {
 		__be16 vlan_proto = nla_get_be16(data[IFLA_BR_VLAN_PROTOCOL]);
 
