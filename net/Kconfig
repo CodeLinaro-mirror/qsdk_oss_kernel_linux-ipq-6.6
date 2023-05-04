@@ -436,6 +436,12 @@ config NET_DROP_MONITOR
 	  just checking the various proc files and other utilities for
 	  drop statistics, say N here.
 
+config DEFAULT_QDISC_DISABLE
+	bool "Diable default qdisc configuration"
+	help
+	Use this config to disable default qdisc configuration on network
+	devices.
+
 endmenu
 
 endmenu
