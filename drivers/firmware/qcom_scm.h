@@ -161,6 +161,17 @@ extern int __qti_scm_tz_hvc_log(struct device *dev, u32 svc_id, u32 cmd_id,
 #define QCOM_SCM_WAITQ_RESUME			0x02
 #define QCOM_SCM_WAITQ_GET_WQ_CTX		0x03
 
+/*
+ * QCOM_SCM_QCE_SVC - commands related to secure key for secure nand
+ */
+#define QCOM_SCM_QCE_CMD		0x3
+#define QCOM_SCM_QCE_CRYPTO_SIP		0xA
+#define QCOM_SCM_QCE_ENC_DEC_CMD	0xB
+#define QCOM_SCM_SECCRYPT_CLRKEY_CMD	0xC
+extern int __qti_sec_crypt(struct device *dev, void *confBuf, int size);
+extern int __qti_seccrypt_clearkey(struct device *dev);
+extern int __qti_set_qcekey_sec(struct device *dev, void *confBuf, int size);
+
 /* common error codes */
 #define QCOM_SCM_V2_EBUSY	-12
 #define QCOM_SCM_ENOMEM		-5

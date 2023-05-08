@@ -154,6 +154,9 @@ extern int qcom_scm_lmh_dcvsh(u32 payload_fn, u32 payload_reg, u32 payload_val,
 			      u64 limit_node, u32 node_id, u64 version);
 extern int qcom_scm_lmh_profile_change(u32 profile_id);
 extern bool qcom_scm_lmh_dcvsh_available(void);
+extern int qti_seccrypt_clearkey(void);
+extern int qti_sec_crypt(void *buf, int size);
+extern int qti_set_qcekey_sec(void *buf, int size);
 
 extern int qti_scm_is_tz_log_encrypted(void);
 extern int qti_scm_get_encrypted_tz_log(void *ker_buf, u32 buf_len, u32 log_id);

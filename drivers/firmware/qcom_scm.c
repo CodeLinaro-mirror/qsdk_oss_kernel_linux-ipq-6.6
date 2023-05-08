@@ -1529,6 +1529,97 @@ static int qcom_scm_find_dload_address(struct device *dev, u64 *addr)
 	return 0;
 }
 
+/*
+ * qcom_set_qcekey_sec() - Configure key securely
+ */
+int qti_set_qcekey_sec(void *buf, int size)
+{
+	return __qti_set_qcekey_sec(__scm->dev, buf, size);
+}
+EXPORT_SYMBOL_GPL(qti_set_qcekey_sec);
+
+int qti_sec_crypt(void *buf, int size)
+{
+	return __qti_sec_crypt(__scm->dev, buf, size);
+}
+EXPORT_SYMBOL_GPL(qti_sec_crypt);
+
+int qti_seccrypt_clearkey(void)
+{
+	return __qti_seccrypt_clearkey(__scm->dev);
+}
+EXPORT_SYMBOL_GPL(qti_seccrypt_clearkey);
+
+int __qti_set_qcekey_sec(struct device *dev, void *confBuf, int size)
+{
+	int ret;
+	dma_addr_t conf_phys;
+	struct qcom_scm_res res;
+	struct qcom_scm_desc desc = {
+		.svc = QCOM_SCM_QCE_CRYPTO_SIP,
+		.cmd = QCOM_SCM_QCE_CMD,
+		.arginfo = QCOM_SCM_ARGS(1, QCOM_SCM_RO),
+		.owner = ARM_SMCCC_OWNER_SIP,
+	};
+
+	conf_phys = dma_map_single(dev, confBuf, size, DMA_TO_DEVICE);
+	ret = dma_mapping_error(dev, conf_phys);
+	if (ret) {
+		dev_err(dev, "Allocation fail for conf buffer\n");
+		return -ENOMEM;
+	}
+	desc.args[1] = (u64)conf_phys;
+	desc.args[2] = size;
+
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+
+	dma_unmap_single(dev, conf_phys, size, DMA_TO_DEVICE);
+	return ret ? : res.result[0];
+}
+
+int __qti_sec_crypt(struct device *dev, void *confBuf, int size)
+{
+	int ret;
+	dma_addr_t conf_phys;
+	struct qcom_scm_res res;
+	struct qcom_scm_desc desc = {
+		.svc = QCOM_SCM_QCE_CRYPTO_SIP,
+		.cmd = QCOM_SCM_QCE_ENC_DEC_CMD,
+		.arginfo = QCOM_SCM_ARGS(2, QCOM_SCM_RW, QCOM_SCM_VAL),
+		.owner = ARM_SMCCC_OWNER_SIP,
+	};
+
+	conf_phys = dma_map_single(dev, confBuf, size, DMA_TO_DEVICE);
+	ret = dma_mapping_error(dev, conf_phys);
+	if (ret) {
+		dev_err(dev, "Allocation fail for conf buffer\n");
+		return -ENOMEM;
+	}
+	desc.args[1] = (u64)conf_phys;
+	desc.args[2] = size;
+
+	return qcom_scm_call(__scm->dev, &desc, &res);
+
+	dma_unmap_single(dev, conf_phys, size, DMA_TO_DEVICE);
+	return ret ? : res.result[0];
+}
+
+int __qti_seccrypt_clearkey(struct device *dev)
+{
+	int ret;
+	struct qcom_scm_desc desc = {
+		.svc = QCOM_SCM_QCE_CRYPTO_SIP,
+		.cmd = QCOM_SCM_SECCRYPT_CLRKEY_CMD,
+		.arginfo = QCOM_SCM_ARGS(0, QCOM_SCM_VAL),
+		.owner = ARM_SMCCC_OWNER_SIP,
+	};
+	struct qcom_scm_res res;
+
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+
+	return ret ? : res.result[0];
+}
+
 /**
  * qcom_scm_is_available() - Checks if SCM is available
  */
