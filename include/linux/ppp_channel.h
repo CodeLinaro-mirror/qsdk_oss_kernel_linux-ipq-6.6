@@ -19,6 +19,11 @@
 #include <linux/skbuff.h>
 #include <linux/poll.h>
 #include <net/net_namespace.h>
+#include <linux/notifier.h>
+
+/* PPP channel connection event types */
+#define PPP_CHANNEL_DISCONNECT	0
+#define PPP_CHANNEL_CONNECT	1
 
 struct net_device_path;
 struct net_device_path_ctx;
@@ -33,6 +38,15 @@ struct ppp_channel_ops {
 	int	(*fill_forward_path)(struct net_device_path_ctx *,
 				     struct net_device_path *,
 				     const struct ppp_channel *);
+
+	/* Get channel protocol type, one of PX_PROTO_XYZ or specific to
+	 * the channel subtype
+	 */
+	int (*get_channel_protocol)(struct ppp_channel *);
+	/* Hold the channel from being destroyed */
+	void (*hold)(struct ppp_channel *);
+	/* Release hold on the channel */
+	void (*release)(struct ppp_channel *);
 };
 
 struct ppp_channel {
@@ -47,6 +61,38 @@ struct ppp_channel {
 };
 
 #ifdef __KERNEL__
+/* Call this to obtain the underlying protocol of the PPP channel,
+ * e.g. PX_PROTO_OE
+ */
+extern int ppp_channel_get_protocol(struct ppp_channel *);
+
+/* Call this to hold a channel */
+extern bool ppp_channel_hold(struct ppp_channel *);
+
+/* Call this to release a hold you have upon a channel */
+extern void ppp_channel_release(struct ppp_channel *);
+
+/* Release hold on PPP channels */
+extern void ppp_release_channels(struct ppp_channel *channels[],
+				 unsigned int chan_sz);
+
+/* Hold PPP channels for the PPP device */
+extern int ppp_hold_channels(struct net_device *dev,
+			     struct ppp_channel *channels[],
+			     unsigned int chan_sz);
+
+/* Test if the ppp device is a multi-link ppp device */
+extern int ppp_is_multilink(struct net_device *dev);
+
+/* Update statistics of the PPP net_device by incrementing related
+ * statistics field value with corresponding parameter
+ */
+extern void ppp_update_stats(struct net_device *dev, unsigned long rx_packets,
+			     unsigned long rx_bytes, unsigned long tx_packets,
+			     unsigned long tx_bytes, unsigned long rx_errors,
+			     unsigned long tx_errors, unsigned long rx_dropped,
+			     unsigned long tx_dropped);
+
 /* Called by the channel when it can send some more data. */
 extern void ppp_output_wakeup(struct ppp_channel *);
 
@@ -75,6 +121,12 @@ extern int ppp_unit_number(struct ppp_channel *);
 
 /* Get the device name associated with a channel, or NULL if none */
 extern char *ppp_dev_name(struct ppp_channel *);
+
+/* Register the PPP channel connect notifier */
+extern void ppp_channel_connection_register_notify(struct notifier_block *nb);
+
+/* Unregister the PPP channel connect notifier */
+extern void ppp_channel_connection_unregister_notify(struct notifier_block *nb);
 
 /*
  * SMP locking notes:

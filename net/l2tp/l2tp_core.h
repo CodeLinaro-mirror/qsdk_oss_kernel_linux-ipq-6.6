@@ -231,6 +231,8 @@ struct l2tp_session *l2tp_session_get(const struct net *net, u32 session_id);
 struct l2tp_session *l2tp_session_get_nth(struct l2tp_tunnel *tunnel, int nth);
 struct l2tp_session *l2tp_session_get_by_ifname(const struct net *net,
 						const char *ifname);
+void l2tp_stats_update(struct l2tp_tunnel *tunnel, struct l2tp_session *session,
+		       struct l2tp_stats *stats);
 
 /* Tunnel and session lifetime management.
  * Creation of a new instance is a two-step process: create, then register.
