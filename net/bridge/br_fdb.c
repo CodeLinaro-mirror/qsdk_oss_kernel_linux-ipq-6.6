@@ -914,6 +914,44 @@ void br_fdb_update(struct net_bridge *br, struct net_bridge_port *source,
 	}
 }
 
+/* Refresh FDB entries for bridge packets being forwarded by offload engines */
+void br_refresh_fdb_entry(struct net_device *dev, const char *addr)
+{
+	struct net_bridge_port *p = br_port_get_rcu(dev);
+
+	if (!p || p->state == BR_STATE_DISABLED)
+		return;
+
+	if (!is_valid_ether_addr(addr)) {
+		pr_info("bridge: Attempt to refresh with invalid ether address %pM\n",
+			addr);
+		return;
+	}
+
+	rcu_read_lock();
+	br_fdb_update(p->br, p, addr, 0, true);
+	rcu_read_unlock();
+}
+EXPORT_SYMBOL_GPL(br_refresh_fdb_entry);
+
+/* Look up the MAC address in the device's bridge fdb table */
+struct net_bridge_fdb_entry *br_fdb_has_entry(struct net_device *dev,
+					      const char *addr, __u16 vid)
+{
+	struct net_bridge_port *p = br_port_get_rcu(dev);
+	struct net_bridge_fdb_entry *fdb;
+
+	if (!p || p->state == BR_STATE_DISABLED)
+		return NULL;
+
+	rcu_read_lock();
+	fdb = fdb_find_rcu(&p->br->fdb_hash_tbl, addr, vid);
+	rcu_read_unlock();
+
+	return fdb;
+}
+EXPORT_SYMBOL_GPL(br_fdb_has_entry);
+
 /* Dump information about entries, in response to GETNEIGH */
 int br_fdb_dump(struct sk_buff *skb,
 		struct netlink_callback *cb,

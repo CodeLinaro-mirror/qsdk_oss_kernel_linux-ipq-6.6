@@ -71,6 +71,14 @@ void brioctl_set(int (*hook)(struct net *net, struct net_bridge *br,
 			     void __user *uarg));
 int br_ioctl_call(struct net *net, struct net_bridge *br, unsigned int cmd,
 		  struct ifreq *ifr, void __user *uarg);
+extern struct net_device *br_port_dev_get(struct net_device *dev,
+					  unsigned char *addr);
+extern void br_refresh_fdb_entry(struct net_device *dev, const char *addr);
+extern void br_dev_update_stats(struct net_device *dev,
+				struct rtnl_link_stats64 *nlstats);
+extern struct net_bridge_fdb_entry *br_fdb_has_entry(struct net_device *dev,
+						     const char *addr,
+						     __u16 vid);
 
 #if IS_ENABLED(CONFIG_BRIDGE) && IS_ENABLED(CONFIG_BRIDGE_IGMP_SNOOPING)
 int br_multicast_list_adjacent(struct net_device *dev,
