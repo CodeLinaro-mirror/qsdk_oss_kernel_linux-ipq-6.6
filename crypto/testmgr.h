@@ -19122,6 +19122,10 @@ static const struct cipher_testvec aes_lrw_tv_template[] = {
 
 static const struct cipher_testvec aes_xts_tv_template[] = {
 	/* http://grouper.ieee.org/groups/1619/email/pdf00086.pdf */
+#ifndef CONFIG_CRYPTO_NO_AES_XTS_ZERO_KEY_SUPPORT
+	/*
+	 * zero-key for AES XTS is not supported in ipq6018 and ipq9574
+	 */
 	{ /* XTS-AES 1 */
 		.key    = "\x00\x00\x00\x00\x00\x00\x00\x00"
 			  "\x00\x00\x00\x00\x00\x00\x00\x00"
@@ -19140,7 +19144,9 @@ static const struct cipher_testvec aes_xts_tv_template[] = {
 			  "\xcd\x43\xd2\xf5\x95\x98\xed\x85"
 			  "\x8c\x02\xc2\x65\x2f\xbf\x92\x2e",
 		.len	= 32,
-	}, { /* XTS-AES 2 */
+	},
+#endif
+	{ /* XTS-AES 2 */
 		.key    = "\x11\x11\x11\x11\x11\x11\x11\x11"
 			  "\x11\x11\x11\x11\x11\x11\x11\x11"
 			  "\x22\x22\x22\x22\x22\x22\x22\x22"
@@ -19669,7 +19675,9 @@ static const struct cipher_testvec aes_ctr_tv_template[] = {
 			  "\xFA\x3A\x05\x4C\xFA\xD1\xFF\xFE"
 			  "\xF1\x4C\xE5\xB2\x91\x64\x0C\x51",
 		.len	= 496,
-	}, { /* Generated with Crypto++ */
+	},
+#ifndef CONFIG_CRYPTO_NO_AES_CTR_UNEVEN_DATA_LEN_SUPPORT
+	{ /* Generated with Crypto++ */
 		.key	= "\xC9\x83\xA6\xC9\xEC\x0F\x32\x55"
 			  "\x0F\x32\x55\x78\x9B\xBE\x78\x9B"
 			  "\xBE\xE1\x04\x27\xE1\x04\x27\x4A"
@@ -19807,6 +19815,7 @@ static const struct cipher_testvec aes_ctr_tv_template[] = {
 			  "\xFB\xF2\x3F",
 		.len	= 499,
 	},
+#endif
 };
 
 static const struct cipher_testvec aes_ctr_rfc3686_tv_template[] = {
