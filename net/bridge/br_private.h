@@ -1564,6 +1564,7 @@ void br_vlan_fill_forward_path_pvid(struct net_bridge *br,
 int br_vlan_fill_forward_path_mode(struct net_bridge *br,
 				   struct net_bridge_port *dst,
 				   struct net_device_path *path);
+void br_vlan_disable_default_pvid(struct net_bridge *br);
 
 static inline struct net_bridge_vlan_group *br_vlan_group(
 					const struct net_bridge *br)

@@ -4789,7 +4789,7 @@ int netdev_walk_all_lower_dev_rcu(struct net_device *dev,
 void *netdev_adjacent_get_private(struct list_head *adj_list);
 void *netdev_lower_get_first_private_rcu(struct net_device *dev);
 struct net_device *netdev_master_upper_dev_get(struct net_device *dev);
-struct net_device *netdev_master_upper_dev_get_rcu(struct net_device *dev);
+struct net_device *netdev_master_upper_dev_get_rcu(const struct net_device *dev);
 int netdev_upper_dev_link(struct net_device *dev, struct net_device *upper_dev,
 			  struct netlink_ext_ack *extack);
 int netdev_master_upper_dev_link(struct net_device *dev,
