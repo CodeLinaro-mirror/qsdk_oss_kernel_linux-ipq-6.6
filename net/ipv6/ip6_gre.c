@@ -53,7 +53,6 @@
 #include <net/erspan.h>
 #include <net/dst_metadata.h>
 
-
 static bool log_ecn_error = true;
 module_param(log_ecn_error, bool, 0644);
 MODULE_PARM_DESC(log_ecn_error, "Log packets received with corrupted ECN");
@@ -413,7 +412,6 @@ static void ip6gre_tunnel_uninit(struct net_device *dev)
 	dst_cache_reset(&t->dst_cache);
 	netdev_put(dev, &t->dev_tracker);
 }
-
 
 static int ip6gre_err(struct sk_buff *skb, struct inet6_skb_parm *opt,
 		       u8 type, u8 code, int offset, __be32 info)
@@ -1614,7 +1612,6 @@ static int __net_init ip6gre_init_net(struct net *net)
 	 */
 	ign->fb_tunnel_dev->features |= NETIF_F_NETNS_LOCAL;
 
-
 	ip6gre_fb_tunnel_init(ign->fb_tunnel_dev);
 	ign->fb_tunnel_dev->rtnl_link_ops = &ip6gre_link_ops;
 
@@ -1936,6 +1933,7 @@ static void ip6gre_tap_setup(struct net_device *dev)
 
 	dev->priv_flags &= ~IFF_TX_SKB_SHARING;
 	dev->priv_flags |= IFF_LIVE_ADDR_CHANGE;
+	dev->priv_flags_ext |= IFF_EXT_GRE_V6_TAP;
 	netif_keep_dst(dev);
 }
 
