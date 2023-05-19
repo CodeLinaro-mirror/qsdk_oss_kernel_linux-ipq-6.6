@@ -79,6 +79,8 @@ extern void br_dev_update_stats(struct net_device *dev,
 extern struct net_bridge_fdb_entry *br_fdb_has_entry(struct net_device *dev,
 						     const char *addr,
 						     __u16 vid);
+extern void br_fdb_update_register_notify(struct notifier_block *nb);
+extern void br_fdb_update_unregister_notify(struct notifier_block *nb);
 
 #if IS_ENABLED(CONFIG_BRIDGE) && IS_ENABLED(CONFIG_BRIDGE_IGMP_SNOOPING)
 int br_multicast_list_adjacent(struct net_device *dev,

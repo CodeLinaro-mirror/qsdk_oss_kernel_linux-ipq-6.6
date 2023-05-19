@@ -519,6 +519,20 @@ out:
 	spin_unlock_bh(&br->hash_lock);
 }
 
+ATOMIC_NOTIFIER_HEAD(br_fdb_update_notifier_list);
+
+void br_fdb_update_register_notify(struct notifier_block *nb)
+{
+	atomic_notifier_chain_register(&br_fdb_update_notifier_list, nb);
+}
+EXPORT_SYMBOL_GPL(br_fdb_update_register_notify);
+
+void br_fdb_update_unregister_notify(struct notifier_block *nb)
+{
+	atomic_notifier_chain_unregister(&br_fdb_update_notifier_list, nb);
+}
+EXPORT_SYMBOL_GPL(br_fdb_update_unregister_notify);
+
 void br_fdb_cleanup(struct work_struct *work)
 {
 	struct net_bridge *br = container_of(work, struct net_bridge,
@@ -527,6 +541,7 @@ void br_fdb_cleanup(struct work_struct *work)
 	unsigned long delay = hold_time(br);
 	unsigned long work_delay = delay;
 	unsigned long now = jiffies;
+	u8 mac_addr[6];
 
 	/* this part is tricky, in order to avoid blocking learning and
 	 * consequently forwarding, we rely on rcu to delete objects with
@@ -553,8 +568,12 @@ void br_fdb_cleanup(struct work_struct *work)
 			work_delay = min(work_delay, this_timer - now);
 		} else {
 			spin_lock_bh(&br->hash_lock);
-			if (!hlist_unhashed(&f->fdb_node))
-				fdb_delete(br, f, true);
+			if (!hlist_unhashed(&f->fdb_node)) {
+			    ether_addr_copy(mac_addr, f->key.addr.addr);
+			    fdb_delete(br, f, true);
+			    atomic_notifier_call_chain(&br_fdb_update_notifier_list, 0,
+						       (void *)mac_addr);
+			}
 			spin_unlock_bh(&br->hash_lock);
 		}
 	}
@@ -881,6 +900,7 @@ void br_fdb_update(struct net_bridge *br, struct net_bridge_port *source,
 				br_switchdev_fdb_notify(br, fdb, RTM_DELNEIGH);
 				WRITE_ONCE(fdb->dst, source);
 				fdb_modified = true;
+
 				/* Take over HW learned entry */
 				if (unlikely(test_bit(BR_FDB_ADDED_BY_EXT_LEARN,
 						      &fdb->flags)))
@@ -891,6 +911,10 @@ void br_fdb_update(struct net_bridge *br, struct net_bridge_port *source,
 				 */
 				if (unlikely(test_bit(BR_FDB_LOCKED, &fdb->flags)))
 					clear_bit(BR_FDB_LOCKED, &fdb->flags);
+
+				atomic_notifier_call_chain(
+					&br_fdb_update_notifier_list,
+					0, (void *)addr);
 			}
 
 			if (unlikely(test_bit(BR_FDB_ADDED_BY_USER, &flags)))
