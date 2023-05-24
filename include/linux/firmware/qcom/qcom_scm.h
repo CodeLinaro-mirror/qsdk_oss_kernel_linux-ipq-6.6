@@ -78,6 +78,7 @@ extern int qcom_scm_pas_init_image(u32 peripheral, const void *metadata,
 extern void qcom_scm_pas_metadata_release(struct qcom_scm_pas_metadata *ctx);
 extern int qcom_scm_pas_mem_setup(u32 peripheral, phys_addr_t addr,
 				  phys_addr_t size);
+extern long qcom_scm_is_feature_available(u32 feature_id);
 extern int qcom_scm_pas_auth_and_reset(u32 peripheral);
 extern int qcom_scm_pas_shutdown(u32 peripheral);
 extern bool qcom_scm_pas_supported(u32 peripheral);
