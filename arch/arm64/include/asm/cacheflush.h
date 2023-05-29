@@ -79,7 +79,9 @@ extern void dcache_clean_pou(unsigned long start, unsigned long end);
 extern long caches_clean_inval_user_pou(unsigned long start, unsigned long end);
 extern void sync_icache_aliases(unsigned long start, unsigned long end);
 
+extern void dmac_flush_range(const void *start, const void *end);
 extern void dmac_inv_range(const void *start, const void *end);
+extern void dmac_clean_range(const void *start, const void *end);
 extern void __dma_flush_area_no_dsb(const void *start, size_t size);
 extern void __dma_inv_area_no_dsb(const void *start, size_t size);
 extern void __dma_clean_area_no_dsb(const void *start, size_t size);
