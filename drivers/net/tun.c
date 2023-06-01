@@ -998,6 +998,7 @@ static int tun_net_init(struct net_device *dev)
 	dev->vlan_features = dev->features &
 			     ~(NETIF_F_HW_VLAN_CTAG_TX |
 			       NETIF_F_HW_VLAN_STAG_TX);
+	dev->priv_flags_ext |= IFF_EXT_TUN_TAP;
 
 	tun->flags = (tun->flags & ~TUN_FEATURES) |
 		      (ifr->ifr_flags & TUN_FEATURES);
