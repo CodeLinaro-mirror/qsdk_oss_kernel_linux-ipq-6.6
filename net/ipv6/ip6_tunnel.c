@@ -1525,17 +1525,19 @@ ipxip6_tnl_xmit(struct sk_buff *skb, struct net_device *dev,
 	fl6.flowi6_uid = sock_net_uid(dev_net(dev), NULL);
 	dsfield = INET_ECN_encapsulate(dsfield, orig_dsfield);
 
-	/* try to find matching FMR */
-	for (fmr = t->parms.fmrs; fmr; fmr = fmr->next) {
-		unsigned mshift = 32 - fmr->ip4_prefix_len;
-		if (ntohl(fmr->ip4_prefix.s_addr) >> mshift ==
-				ntohl(ip_hdr(skb)->daddr) >> mshift)
-			break;
-	}
+	if (protocol == IPPROTO_IPIP) {
+		/* try to find matching FMR */
+		for (fmr = t->parms.fmrs; fmr; fmr = fmr->next) {
+			unsigned mshift = 32 - fmr->ip4_prefix_len;
+			if (ntohl(fmr->ip4_prefix.s_addr) >> mshift ==
+					ntohl(ip_hdr(skb)->daddr) >> mshift)
+				break;
+		}
 
-	/* change dstaddr according to FMR */
-	if (fmr)
-		ip4ip6_fmr_calc(&fl6.daddr, ip_hdr(skb), skb_tail_pointer(skb), fmr, true);
+		/* change dstaddr according to FMR */
+		if (fmr)
+			ip4ip6_fmr_calc(&fl6.daddr, ip_hdr(skb), skb_tail_pointer(skb), fmr, true);
+	}
 
 	if (iptunnel_handle_offloads(skb, SKB_GSO_IPXIP6))
 		return -1;
