@@ -23,7 +23,6 @@
 
 #define MAX_TEMP	204000 /* milliCelcius */
 #define MIN_TEMP	0 /* milliCelcius */
-#define MAX_SENSOR	16
 
 /**
  * struct tsens_irq_data - IRQ status and temperature violations
@@ -714,7 +713,7 @@ static int __maybe_unused tsens_set_trip_activate(void *data, int trip,
 		hw_id = 0;
 	}
 
-	if ((hw_id < 0) || (hw_id > (MAX_SENSOR - 1)))
+	if ((hw_id < 0) || (hw_id > (MAX_SENSORS - 1)))
 		return -EINVAL;
 
 	switch(trip_type) {
@@ -768,7 +767,7 @@ static int __maybe_unused tsens_set_trip_temp(struct thermal_zone_device *tz, in
 	if ((temperature < MIN_TEMP) || (temperature > MAX_TEMP))
 		return -EINVAL;
 
-	if ((hw_id < 0) || (hw_id > (MAX_SENSOR - 1)))
+	if ((hw_id < 0) || (hw_id > (MAX_SENSORS - 1)))
 		return -EINVAL;
 
 	regmap_field_read(priv->rf[UP_THRESH_0 + hw_id], &th_hi);
@@ -1089,7 +1088,7 @@ int __init init_common(struct tsens_priv *priv)
 	ret = regmap_field_read(priv->rf[TSENS_EN], &enabled);
 	if (ret)
 		goto err_put_device;
-	if (!enabled) {
+	if (!enabled && (tsens_version(priv) != VER_2_X_NO_RPM)) {
 		dev_err(dev, "%s: device not enabled\n", __func__);
 		ret = -ENODEV;
 		goto err_put_device;
