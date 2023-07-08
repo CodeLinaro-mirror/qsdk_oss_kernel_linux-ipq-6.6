@@ -713,6 +713,46 @@ static void notify_uspace_tsens_fn(struct work_struct *work)
 	sysfs_notify(&s->tzd->device.kobj, NULL, "type");
 }
 
+static int tsens_panic_notify(struct thermal_zone_device *tz)
+{
+	struct tsens_sensor *s = tz->devdata;
+	struct tsens_priv *priv = s->priv;
+	u32 hw_id = s->hw_id;
+	unsigned int try = 0;
+	u32 trdy, valid;
+	unsigned int reg_val = 0;
+
+	if (tsens_version(priv) < VER_0_1) {
+		/* Pre v0.1 IP had a single register for each type of interrupt
+		 * and thresholds
+		 */
+		hw_id = 0;
+	}
+
+	if ((hw_id < 0) || (hw_id > (MAX_SENSORS - 1)))
+		return -EINVAL;
+
+	for(try = 0; try < 100; try++) {
+		try++;
+		regmap_field_read(priv->rf[TRDY], &trdy);
+
+		if (!trdy)
+			continue;
+
+		regmap_field_read(priv->rf[VALID_0 + hw_id], &valid);
+
+		if (!valid)
+			continue;
+
+		regmap_read(priv->tm_map, priv->fields[VALID_0 + hw_id].reg, &reg_val);
+		pr_emerg("The reading for sensor %d is 0x%08x\n", s->hw_id, reg_val);
+		return 0;
+	}
+
+	pr_emerg("Couldn't get reading for sensor %d\n", s->hw_id);
+	return -EINVAL;
+}
+
 static int __maybe_unused tsens_set_trip_activate(void *data, int trip,
 					enum thermal_trip_activation_mode mode)
 {
@@ -1286,6 +1326,7 @@ MODULE_DEVICE_TABLE(of, tsens_table);
 
 static const struct thermal_zone_device_ops tsens_of_ops = {
 	.get_temp = tsens_get_temp,
+	.panic_notify = tsens_panic_notify,
 #ifdef CONFIG_CPU_THERMAL
 	.set_trips = tsens_set_trips,
 #else
