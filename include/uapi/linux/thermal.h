@@ -4,6 +4,11 @@
 
 #define THERMAL_NAME_LENGTH	20
 
+enum thermal_trip_activation_mode {
+	THERMAL_TRIP_ACTIVATION_DISABLED = 0,
+	THERMAL_TRIP_ACTIVATION_ENABLED,
+};
+
 enum thermal_device_mode {
 	THERMAL_DEVICE_DISABLED = 0,
 	THERMAL_DEVICE_ENABLED,
@@ -14,6 +19,8 @@ enum thermal_trip_type {
 	THERMAL_TRIP_PASSIVE,
 	THERMAL_TRIP_HOT,
 	THERMAL_TRIP_CRITICAL,
+	THERMAL_TRIP_CONFIGURABLE_HI,
+	THERMAL_TRIP_CONFIGURABLE_LOW,
 };
 
 /* Adding event notification support elements */

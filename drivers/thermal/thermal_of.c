@@ -60,6 +60,8 @@ static const char * const trip_types[] = {
 	[THERMAL_TRIP_PASSIVE]	= "passive",
 	[THERMAL_TRIP_HOT]	= "hot",
 	[THERMAL_TRIP_CRITICAL]	= "critical",
+	[THERMAL_TRIP_CONFIGURABLE_HI] = "configurable_hi",
+	[THERMAL_TRIP_CONFIGURABLE_LOW] = "configurable_lo",
 };
 
 /**
