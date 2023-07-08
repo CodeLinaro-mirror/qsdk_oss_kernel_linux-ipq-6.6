@@ -660,7 +660,13 @@ static irqreturn_t tsens_irq_thread(int irq, void *data)
 		if (!tsens_threshold_violated(priv, hw_id, &d))
 			continue;
 
+#ifdef CONFIG_CPU_THERMAL
+		/* If CPUFreq cooling is enabled, then notify Thermal framework */
 		thermal_zone_device_update(s->tzd, THERMAL_EVENT_UNSPECIFIED);
+#else
+		/* Notify user space */
+		schedule_work(&priv->sensor[i].notify_work);
+#endif
 
 		if (tsens_version(priv) < VER_0_1) {
 			/* Constraint: There is only 1 interrupt control register for all
@@ -694,6 +700,17 @@ static irqreturn_t tsens_combined_irq_thread(int irq, void *data)
 		return ret;
 
 	return tsens_irq_thread(irq, data);
+}
+
+static void notify_uspace_tsens_fn(struct work_struct *work)
+{
+	struct tsens_sensor *s = container_of(work, struct tsens_sensor, notify_work);
+
+	if (!s || !s->tzd)
+		/* Do nothing. TSENS driver has not been registered yet */
+		return;
+
+	sysfs_notify(&s->tzd->device.kobj, NULL, "type");
 }
 
 static int __maybe_unused tsens_set_trip_activate(void *data, int trip,
@@ -1099,6 +1116,11 @@ int __init init_common(struct tsens_priv *priv)
 	if (IS_ERR(priv->rf[SENSOR_EN])) {
 		ret = PTR_ERR(priv->rf[SENSOR_EN]);
 		goto err_put_device;
+	}
+
+	for(i = 0; i < priv->num_sensors; i++) {
+		priv->sensor[i].status = priv->fields[LAST_TEMP_0 + i].reg;
+		INIT_WORK(&priv->sensor[i].notify_work, notify_uspace_tsens_fn);
 	}
 
 	priv->rf[INT_EN] = devm_regmap_field_alloc(dev, priv->tm_map,
