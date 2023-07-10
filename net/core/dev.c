@@ -2069,6 +2069,9 @@ static int call_netdevice_notifiers_mtu(unsigned long val,
 	return call_netdevice_notifiers_info(val, &info.info);
 }
 
+bool fast_tc_filter = false;
+EXPORT_SYMBOL_GPL(fast_tc_filter);
+
 #ifdef CONFIG_NET_INGRESS
 static DEFINE_STATIC_KEY_FALSE(ingress_needed_key);
 
@@ -5531,11 +5534,13 @@ another_round:
 			goto out;
 	}
 
-	fast_recv = rcu_dereference(athrs_fast_nat_recv);
-	if (fast_recv) {
-		if (fast_recv(skb)) {
-			ret = NET_RX_SUCCESS;
-			goto out;
+	if (likely(!fast_tc_filter)) {
+		fast_recv = rcu_dereference(athrs_fast_nat_recv);
+		if (fast_recv) {
+			if (fast_recv(skb)) {
+				ret = NET_RX_SUCCESS;
+				goto out;
+			}
 		}
 	}
 
@@ -5590,6 +5595,24 @@ skip_classify:
 		else if (unlikely(!skb))
 			goto out;
 	}
+
+	if (unlikely(!fast_tc_filter)) {
+		goto skip_fast_recv;
+	}
+
+	fast_recv = rcu_dereference(athrs_fast_nat_recv);
+	if (fast_recv) {
+		if (pt_prev) {
+			ret = deliver_skb(skb, pt_prev, orig_dev);
+			pt_prev = NULL;
+		}
+
+		if (fast_recv(skb)) {
+			ret = NET_RX_SUCCESS;
+			goto out;
+		}
+	}
+skip_fast_recv:
 
 	rx_handler = rcu_dereference(skb->dev->rx_handler);
 	if (rx_handler) {
