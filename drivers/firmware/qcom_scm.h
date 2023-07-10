@@ -39,6 +39,8 @@ enum qcom_scm_arg_types {
 
 #define QCOM_SCM_ARGS(...) QCOM_SCM_ARGS_IMPL(__VA_ARGS__, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
 
+#define SCM_QSEEOS_FNID(s, c) (((((s) & 0xFF) << 8) | ((c) & 0xFF)) | \
+				0x32000000)
 
 /**
  * struct qcom_scm_desc
@@ -123,6 +125,7 @@ extern int __qti_scm_tz_hvc_log(struct device *dev, u32 svc_id, u32 cmd_id,
 #define QTI_SCM_TZ_DIAG_CMD		0x2
 #define QTI_SCM_HVC_DIAG_CMD		0x7
 #define QTI_SCM_SMMUSTATE_CMD		0x19
+#define QCOM_IS_CALL_AVAIL_CMD		0x1
 
 #define QCOM_SCM_SVC_MP				0x0c
 #define QCOM_SCM_MP_RESTORE_SEC_CFG		0x02
@@ -173,6 +176,42 @@ extern int __qti_scm_tz_hvc_log(struct device *dev, u32 svc_id, u32 cmd_id,
 extern int __qti_sec_crypt(struct device *dev, void *confBuf, int size);
 extern int __qti_seccrypt_clearkey(struct device *dev);
 extern int __qti_set_qcekey_sec(struct device *dev, void *confBuf, int size);
+extern int __qti_scm_qseecom_remove_xpu(struct device *);
+extern int __qti_scm_qseecom_notify(struct device *dev,
+				    struct qsee_notify_app *req,
+				    size_t req_size,
+				    struct qseecom_command_scm_resp *resp,
+				    size_t resp_size);
+extern int __qti_scm_qseecom_load(struct device *dev,
+				  uint32_t smc_id, uint32_t cmd_id,
+				  union qseecom_load_ireq *req,
+				  size_t req_size,
+				  struct qseecom_command_scm_resp *resp,
+				  size_t resp_size);
+extern int __qti_scm_qseecom_send_data(struct device *dev,
+				       union qseecom_client_send_data_ireq *req,
+				       size_t req_size,
+				       struct qseecom_command_scm_resp *resp,
+				       size_t resp_size);
+extern int __qti_scm_qseecom_unload(struct device *dev,
+				    uint32_t smc_id, uint32_t cmd_id,
+				    struct qseecom_unload_ireq *req,
+				    size_t req_size,
+				    struct qseecom_command_scm_resp *resp,
+				    size_t resp_size);
+extern int __qti_scm_register_log_buf(struct device *dev,
+					 struct qsee_reg_log_buf_req *request,
+					 size_t req_size,
+					 struct qseecom_command_scm_resp
+					 *response, size_t resp_size);
+extern int __qti_scm_tls_hardening(struct device *dev, uint32_t req_addr,
+				   uint32_t req_size, uint32_t resp_addr,
+				   uint32_t resp_size, u32 cmd_id);
+extern int __qti_scm_aes(struct device *dev, uint32_t req_addr,
+			 uint32_t req_size, u32 cmd_id);
+extern int __qti_scm_aes_clear_key_handle(struct device *dev, uint32_t key_handle, u32 cmd_id);
+extern int __qcom_remove_xpu_scm_call_available(struct device *dev, u32 svc_id,
+						u32 cmd_id);
 
 /* common error codes */
 #define QCOM_SCM_V2_EBUSY	-12
@@ -183,6 +222,7 @@ extern int __qti_set_qcekey_sec(struct device *dev, void *confBuf, int size);
 #define QCOM_SCM_ERROR		-1
 #define QCOM_SCM_INTERRUPTED	1
 #define QCOM_SCM_WAITQ_SLEEP	2
+#define QCOM_SCM_EINVAL_SIZE	18
 
 static inline int qcom_scm_remap_error(int err)
 {

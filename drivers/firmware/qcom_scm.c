@@ -2051,6 +2051,339 @@ int qcom_qfprom_read_version(uint32_t sw_type, uint32_t value, uint32_t qfprom_r
 }
 EXPORT_SYMBOL_GPL(qcom_qfprom_read_version);
 
+int qti_scm_qseecom_remove_xpu()
+{
+	return __qti_scm_qseecom_remove_xpu(__scm->dev);
+}
+EXPORT_SYMBOL_GPL(qti_scm_qseecom_remove_xpu);
+
+int qti_scm_qseecom_notify(struct qsee_notify_app *req, size_t req_size,
+			   struct qseecom_command_scm_resp *resp,
+			   size_t resp_size)
+{
+	return __qti_scm_qseecom_notify(__scm->dev, req, req_size,
+				      resp, resp_size);
+}
+EXPORT_SYMBOL_GPL(qti_scm_qseecom_notify);
+
+int qti_scm_qseecom_load(uint32_t smc_id, uint32_t cmd_id,
+			 union qseecom_load_ireq *req, size_t req_size,
+			 struct qseecom_command_scm_resp *resp,
+			 size_t resp_size)
+{
+	return __qti_scm_qseecom_load(__scm->dev, smc_id, cmd_id, req, req_size,
+				    resp, resp_size);
+}
+EXPORT_SYMBOL_GPL(qti_scm_qseecom_load);
+
+int qti_scm_qseecom_send_data(union qseecom_client_send_data_ireq *req,
+			      size_t req_size,
+			      struct qseecom_command_scm_resp *resp,
+			      size_t resp_size)
+{
+	return __qti_scm_qseecom_send_data(__scm->dev, req, req_size,
+					 resp, resp_size);
+}
+EXPORT_SYMBOL_GPL(qti_scm_qseecom_send_data);
+
+int qti_scm_qseecom_unload(uint32_t smc_id, uint32_t cmd_id,
+			   struct qseecom_unload_ireq *req,
+			   size_t req_size,
+			   struct qseecom_command_scm_resp *resp,
+			   size_t resp_size)
+{
+	return __qti_scm_qseecom_unload(__scm->dev, smc_id, cmd_id, req,
+				      req_size, resp, resp_size);
+}
+EXPORT_SYMBOL_GPL(qti_scm_qseecom_unload);
+
+int qti_scm_register_log_buf(struct device *dev,
+				struct qsee_reg_log_buf_req *request,
+				size_t req_size,
+				struct qseecom_command_scm_resp *response,
+				size_t resp_size)
+{
+	return __qti_scm_register_log_buf(__scm->dev, request, req_size,
+					    response, resp_size);
+}
+EXPORT_SYMBOL_GPL(qti_scm_register_log_buf);
+
+int qti_scm_aes(uint32_t req_addr, uint32_t req_size, u32 cmd_id)
+{
+	return __qti_scm_aes(__scm->dev, req_addr, req_size, cmd_id);
+}
+EXPORT_SYMBOL_GPL(qti_scm_aes);
+
+int qti_scm_aes_clear_key_handle(uint32_t key_handle, u32 cmd_id)
+{
+	return __qti_scm_aes_clear_key_handle(__scm->dev, key_handle, cmd_id);
+}
+EXPORT_SYMBOL_GPL(qti_scm_aes_clear_key_handle);
+
+int qti_scm_tls_hardening(uint32_t req_addr, uint32_t req_size,
+			  uint32_t resp_addr, uint32_t resp_size, u32 cmd_id)
+{
+	return __qti_scm_tls_hardening(__scm->dev, req_addr, req_size,
+				      resp_addr, resp_size, cmd_id);
+}
+EXPORT_SYMBOL_GPL(qti_scm_tls_hardening);
+
+int __qcom_remove_xpu_scm_call_available(struct device *dev, u32 svc_id, u32 cmd_id)
+{
+	int ret = 0;
+	struct qcom_scm_res res;
+	struct qcom_scm_desc desc = {
+		.svc = QCOM_SCM_SVC_INFO,
+		.cmd = QCOM_IS_CALL_AVAIL_CMD,
+		.arginfo = QCOM_SCM_ARGS(1),
+		.args[0] = SCM_QSEEOS_FNID(svc_id, cmd_id) |
+				(ARM_SMCCC_OWNER_TRUSTED_OS << ARM_SMCCC_OWNER_SHIFT),
+		.owner = ARM_SMCCC_OWNER_SIP,
+	};
+
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+
+	return ret ? : res.result[0];
+}
+
+int __qti_scm_qseecom_remove_xpu(struct device *dev)
+{
+	int ret = 0;
+	struct qcom_scm_res res;
+	struct qcom_scm_desc desc = {
+		.svc = QTI_SVC_APP_MGR,
+		.cmd = QTI_ARMv8_CMD_REMOVE_XPU,
+		.owner = QTI_OWNER_QSEE_OS,
+	};
+
+	ret = __qcom_remove_xpu_scm_call_available(dev, QTI_SVC_APP_MGR,
+					QTI_ARMv8_CMD_REMOVE_XPU);
+
+	if (ret <= 0)
+		return -ENOTSUPP;
+
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+
+	return ret ? : res.result[0];
+}
+
+int __qti_scm_qseecom_notify(struct device *dev,
+			     struct qsee_notify_app *req, size_t req_size,
+			     struct qseecom_command_scm_resp *resp,
+			     size_t resp_size)
+{
+	int ret = 0;
+	struct qcom_scm_res res;
+	struct qcom_scm_desc desc = {
+		.svc = QTI_SVC_APP_MGR,
+		.cmd = QTI_CMD_NOTIFY_REGION_ID,
+		.arginfo = QCOM_SCM_ARGS(2, QCOM_SCM_RW, QCOM_SCM_VAL),
+		.args[0] = req->applications_region_addr,
+		.args[1] = req->applications_region_size,
+		.owner = QTI_OWNER_QSEE_OS,
+	};
+
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+
+	resp->result = res.result[0];
+	resp->resp_type = res.result[1];
+	resp->data = res.result[2];
+
+	return ret;
+}
+
+int __qti_scm_qseecom_load(struct device *dev, uint32_t smc_id,
+			   uint32_t cmd_id, union qseecom_load_ireq *req,
+			   size_t req_size,
+			   struct qseecom_command_scm_resp *resp,
+			   size_t resp_size)
+{
+	int ret = 0;
+	struct qcom_scm_res res;
+	struct qcom_scm_desc desc = {
+		.svc = QTI_SVC_APP_MGR,
+		.arginfo = QCOM_SCM_ARGS(3, QCOM_SCM_VAL, QCOM_SCM_VAL,
+					    QCOM_SCM_VAL),
+		.args[0] = req->load_lib_req.mdt_len,
+		.args[1] = req->load_lib_req.img_len,
+		.args[2] = req->load_lib_req.phy_addr,
+		.owner = QTI_OWNER_QSEE_OS,
+	};
+
+
+	if (cmd_id == QSEOS_APP_START_COMMAND) {
+		desc.cmd = QTI_CMD_LOAD_APP_ID;
+		ret = qcom_scm_call(__scm->dev, &desc, &res);
+	}
+	else {
+		desc.cmd = QTI_CMD_LOAD_LIB;
+		ret = qcom_scm_call(__scm->dev, &desc, &res);
+	}
+
+	resp->result = res.result[0];
+	resp->resp_type = res.result[1];
+	resp->data = res.result[2];
+
+	return ret;
+}
+
+int __qti_scm_qseecom_send_data(struct device *dev,
+				union qseecom_client_send_data_ireq *req,
+				size_t req_size,
+				struct qseecom_command_scm_resp *resp,
+				size_t resp_size)
+{
+	int ret = 0;
+	struct qcom_scm_res res;
+	struct qcom_scm_desc desc = {
+		.svc = QTI_SVC_APP_ID_PLACEHOLDER,
+		.cmd = QTI_CMD_SEND_DATA_ID,
+		.arginfo = QCOM_SCM_ARGS(5, QCOM_SCM_VAL, QCOM_SCM_RW, QCOM_SCM_VAL,
+					QCOM_SCM_RW, QCOM_SCM_VAL),
+		.args[0] = req->v1.app_id,
+		.args[1] = req->v1.req_ptr,
+		.args[2] = req->v1.req_len,
+		.args[3] = req->v1.rsp_ptr,
+		.args[4] = req->v1.rsp_len,
+		.owner = QTI_OWNER_TZ_APPS,
+	};
+
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+
+	resp->result = res.result[0];
+	resp->resp_type = res.result[1];
+	resp->data = res.result[2];
+
+	return ret;
+}
+
+int __qti_scm_qseecom_unload(struct device *dev, uint32_t smc_id,
+			     uint32_t cmd_id, struct qseecom_unload_ireq *req,
+			     size_t req_size,
+			     struct qseecom_command_scm_resp *resp,
+			     size_t resp_size)
+{
+	int ret = 0;
+	struct qcom_scm_res res;
+	struct qcom_scm_desc desc = {
+		.svc = QTI_SVC_APP_MGR,
+		.owner = QTI_OWNER_QSEE_OS,
+	};
+
+	switch (cmd_id) {
+	case QSEOS_APP_SHUTDOWN_COMMAND:
+		desc.cmd = QTI_CMD_UNLOAD_APP_ID;
+		desc.arginfo = QCOM_SCM_ARGS(1);
+		desc.args[0] = req->app_id;
+		ret = qcom_scm_call(__scm->dev, &desc, &res);
+		break;
+
+	case QSEE_UNLOAD_SERV_IMAGE_COMMAND:
+		desc.cmd = QTI_CMD_UNLOAD_LIB;
+		ret = qcom_scm_call(__scm->dev, &desc, &res);
+		break;
+
+	default:
+		pr_info("\nIncorrect command id has been passed");
+		return -EINVAL;
+	}
+
+	resp->result = res.result[0];
+	resp->resp_type = res.result[1];
+	resp->data = res.result[2];
+
+	return ret;
+}
+
+int __qti_scm_register_log_buf(struct device *dev,
+				  struct qsee_reg_log_buf_req *request,
+				  size_t req_size,
+				  struct qseecom_command_scm_resp *response,
+				  size_t resp_size)
+{
+	int ret = 0;
+	struct qcom_scm_res res;
+	struct qcom_scm_desc desc = {
+		.svc = QTI_SVC_APP_MGR,
+		.cmd = QTI_CMD_REGISTER_LOG_BUF,
+		.arginfo = QCOM_SCM_ARGS(2, QCOM_SCM_RW, QCOM_SCM_VAL),
+		.args[0] = request->phy_addr,
+		.args[1] = request->len,
+		.owner = QTI_OWNER_QSEE_OS,
+	};
+
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+
+	response->result = res.result[0];
+	response->resp_type = res.result[1];
+	response->data = res.result[2];
+
+	return ret;
+}
+
+int __qti_scm_tls_hardening(struct device *dev, uint32_t req_addr,
+			    uint32_t req_size, uint32_t resp_addr,
+			    uint32_t resp_size, u32 cmd_id)
+{
+	int ret = 0;
+	struct qcom_scm_res res;
+	struct qcom_scm_desc desc = {
+		.svc = QTI_SVC_CRYPTO,
+		.cmd = cmd_id,
+		.arginfo = QCOM_SCM_ARGS(4, QCOM_SCM_RW, QCOM_SCM_VAL,
+					QCOM_SCM_RW, QCOM_SCM_VAL),
+		.args[0] = req_addr,
+		.args[1] = req_size,
+		.args[2] = resp_addr,
+		.args[3] = resp_size,
+		.owner = ARM_SMCCC_OWNER_SIP,
+	};
+
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+
+	if (res.result[0] == QCOM_SCM_EINVAL_SIZE) {
+		pr_err("%s: TZ does not support data larger than 2K bytes: -%llu\n",
+					__func__, res.result[0]);
+	}
+	return ret ? : res.result[0];
+}
+
+int __qti_scm_aes(struct device *dev, uint32_t req_addr,
+		  uint32_t req_size, u32 cmd_id)
+{
+	int ret = 0;
+	struct qcom_scm_res res;
+	struct qcom_scm_desc desc = {
+		.svc = QTI_SVC_CRYPTO,
+		.cmd = cmd_id,
+		.arginfo = QCOM_SCM_ARGS(2, QCOM_SCM_RW, QCOM_SCM_VAL),
+		.args[0] = req_addr,
+		.args[1] = req_size,
+		.owner = ARM_SMCCC_OWNER_SIP,
+	};
+
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+
+	return res.result[0];
+}
+
+int __qti_scm_aes_clear_key_handle(struct device *dev, uint32_t key_handle, u32 cmd_id)
+{
+	int ret = 0;
+	struct qcom_scm_res res;
+	struct qcom_scm_desc desc = {
+		.svc = QTI_SVC_CRYPTO,
+		.cmd = cmd_id,
+		.arginfo = QCOM_SCM_ARGS(1),
+		.args[0] = key_handle,
+		.owner = ARM_SMCCC_OWNER_SIP,
+	};
+
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+
+	return ret ? : res.result[0];
+}
+
 static int qcom_scm_probe(struct platform_device *pdev)
 {
 	struct qcom_scm *scm;
