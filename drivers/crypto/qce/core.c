@@ -281,6 +281,7 @@ static struct attribute *qce_attrs[] = {
 	&qce_fixed_key_attribute,
 	NULL
 };
+ATTRIBUTE_GROUPS(qce);
 
 static struct sysfs_ops qce_sysfs_ops = {
 	.show = fixed_sec_key_show,
@@ -289,7 +290,7 @@ static struct sysfs_ops qce_sysfs_ops = {
 
 static struct kobj_type qce_ktype = {
 	.sysfs_ops = &qce_sysfs_ops,
-	.default_attrs = qce_attrs,
+	.default_groups = qce_groups,
 };
 
 static int qce_sysfs_init(struct qce_device *qce)
@@ -417,7 +418,7 @@ static int qce_async_request_enqueue(struct qce_device *qce,
 	pstat = &qce->qce_stat;
 	if (req) {
 		cra_drv_name = crypto_tfm_alg_driver_name(req->tfm);
-		rctx = ablkcipher_request_ctx((void *)req);
+		rctx = skcipher_request_ctx((void *)req);
 		if (rctx)
 			ablk_flags = rctx->flags;
 
@@ -461,9 +462,9 @@ static void qce_async_request_done(struct qce_device *qce, int ret)
 		if (!ret && (type == CRYPTO_ALG_TYPE_AHASH))
 			pstat->ahash_op_success++;
 
-		if (ret && (type == CRYPTO_ALG_TYPE_ABLKCIPHER))
+		if (ret && (type == CRYPTO_ALG_TYPE_SKCIPHER))
 			pstat->ablk_cipher_op_fail++;
-		if (!ret && (type == CRYPTO_ALG_TYPE_ABLKCIPHER))
+		if (!ret && (type == CRYPTO_ALG_TYPE_SKCIPHER))
 			pstat->ablk_cipher_op_success++;
 	}
 	tasklet_schedule(&qce->done_tasklet);
