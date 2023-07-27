@@ -565,6 +565,7 @@ int dev_addr_init(struct net_device *dev)
 		ha = list_first_entry(&dev->dev_addrs.list,
 				      struct netdev_hw_addr, list);
 		dev->dev_addr = ha->addr;
+		memcpy(dev->dev_addr_shadow, dev->dev_addr, MAX_ADDR_LEN);
 	}
 	return err;
 }
