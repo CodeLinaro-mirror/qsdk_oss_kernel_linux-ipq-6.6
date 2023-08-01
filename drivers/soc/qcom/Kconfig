@@ -291,4 +291,14 @@ config QCOM_INLINE_CRYPTO_ENGINE
 	tristate
 	select QCOM_SCM
 
+config QTI_EMULATION_APSS_ACC
+	bool "QTI APSS Application Clock Controller"
+	depends on ARM64 && QCOM_SCM
+	help
+	  The ACC provides clock, power domain, and reset control to a CPU.
+	  There is one ACC register region per CPU within the APSS remapped
+	  region as well as an alias register region that remaps accesses
+	  to the ACC associated with the CPU accessing the region.
+
+	  If unsure, say N.
 endmenu

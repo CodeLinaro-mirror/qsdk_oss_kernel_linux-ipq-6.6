@@ -88,7 +88,7 @@ extern void secondary_entry(void);
 extern void arch_send_call_function_single_ipi(int cpu);
 extern void arch_send_call_function_ipi_mask(const struct cpumask *mask);
 
-#ifdef CONFIG_ARM64_ACPI_PARKING_PROTOCOL
+#if defined(CONFIG_ARM64_ACPI_PARKING_PROTOCOL) || defined(CONFIG_QTI_EMULATION_APSS_ACC)
 extern void arch_send_wakeup_ipi_mask(const struct cpumask *mask);
 #else
 static inline void arch_send_wakeup_ipi_mask(const struct cpumask *mask)

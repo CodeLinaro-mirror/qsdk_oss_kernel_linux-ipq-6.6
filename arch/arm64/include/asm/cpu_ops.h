@@ -54,4 +54,15 @@ static inline void __init init_bootcpu_ops(void)
 	init_cpu_ops(0);
 }
 
+#ifdef CONFIG_QTI_EMULATION_APSS_ACC
+struct of_cpu_method {
+	const char *method;
+	struct cpu_operations *ops;
+};
+
+#define CPU_METHOD_OF_DECLARE(name, _method, _ops)			\
+	static const struct of_cpu_method __cpu_method_of_table_##name	\
+	__used __section("__cpu_method_of_table")				\
+		= { .method = _method, .ops = _ops }
+#endif /* CONFIG_QTI_EMULATION_APSS_ACC */
 #endif /* ifndef __ASM_CPU_OPS_H */
