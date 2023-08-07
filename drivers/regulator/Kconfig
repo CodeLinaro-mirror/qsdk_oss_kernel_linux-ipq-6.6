@@ -1663,4 +1663,12 @@ config REGULATOR_QCOM_LABIBB
 	  boost regulator and IBB can be used as a negative boost regulator
 	  for LCD display panel.
 
+config REGULATOR_QTI_GPIO
+	bool "QTI GPIO regulator driver"
+	depends on REGULATOR_GPIO
+	help
+	  This driver supports Qualcomm Technologies, Inc. GPIO regulator
+	  can be used for boards with discrete regulators which voltage will
+	  be controlled using REGULATOR_GPIO driver.
+
 endif
