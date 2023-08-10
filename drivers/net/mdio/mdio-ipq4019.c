@@ -750,8 +750,8 @@ static int ipq4019_mdio_probe(struct platform_device *pdev)
 	 * for the platform ipq95xx/ipq53xx.
 	 */
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "cmn_blk");
-	if (ret) {
-		priv->membase[1] = devm_ioremap_resource(bus->parent, res);
+	if (res) {
+		priv->membase[1] = devm_ioremap_resource(&pdev->dev, res);
 		if (IS_ERR(priv->membase[1]))
 			return PTR_ERR(priv->membase[1]);
 	}
@@ -766,7 +766,7 @@ static int ipq4019_mdio_probe(struct platform_device *pdev)
 	/* This resource is optional */
 	for (i = 0; i < ETH_LDO_RDY_CNT; i++) {
 		res = platform_get_resource(pdev, IORESOURCE_MEM, i + 1);
-		if (res) {
+		if (res && strcmp(res->name, "cmn_blk")) {
 			priv->eth_ldo_rdy[i] = devm_ioremap_resource(&pdev->dev, res);
 			if (IS_ERR(priv->eth_ldo_rdy[i]))
 				return PTR_ERR(priv->eth_ldo_rdy[i]);
