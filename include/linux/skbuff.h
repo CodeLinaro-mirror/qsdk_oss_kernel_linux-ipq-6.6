@@ -1255,7 +1255,7 @@ static inline void kfree_skb_list(struct sk_buff *segs)
 	kfree_skb_list_reason(segs, SKB_DROP_REASON_NOT_SPECIFIED);
 }
 
-#ifdef CONFIG_TRACEPOINTS
+#ifdef CONFIG_SKB_RECYCLER
 void consume_skb(struct sk_buff *skb);
 #else
 static inline void consume_skb(struct sk_buff *skb)
