@@ -15,6 +15,7 @@ extern struct bus_type mhi_bus_type;
 #define MHI_SOC_RESET_REQ_OFFSET			0xb0
 #define MHI_SOC_RESET_REQ				BIT(0)
 
+#define QCN9224_DEVICE_ID				(0x1109)
 #define SOC_HW_VERSION_OFFS				0x224
 #define SOC_HW_VERSION_FAM_NUM_BMSK			GENMASK(31, 28)
 #define SOC_HW_VERSION_DEV_NUM_BMSK			GENMASK(27, 16)
@@ -277,6 +278,7 @@ int mhi_alloc_bhie_table(struct mhi_controller *mhi_cntrl,
 			 struct image_info **image_info, size_t alloc_size);
 void mhi_free_bhie_table(struct mhi_controller *mhi_cntrl,
 			 struct image_info *image_info);
+void mhi_free_nonce_buffer(struct mhi_controller *mhi_cntrl);
 
 /* Power management APIs */
 enum mhi_pm_state __must_check mhi_tryset_pm_state(
