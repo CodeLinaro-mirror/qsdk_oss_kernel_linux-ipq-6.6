@@ -1402,6 +1402,7 @@ EXPORT_SYMBOL(skb_tx_error);
  *	Functions identically to kfree_skb, but kfree_skb assumes that the frame
  *	is being dropped after a failure and notes that
  */
+#ifdef CONFIG_SKB_RECYCLER
 void consume_skb(struct sk_buff *skb)
 {
 	if (!skb_unref(skb))
@@ -1445,6 +1446,7 @@ void consume_skb(struct sk_buff *skb)
 	kfree_skbmem(skb);
 }
 EXPORT_SYMBOL(consume_skb);
+#endif
 
 /**
  *	consume_skb_list_fast - free a list of skbs
