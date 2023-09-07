@@ -1387,14 +1387,18 @@ out:
 static int rproc_fw_boot(struct rproc *rproc, const struct firmware *fw)
 {
 	struct device *dev = &rproc->dev;
+	#ifndef CONFIG_QCOM_NON_SECURE_PIL
 	const char *name = rproc->firmware;
+	#endif
 	int ret;
 
 	ret = rproc_fw_sanity_check(rproc, fw);
 	if (ret)
 		return ret;
 
-	dev_info(dev, "Booting fw image %s, size %zd\n", name, fw->size);
+	#ifndef CONFIG_QCOM_NON_SECURE_PIL
+		dev_info(dev, "Booting fw image %s, size %zd\n", name, fw->size);
+	#endif
 
 	/*
 	 * if enabling an IOMMU isn't relevant for this rproc, this is
@@ -1413,7 +1417,9 @@ static int rproc_fw_boot(struct rproc *rproc, const struct firmware *fw)
 		goto disable_iommu;
 	}
 
-	rproc->bootaddr = rproc_get_boot_addr(rproc, fw);
+	#ifndef CONFIG_QCOM_NON_SECURE_PIL
+		rproc->bootaddr = rproc_get_boot_addr(rproc, fw);
+	#endif
 
 	/* Load resource table, core dump segment list etc from the firmware */
 	ret = rproc_parse_fw(rproc, fw);
@@ -1803,7 +1809,9 @@ static int rproc_attach_recovery(struct rproc *rproc)
 static int rproc_boot_recovery(struct rproc *rproc)
 {
 	const struct firmware *firmware_p;
+	#ifndef CONFIG_QCOM_NON_SECURE_PIL
 	struct device *dev = &rproc->dev;
+	#endif
 	int ret;
 
 	ret = rproc_stop(rproc, true);
@@ -1813,18 +1821,21 @@ static int rproc_boot_recovery(struct rproc *rproc)
 	/* generate coredump */
 	rproc->ops->coredump(rproc);
 
-	/* load firmware */
-	ret = request_firmware(&firmware_p, rproc->firmware, dev);
-	if (ret < 0) {
-		dev_err(dev, "request_firmware failed: %d\n", ret);
-		return ret;
-	}
+	#ifndef	CONFIG_QCOM_NON_SECURE_PIL
+		/* load firmware */
+		ret = request_firmware(&firmware_p, rproc->firmware, dev);
+		if (ret < 0) {
+			dev_err(dev, "request_firmware failed: %d\n", ret);
+			return ret;
+		}
+	#endif
 
 	/* boot the remote processor up again */
 	ret = rproc_start(rproc, firmware_p);
 
+	#ifndef	CONFIG_QCOM_NON_SECURE_PIL
 	release_firmware(firmware_p);
-
+	#endif
 	return ret;
 }
 
@@ -1955,19 +1966,24 @@ int rproc_boot(struct rproc *rproc)
 	} else {
 		dev_info(dev, "powering up %s\n", rproc->name);
 
-		/* load firmware */
-		ret = request_firmware(&firmware_p, rproc->firmware, dev);
-		if (ret < 0) {
-			dev_err(dev, "request_firmware failed: %d\n", ret);
-			goto downref_rproc;
-		}
+		#ifndef CONFIG_QCOM_NON_SECURE_PIL
+			/* load firmware */
+			ret = request_firmware(&firmware_p, rproc->firmware, dev);
+			if (ret < 0) {
+				dev_err(dev, "request_firmware failed: %d\n", ret);
+				goto downref_rproc;
+			}
+		#endif
 
 		ret = rproc_fw_boot(rproc, firmware_p);
-
+		#ifndef CONFIG_QCOM_NON_SECURE_PIL
 		release_firmware(firmware_p);
+		#endif
 	}
 
+#ifndef CONFIG_QCOM_NON_SECURE_PIL
 downref_rproc:
+#endif
 	if (ret)
 		atomic_dec(&rproc->power);
 unlock_mutex:
