@@ -455,8 +455,8 @@ static int mhi_get_nonce(struct mhi_controller *mhi_cntrl)
 	mhi_read_reg(mhi_cntrl, mhi_cntrl->regs, PCIE_PCIE_LOCAL_REG_PCIE_LOCAL_RSV1,
 			&sram_addr);
 	if (sram_addr != 0) {
-		mhi_cntrl->nonce_buf = dma_alloc_coherent(dev, NONCE_SIZE,
-					&mhi_cntrl->nonce_dma_addr, GFP_KERNEL);
+		mhi_cntrl->nonce_buf = dma_alloc_coherent(mhi_cntrl->cntrl_dev, NONCE_SIZE,
+							  &mhi_cntrl->nonce_dma_addr, GFP_KERNEL);
 		if (!mhi_cntrl->nonce_buf) {
 			dev_err(dev, "Error Allocating memory buffer for NONCE\n");
 			return -ENOMEM;
