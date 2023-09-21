@@ -1636,8 +1636,8 @@ int __qti_set_qcekey_sec(struct device *dev, void *confBuf, int size)
 		dev_err(dev, "Allocation fail for conf buffer\n");
 		return -ENOMEM;
 	}
-	desc.args[1] = (u64)conf_phys;
-	desc.args[2] = size;
+	desc.args[0] = (u64)conf_phys;
+	desc.args[1] = size;
 
 	ret = qcom_scm_call(__scm->dev, &desc, &res);
 
@@ -1663,8 +1663,8 @@ int __qti_sec_crypt(struct device *dev, void *confBuf, int size)
 		dev_err(dev, "Allocation fail for conf buffer\n");
 		return -ENOMEM;
 	}
-	desc.args[1] = (u64)conf_phys;
-	desc.args[2] = size;
+	desc.args[0] = (u64)conf_phys;
+	desc.args[1] = size;
 
 	return qcom_scm_call(__scm->dev, &desc, &res);
 
