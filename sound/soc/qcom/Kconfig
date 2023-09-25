@@ -221,4 +221,19 @@ config SND_SOC_SC7280
 	  SC7280 SoC-based systems.
 	  Say Y or M if you want to use audio device on this SoCs.
 
+config SND_SOC_IPQ
+	tristate "Soc Audio support for IPQ platforms"
+	depends on SND_SOC_QCOM && HAS_DMA
+	help
+	Say Y or M to if you want to add support for SoC audio on
+	Qualcomm Technologies IPQ based board.
+
+config SND_SOC_IPQ9574_LPASS_PCM_RAW
+	tristate "IPQ9574_LPASS_PCM"
+	depends on SND_SOC_IPQ
+
+config SND_SOC_IPQ_LPASS
+	tristate "IPQ_LPASS"
+	depends on SND_SOC_IPQ
+
 endif #SND_SOC_QCOM
