@@ -358,6 +358,60 @@ void mhi_deinit_chan_ctxt(struct mhi_controller *mhi_cntrl,
 void mhi_reset_chan(struct mhi_controller *mhi_cntrl,
 		    struct mhi_chan *mhi_chan);
 
+#ifdef CONFIG_MHI_BUS_RESERVED_DMA_POOL
+static inline void *mhi_fw_alloc_coherent(struct mhi_controller *mhi_cntrl,
+					  size_t size, dma_addr_t *dma_handle,
+					  gfp_t gfp)
+{
+	/* DMA pool is reserved for coherent allocations of size SZ_512K
+	 * (mhi_cntrl->seg_len) to avoid fragmentation and always ensure
+	 * allocations of SZ_512K succeeds.
+	 * Allocations of lower order from the reserved memory would lead to
+	 * fragmentation on multiple alloc/frees.
+	 * So use dma_alloc_coherent from mhi_cntrl->cntrl_dev for allocations
+	 * lower than mhi_cntrl->seg_len
+	 */
+	if (size < mhi_cntrl->seg_len) {
+		return dma_alloc_coherent(mhi_cntrl->cntrl_dev,
+					  size, dma_handle, gfp);
+	} else {
+		return dma_alloc_coherent(&mhi_cntrl->mhi_dev->dev,
+					  size, dma_handle, gfp);
+	}
+}
+
+static inline void mhi_fw_free_coherent(struct mhi_controller *mhi_cntrl,
+					size_t size, void *vaddr,
+					dma_addr_t dma_handle)
+{
+	/* Allocs of size lower than mhi_cntrl->seg_len is done from
+	 * mhi_cntrl->cntrl_dev and higher allocations are done from
+	 * reserved memory of mhi_dev->dev.
+	 */
+	if (size < mhi_cntrl->seg_len) {
+		dma_free_coherent(mhi_cntrl->cntrl_dev, size, vaddr,
+				  dma_handle);
+	} else {
+		dma_free_coherent(&mhi_cntrl->mhi_dev->dev, size, vaddr,
+				  dma_handle);
+	}
+}
+#else
+static inline void *mhi_fw_alloc_coherent(struct mhi_controller *mhi_cntrl,
+					  size_t size, dma_addr_t *dma_handle,
+					  gfp_t gfp)
+{
+	return dma_alloc_coherent(mhi_cntrl->cntrl_dev, size, dma_handle, gfp);
+}
+
+static inline void mhi_fw_free_coherent(struct mhi_controller *mhi_cntrl,
+					size_t size, void *vaddr,
+					dma_addr_t dma_handle)
+{
+	dma_free_coherent(mhi_cntrl->cntrl_dev, size, vaddr, dma_handle);
+}
+#endif
+
 /* Event processing methods */
 void mhi_ctrl_ev_task(unsigned long data);
 void mhi_ev_task(unsigned long data);

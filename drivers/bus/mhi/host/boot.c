@@ -316,8 +316,8 @@ void mhi_free_bhie_table(struct mhi_controller *mhi_cntrl,
 	struct mhi_buf *mhi_buf = image_info->mhi_buf;
 
 	for (i = 0; i < image_info->entries; i++, mhi_buf++)
-		dma_free_coherent(mhi_cntrl->cntrl_dev, mhi_buf->len,
-				  mhi_buf->buf, mhi_buf->dma_addr);
+		mhi_fw_free_coherent(mhi_cntrl, mhi_buf->len,
+				     mhi_buf->buf, mhi_buf->dma_addr);
 
 	kfree(image_info->mhi_buf);
 	kfree(image_info);
@@ -353,9 +353,9 @@ int mhi_alloc_bhie_table(struct mhi_controller *mhi_cntrl,
 			vec_size = sizeof(struct bhi_vec_entry) * i;
 
 		mhi_buf->len = vec_size;
-		mhi_buf->buf = dma_alloc_coherent(mhi_cntrl->cntrl_dev,
-						  vec_size, &mhi_buf->dma_addr,
-						  GFP_KERNEL);
+		mhi_buf->buf = mhi_fw_alloc_coherent(mhi_cntrl, vec_size,
+						     &mhi_buf->dma_addr,
+						     GFP_KERNEL);
 		if (!mhi_buf->buf)
 			goto error_alloc_segment;
 	}
@@ -368,8 +368,8 @@ int mhi_alloc_bhie_table(struct mhi_controller *mhi_cntrl,
 
 error_alloc_segment:
 	for (--i, --mhi_buf; i >= 0; i--, mhi_buf--)
-		dma_free_coherent(mhi_cntrl->cntrl_dev, mhi_buf->len,
-				  mhi_buf->buf, mhi_buf->dma_addr);
+		mhi_fw_free_coherent(mhi_cntrl, mhi_buf->len,
+				     mhi_buf->buf, mhi_buf->dma_addr);
 
 error_alloc_mhi_buf:
 	kfree(img_info);
@@ -605,8 +605,7 @@ void mhi_fw_load_handler(struct mhi_controller *mhi_cntrl)
 	fw_sz = firmware->size;
 
 skip_req_fw:
-	buf = dma_alloc_coherent(mhi_cntrl->cntrl_dev, size, &dma_addr,
-				 GFP_KERNEL);
+	buf = mhi_fw_alloc_coherent(mhi_cntrl, size, &dma_addr, GFP_KERNEL);
 	if (!buf) {
 		release_firmware(firmware);
 		goto error_fw_load;
@@ -615,7 +614,7 @@ skip_req_fw:
 	/* Download image using BHI */
 	memcpy(buf, fw_data, size);
 	ret = mhi_fw_load_bhi(mhi_cntrl, dma_addr, size);
-	dma_free_coherent(mhi_cntrl->cntrl_dev, size, buf, dma_addr);
+	mhi_fw_free_coherent(mhi_cntrl, size, buf, dma_addr);
 
 	/* Error or in EDL mode, we're done */
 	if (ret) {
