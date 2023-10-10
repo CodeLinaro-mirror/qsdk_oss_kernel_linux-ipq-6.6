@@ -581,19 +581,23 @@ static void *kmalloc_reserve(unsigned int *size, gfp_t flags, int node,
 	bool ret_pfmemalloc = false;
 	size_t obj_size;
 	void *obj;
+	struct kmem_cache * skb_cache;
 
 	obj_size = SKB_HEAD_ALIGN(*size);
-	if (obj_size <= SKB_SMALL_HEAD_CACHE_SIZE &&
-	    !(flags & KMALLOC_NOT_NORMAL_BITS)) {
-		obj = kmem_cache_alloc_node(skb_small_head_cache,
+	if ((obj_size <= SKB_SMALL_HEAD_CACHE_SIZE &&
+	    !(flags & KMALLOC_NOT_NORMAL_BITS)) ||
+	    (obj_size > SZ_2K && obj_size <= SKB_DATA_CACHE_SIZE)) {
+		skb_cache = (obj_size <= SKB_SMALL_HEAD_CACHE_SIZE) ? skb_small_head_cache : skb_data_cache;
+		obj = kmem_cache_alloc_node(skb_cache,
 				flags | __GFP_NOMEMALLOC | __GFP_NOWARN,
 				node);
-		*size = SKB_SMALL_HEAD_CACHE_SIZE;
+		*size = (obj_size <= SKB_SMALL_HEAD_CACHE_SIZE) ? SKB_SMALL_HEAD_CACHE_SIZE : SKB_DATA_CACHE_SIZE;
+
 		if (obj || !(gfp_pfmemalloc_allowed(flags)))
 			goto out;
 		/* Try again but now we are using pfmemalloc reserves */
 		ret_pfmemalloc = true;
-		obj = kmem_cache_alloc_node(skb_small_head_cache, flags, node);
+		obj = kmem_cache_alloc_node(skb_cache, flags, node);
 		goto out;
 	}
 
@@ -607,12 +611,7 @@ static void *kmalloc_reserve(unsigned int *size, gfp_t flags, int node,
 	 * Try a regular allocation, when that fails and we're not entitled
 	 * to the reserves, fail.
 	 */
-	if (size > SZ_2K && size <= SKB_DATA_CACHE_SIZE)
-		obj = kmem_cache_alloc_node(skb_data_cache,
-						flags | __GFP_NOMEMALLOC | __GFP_NOWARN,
-						node);
-	else
-		obj = kmalloc_node_track_caller(obj_size,
+	obj = kmalloc_node_track_caller(obj_size,
 					flags | __GFP_NOMEMALLOC | __GFP_NOWARN,
 					node);
 	if (obj || !(gfp_pfmemalloc_allowed(flags)))
@@ -620,10 +619,7 @@ static void *kmalloc_reserve(unsigned int *size, gfp_t flags, int node,
 
 	/* Try again but now we are using pfmemalloc reserves */
 	ret_pfmemalloc = true;
-	if (size > SZ_2K && size <= SKB_DATA_CACHE_SIZE)
-		obj = kmem_cache_alloc_node(skb_data_cache, flags, node);
-	else
-		obj = kmalloc_node_track_caller(obj_size, flags, node);
+	obj = kmalloc_node_track_caller(obj_size, flags, node);
 
 out:
 	if (pfmemalloc)
@@ -687,7 +683,7 @@ struct sk_buff *__alloc_skb(unsigned int size, gfp_t gfp_mask,
 	data = kmalloc_reserve(&size, gfp_mask, node, &pfmemalloc);
 	if (unlikely(!data))
 		goto nodata;
-	/* kmalloc_size_roundup() might give us more room than requested.
+	/* kmalloc_reserve(size) might give us more room than requested.
 	 * Put skb_shared_info exactly at the end of allocated zone,
 	 * to allow max possible filling before reallocation.
 	 */
