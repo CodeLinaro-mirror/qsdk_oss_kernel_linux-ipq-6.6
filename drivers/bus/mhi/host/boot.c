@@ -48,6 +48,17 @@ int mhi_rddm_prepare(struct mhi_controller *mhi_cntrl,
 		bhi_vec->size = mhi_buf->len;
 	}
 
+	if (!mhi_cntrl->rddm_prealloc) {
+		mhi_buf->dma_addr = dma_map_single(mhi_cntrl->cntrl_dev,
+						   mhi_buf->buf, mhi_buf->len,
+						   DMA_TO_DEVICE);
+		if (dma_mapping_error(mhi_cntrl->cntrl_dev, mhi_buf->dma_addr)) {
+			dev_err(dev, "dma mapping failed, Address: %p and len: 0x%zx\n",
+				&mhi_buf->dma_addr, mhi_buf->len);
+			return -ENOMEM;
+		}
+	}
+
 	dev_dbg(dev, "BHIe programming for RDDM\n");
 
 	mhi_write_reg(mhi_cntrl, base, BHIE_RXVECADDR_HIGH_OFFS,
@@ -171,10 +182,35 @@ int mhi_download_rddm_image(struct mhi_controller *mhi_cntrl, bool in_panic)
 {
 	void __iomem *base = mhi_cntrl->bhie;
 	struct device *dev = &mhi_cntrl->mhi_dev->dev;
+	struct mhi_buf *mhi_buf = NULL;
 	u32 rx_status;
+	int ret;
 
-	if (in_panic)
-		return __mhi_download_rddm_in_panic(mhi_cntrl);
+	/*
+	 * Allocate RDDM table if specified, this table is for debugging purpose
+	 */
+	if (!mhi_cntrl->rddm_prealloc && mhi_cntrl->rddm_size) {
+		ret = mhi_alloc_bhie_table(mhi_cntrl, &mhi_cntrl->rddm_image,
+					   mhi_cntrl->rddm_size, IMG_TYPE_RDDM);
+		if (ret) {
+			dev_err(dev, "Failed to allocate RDDM table memory\n");
+			return ret;
+		}
+
+		/* setup the RX vector table */
+		ret = mhi_rddm_prepare(mhi_cntrl, mhi_cntrl->rddm_image);
+		if (ret) {
+			dev_err(dev, "Failed to prepare RDDM\n");
+			mhi_free_bhie_table(mhi_cntrl, mhi_cntrl->rddm_image,
+					    IMG_TYPE_RDDM);
+			return ret;
+		}
+	}
+
+	if (in_panic) {
+		ret = __mhi_download_rddm_in_panic(mhi_cntrl);
+		goto out;
+	}
 
 	dev_dbg(dev, "Waiting for RDDM image download via BHIe\n");
 
@@ -186,7 +222,16 @@ int mhi_download_rddm_image(struct mhi_controller *mhi_cntrl, bool in_panic)
 					      &rx_status) || rx_status,
 			   msecs_to_jiffies(mhi_cntrl->timeout_ms));
 
-	return (rx_status == BHIE_RXVECSTATUS_STATUS_XFER_COMPL) ? 0 : -EIO;
+	ret = (rx_status == BHIE_RXVECSTATUS_STATUS_XFER_COMPL) ? 0 : -EIO;
+
+out:
+	mhi_buf = &mhi_cntrl->rddm_image->mhi_buf[mhi_cntrl->rddm_image->entries - 1];
+
+	if (!mhi_cntrl->rddm_prealloc)
+		dma_unmap_single(mhi_cntrl->cntrl_dev, mhi_buf->dma_addr,
+				 mhi_buf->len, DMA_TO_DEVICE);
+
+	return ret;
 }
 EXPORT_SYMBOL_GPL(mhi_download_rddm_image);
 
@@ -310,14 +355,26 @@ invalid_pm_state:
 }
 
 void mhi_free_bhie_table(struct mhi_controller *mhi_cntrl,
-			 struct image_info *image_info)
+			 struct image_info *image_info,
+			 enum image_type img_type)
 {
 	int i;
 	struct mhi_buf *mhi_buf = image_info->mhi_buf;
 
-	for (i = 0; i < image_info->entries; i++, mhi_buf++)
-		mhi_fw_free_coherent(mhi_cntrl, mhi_buf->len,
-				     mhi_buf->buf, mhi_buf->dma_addr);
+	for (i = 0; i < image_info->entries; i++, mhi_buf++) {
+		if (img_type == IMG_TYPE_RDDM && !mhi_cntrl->rddm_prealloc) {
+			if (i == (image_info->entries - 1))
+				dma_unmap_single(mhi_cntrl->cntrl_dev,
+						 mhi_buf->dma_addr,
+						 mhi_buf->len,
+						 DMA_FROM_DEVICE);
+			kfree(mhi_buf->buf);
+
+		} else {
+			mhi_fw_free_coherent(mhi_cntrl, mhi_buf->len,
+					     mhi_buf->buf, mhi_buf->dma_addr);
+		}
+	}
 
 	kfree(image_info->mhi_buf);
 	kfree(image_info);
@@ -325,21 +382,31 @@ void mhi_free_bhie_table(struct mhi_controller *mhi_cntrl,
 
 int mhi_alloc_bhie_table(struct mhi_controller *mhi_cntrl,
 			 struct image_info **image_info,
-			 size_t alloc_size)
+			 size_t alloc_size, enum image_type img_type)
 {
 	size_t seg_size = mhi_cntrl->seg_len;
-	int segments = DIV_ROUND_UP(alloc_size, seg_size) + 1;
+	int segments;
 	int i;
 	struct image_info *img_info;
 	struct mhi_buf *mhi_buf;
+	/* Maksed __GFP_DIRECT_RECLAIM flag for non-interrupt context
+	 * to avoid rcu context sleep issue in kmalloc during panic scenario
+	 */
+	gfp_t gfp = (in_interrupt() ? GFP_ATOMIC :
+		((GFP_KERNEL | __GFP_NORETRY) & ~__GFP_DIRECT_RECLAIM));
 
-	img_info = kzalloc(sizeof(*img_info), GFP_KERNEL);
+	if (img_type == IMG_TYPE_RDDM)
+		seg_size = mhi_cntrl->rddm_seg_len;
+
+	segments = DIV_ROUND_UP(alloc_size, seg_size) + 1;
+
+	img_info = kzalloc(sizeof(*img_info), gfp);
 	if (!img_info)
 		return -ENOMEM;
 
 	/* Allocate memory for entries */
 	img_info->mhi_buf = kcalloc(segments, sizeof(*img_info->mhi_buf),
-				    GFP_KERNEL);
+				    gfp);
 	if (!img_info->mhi_buf)
 		goto error_alloc_mhi_buf;
 
@@ -353,11 +420,42 @@ int mhi_alloc_bhie_table(struct mhi_controller *mhi_cntrl,
 			vec_size = sizeof(struct bhi_vec_entry) * i;
 
 		mhi_buf->len = vec_size;
-		mhi_buf->buf = mhi_fw_alloc_coherent(mhi_cntrl, vec_size,
-						     &mhi_buf->dma_addr,
-						     GFP_KERNEL);
-		if (!mhi_buf->buf)
-			goto error_alloc_segment;
+
+		if (img_type == IMG_TYPE_RDDM && !mhi_cntrl->rddm_prealloc) {
+			/* Vector table is the last entry */
+			if (i == segments - 1) {
+				mhi_buf->buf = kzalloc(PAGE_ALIGN(vec_size),
+						       gfp);
+				if (!mhi_buf->buf)
+					goto error_alloc_segment;
+
+				/* Vector table entry will be dma_mapped during
+				 * rddm prepare with DMA_TO_DEVICE and unmapped
+				 * once the target completes the RDDM XFER.
+				 */
+				continue;
+			}
+			mhi_buf->buf = kmalloc(vec_size, gfp);
+			if (!mhi_buf->buf)
+				goto error_alloc_segment;
+
+			mhi_buf->dma_addr = dma_map_single(mhi_cntrl->cntrl_dev,
+							   mhi_buf->buf,
+							   vec_size,
+							   DMA_FROM_DEVICE);
+			if (dma_mapping_error(mhi_cntrl->cntrl_dev,
+					      mhi_buf->dma_addr)) {
+				kfree(mhi_buf->buf);
+				goto error_alloc_segment;
+			}
+		} else {
+			mhi_buf->buf = mhi_fw_alloc_coherent(mhi_cntrl,
+							     vec_size,
+							     &mhi_buf->dma_addr,
+							     GFP_KERNEL);
+			if (!mhi_buf->buf)
+				goto error_alloc_segment;
+		}
 	}
 
 	img_info->bhi_vec = img_info->mhi_buf[segments - 1].buf;
@@ -367,9 +465,18 @@ int mhi_alloc_bhie_table(struct mhi_controller *mhi_cntrl,
 	return 0;
 
 error_alloc_segment:
-	for (--i, --mhi_buf; i >= 0; i--, mhi_buf--)
-		mhi_fw_free_coherent(mhi_cntrl, mhi_buf->len,
-				     mhi_buf->buf, mhi_buf->dma_addr);
+	for (--i, --mhi_buf; i >= 0; i--, mhi_buf--) {
+		if (img_type == IMG_TYPE_RDDM && !mhi_cntrl->rddm_prealloc) {
+			dma_unmap_single(mhi_cntrl->cntrl_dev,
+					 mhi_buf->dma_addr, mhi_buf->len,
+					 DMA_FROM_DEVICE);
+			kfree(mhi_buf->buf);
+
+		} else {
+			mhi_fw_free_coherent(mhi_cntrl, mhi_buf->len,
+					     mhi_buf->buf, mhi_buf->dma_addr);
+		}
+	}
 
 error_alloc_mhi_buf:
 	kfree(img_info);
@@ -638,7 +745,8 @@ skip_req_fw:
 	 * device transitioning into MHI READY state
 	 */
 	if (mhi_cntrl->fbc_download) {
-		ret = mhi_alloc_bhie_table(mhi_cntrl, &mhi_cntrl->fbc_image, fw_sz);
+		ret = mhi_alloc_bhie_table(mhi_cntrl, &mhi_cntrl->fbc_image, fw_sz,
+					   IMG_TYPE_FBC);
 		if (ret) {
 			release_firmware(firmware);
 			goto error_fw_load;
@@ -663,7 +771,8 @@ fw_load_ready_state:
 
 error_ready_state:
 	if (mhi_cntrl->fbc_download) {
-		mhi_free_bhie_table(mhi_cntrl, mhi_cntrl->fbc_image);
+		mhi_free_bhie_table(mhi_cntrl, mhi_cntrl->fbc_image,
+				    IMG_TYPE_FBC);
 		mhi_cntrl->fbc_image = NULL;
 	}
 

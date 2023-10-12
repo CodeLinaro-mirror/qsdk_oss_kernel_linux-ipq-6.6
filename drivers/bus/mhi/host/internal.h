@@ -137,6 +137,11 @@ enum mhi_er_type {
 	MHI_ER_TYPE_VALID = 0x1,
 };
 
+enum image_type {
+	IMG_TYPE_FBC,
+	IMG_TYPE_RDDM,
+};
+
 struct db_cfg {
 	bool reset_req;
 	bool db_mode;
@@ -275,9 +280,11 @@ int mhi_destroy_device(struct device *dev, void *data);
 void mhi_create_devices(struct mhi_controller *mhi_cntrl);
 
 int mhi_alloc_bhie_table(struct mhi_controller *mhi_cntrl,
-			 struct image_info **image_info, size_t alloc_size);
+			 struct image_info **image_info, size_t alloc_size,
+			 enum image_type img_type);
 void mhi_free_bhie_table(struct mhi_controller *mhi_cntrl,
-			 struct image_info *image_info);
+			 struct image_info *image_info,
+			 enum image_type img_type);
 void mhi_free_nonce_buffer(struct mhi_controller *mhi_cntrl);
 
 /* Power management APIs */

@@ -1043,6 +1043,13 @@ int mhi_register_controller(struct mhi_controller *mhi_cntrl,
 		mhi_cntrl->unmap_single = mhi_unmap_single_no_bb;
 	}
 
+	/* By default RDDM buffers are pre-allocated during INIT and
+	 * rddm_seg_len will be same as mhi_cntrl->seg_len. Client drivers
+	 * registering the MHI controller can override these if required
+	 */
+	mhi_cntrl->rddm_prealloc = true;
+	mhi_cntrl->rddm_seg_len = mhi_cntrl->seg_len;
+
 	/* Read the MHI device info */
 	ret = mhi_read_reg(mhi_cntrl, mhi_cntrl->regs,
 			   SOC_HW_VERSION_OFFS, &soc_info);
@@ -1211,14 +1218,18 @@ int mhi_prepare_for_power_up(struct mhi_controller *mhi_cntrl)
 		/*
 		 * Allocate RDDM table for debugging purpose if specified
 		 */
-		mhi_alloc_bhie_table(mhi_cntrl, &mhi_cntrl->rddm_image,
-				     mhi_cntrl->rddm_size);
+		if (mhi_cntrl->rddm_prealloc)
+			mhi_alloc_bhie_table(mhi_cntrl, &mhi_cntrl->rddm_image,
+					     mhi_cntrl->rddm_size,
+					     IMG_TYPE_RDDM);
+
 		if (mhi_cntrl->rddm_image) {
 			ret = mhi_rddm_prepare(mhi_cntrl,
 					       mhi_cntrl->rddm_image);
 			if (ret) {
 				mhi_free_bhie_table(mhi_cntrl,
-						    mhi_cntrl->rddm_image);
+						    mhi_cntrl->rddm_image,
+						    IMG_TYPE_RDDM);
 				goto error_reg_offset;
 			}
 		}
@@ -1241,12 +1252,14 @@ EXPORT_SYMBOL_GPL(mhi_prepare_for_power_up);
 void mhi_unprepare_after_power_down(struct mhi_controller *mhi_cntrl)
 {
 	if (mhi_cntrl->fbc_image) {
-		mhi_free_bhie_table(mhi_cntrl, mhi_cntrl->fbc_image);
+		mhi_free_bhie_table(mhi_cntrl, mhi_cntrl->fbc_image,
+				    IMG_TYPE_FBC);
 		mhi_cntrl->fbc_image = NULL;
 	}
 
 	if (mhi_cntrl->rddm_image) {
-		mhi_free_bhie_table(mhi_cntrl, mhi_cntrl->rddm_image);
+		mhi_free_bhie_table(mhi_cntrl, mhi_cntrl->rddm_image,
+				    IMG_TYPE_RDDM);
 		mhi_cntrl->rddm_image = NULL;
 	}
 

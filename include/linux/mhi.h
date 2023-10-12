@@ -362,6 +362,8 @@ struct mhi_controller_config {
  * @wake_set: Device wakeup set flag
  * @irq_flags: irq flags passed to request_irq (optional)
  * @mru: the default MRU for the MHI device
+ * @rddm_prealloc: Enable/Disable preallocation of RDDM buffer during init
+ * @rddm_seg_len: Override rddm segment length if different from seg_len
  *
  * Fields marked as (required) need to be populated by the controller driver
  * before calling mhi_register_controller(). For the fields marked as (optional)
@@ -463,6 +465,8 @@ struct mhi_controller {
 	size_t license_buf_size;
 	void *nonce_buf;
 	dma_addr_t nonce_dma_addr;
+	bool rddm_prealloc;
+	u32 rddm_seg_len;
 };
 
 /**
