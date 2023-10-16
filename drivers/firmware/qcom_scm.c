@@ -1963,6 +1963,49 @@ int qcom_fuseipq_scm_call(u32 svc_id, u32 cmd_id,void *cmd_buf, size_t size)
 EXPORT_SYMBOL_GPL(qcom_fuseipq_scm_call);
 
 /**
+ * qcom_scm_get_ipq5332_fuse_list() - Get OEM Fuse parameter from TME-L
+ *
+ * @fuse: QFPROM CORR addresses
+ * @size: size of fuse structure
+ *
+ * This function can be used to get the OEM Fuse parameters from TME-L.
+ */
+int qcom_scm_get_ipq5332_fuse_list(struct fuse_payload *fuse, size_t size)
+{
+	int ret;
+	dma_addr_t dma_fuse;
+	struct qcom_scm_res res;
+	struct qcom_scm_desc desc = {
+		.svc = QCOM_SCM_SVC_FUSE,
+		.cmd = QCOM_SCM_OWM_FUSE_CMD_ID,
+		.arginfo = QCOM_SCM_ARGS(2, QCOM_SCM_RW, QCOM_SCM_VAL),
+		.owner = ARM_SMCCC_OWNER_SIP,
+	};
+
+	dma_fuse  = dma_map_single(__scm->dev, fuse, size, DMA_FROM_DEVICE);
+	ret = dma_mapping_error(__scm->dev, dma_fuse);
+	if (ret != 0) {
+		pr_err("%s: DMA Mapping Error : %d\n", __func__, ret);
+		return -EINVAL;
+	}
+	desc.args[0] = dma_fuse;
+	desc.args[1] = size;
+
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+
+	if(res.result[0] != 0) {
+		pr_err("%s : Response error code is : %#x\n", __func__,
+				(unsigned int)res.result[0]);
+	}
+
+	dma_unmap_single(__scm->dev, dma_fuse, size, DMA_FROM_DEVICE);
+
+	return ret ? : res.result[0];
+
+}
+EXPORT_SYMBOL_GPL(qcom_scm_get_ipq5332_fuse_list);
+
+/**
  * qcom_scm_sec_auth_available() - Checks if SEC_AUTH is supported.
  *
  * Return true if SEC_AUTH is supported, false if not.

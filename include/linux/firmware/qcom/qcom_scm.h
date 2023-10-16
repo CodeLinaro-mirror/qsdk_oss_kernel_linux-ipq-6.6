@@ -22,6 +22,13 @@
 #define QTI_TZ_LOG_NO_UPDATE		-6
 #define QTI_SCM_SVC_FUSE		0x8
 
+#define MAX_FUSE_ADDR_SIZE		0x8
+struct fuse_payload {
+	uint32_t fuse_addr;
+	uint32_t lsb_val;
+	uint32_t msb_val;
+};
+
 enum qseecom_qceos_cmd_id {
 	QSEOS_APP_START_COMMAND = 0x01,
 	QSEOS_APP_SHUTDOWN_COMMAND,
@@ -165,6 +172,7 @@ enum qcom_scm_ice_cipher {
 #define QCOM_SCM_PERM_RW (QCOM_SCM_PERM_READ | QCOM_SCM_PERM_WRITE)
 #define QCOM_SCM_PERM_RWX (QCOM_SCM_PERM_RW | QCOM_SCM_PERM_EXEC)
 
+#define QCOM_SCM_OWM_FUSE_CMD_ID   0x22
 #define FUSEPROV_SUCCESS           0x0
 #define QCOM_SCM_SVC_FUSE          0x8
 #define FUSEPROV_INVALID_HASH      0x9
@@ -280,6 +288,7 @@ extern int qti_qfprom_show_authenticate(void);
 extern int qti_scm_get_smmustate(void);
 
 extern bool qcom_scm_sec_auth_available(unsigned int scm_cmd_id);
+extern int qcom_scm_get_ipq5332_fuse_list(struct fuse_payload *fuse, size_t size);
 extern int qcom_sec_upgrade_auth(unsigned int scm_cmd_id,
 				 unsigned int sw_type, unsigned int img_size,
 				 unsigned int load_addr);
