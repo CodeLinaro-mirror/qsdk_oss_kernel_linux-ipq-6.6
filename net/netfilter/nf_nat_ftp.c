@@ -105,6 +105,8 @@ static unsigned int nf_nat_ftp(struct sk_buff *skb,
 	struct nf_conn *ct = exp->master;
 	char buffer[sizeof("|1||65535|") + INET6_ADDRSTRLEN];
 	unsigned int buflen;
+	static const unsigned int max_attempts = 128;
+	int range, attempts_left;
 
 	pr_debug("type %i, off %u len %u\n", type, matchoff, matchlen);
 
@@ -122,17 +124,14 @@ static unsigned int nf_nat_ftp(struct sk_buff *skb,
 	 * than its own IPv6 address.
          * so let the check hook to validate the port*/
 
-	static const unsigned int max_attempts = 128;
-	int range, attempts_left;
-	u16 min = port;
-
+	port = ntohs(exp->saved_proto.tcp.port);
 	range = USHRT_MAX - port;
 	attempts_left = range;
 
 	if (attempts_left > max_attempts)
 		attempts_left = max_attempts;
 
-	for (port = ntohs(exp->saved_proto.tcp.port); ;) {
+	for (;port != 0; port++) {
 		int ret;
 
 		if (!nf_nat_port_valid_check(skb, port))
