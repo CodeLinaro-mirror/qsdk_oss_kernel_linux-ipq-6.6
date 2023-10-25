@@ -1750,6 +1750,7 @@ enum netdev_priv_flags {
  * @IFF_EXT_GRE_V6_TAP: device is a GRE IPv6 TAP device
  * @IFF_EXT_IFB: device is an IFB device
  * @IFF_EXT_MAPT: device is an MAPT device
+ * @IFF_EXT_L2TPV3: device is a L2TPV3 Ethernet device
  */
 enum netdev_priv_flags_ext {
 	IFF_EXT_TUN_TAP			= 1<<0,
@@ -1761,6 +1762,7 @@ enum netdev_priv_flags_ext {
 	IFF_EXT_IFB				= 1<<6,
 	IFF_EXT_MAPT			= 1<<7,
 	IFF_EXT_HW_NO_OFFLOAD		= 1<<8,
+	IFF_EXT_ETH_L2TPV3		= 1<<9,
 };
 
 #define IFF_802_1Q_VLAN			IFF_802_1Q_VLAN
