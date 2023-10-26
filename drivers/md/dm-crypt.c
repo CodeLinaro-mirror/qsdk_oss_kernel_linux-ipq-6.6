@@ -226,7 +226,6 @@ struct crypt_config {
 
 #ifdef CONFIG_BLK_INLINE_ENCRYPTION
 	enum blk_crypto_mode_num crypto_mode;
-	enum blk_crypto_key_type key_type;
 	struct blk_crypto_key *blk_key;
 #endif
 	u8 *authenc_key; /* space for keys in authenc() format (if used) */
@@ -2427,10 +2426,6 @@ static int crypt_select_inline_crypt_mode(struct dm_target *ti, char *cipher,
 
 	if (strcmp(cipher, "xts(aes)") == 0) {
 		cc->crypto_mode = BLK_ENCRYPTION_MODE_AES_256_XTS;
-		cc->key_type = BLK_CRYPTO_KEY_TYPE_STANDARD;
-	} else if (strcmp(cipher, "xts(paes)") == 0) {
-		cc->crypto_mode = BLK_ENCRYPTION_MODE_AES_256_XTS;
-		cc->key_type = BLK_CRYPTO_KEY_TYPE_HW_WRAPPED;
 	} else {
 		ti->error = "Invalid cipher for inline_crypt";
 		return -EINVAL;
@@ -2454,16 +2449,14 @@ static int crypt_prepare_inline_crypt_key(struct crypt_config *cc)
 	if (!cc->blk_key)
 		return -ENOMEM;
 
-	ret = blk_crypto_init_key(cc->blk_key, cc->key, cc->key_size,
-				  cc->key_type, cc->crypto_mode, cc->iv_size,
-				  cc->sector_size);
+	ret = blk_crypto_init_key(cc->blk_key, cc->key, cc->crypto_mode,
+				  cc->iv_size, cc->sector_size);
 	if (ret) {
 		DMERR("Failed to init inline encryption key");
 		goto bad_key;
 	}
 
-	ret = blk_crypto_start_using_key(cc->blk_key,
-					 bdev_get_queue(cc->dev->bdev));
+	ret = blk_crypto_start_using_key(cc->dev->bdev, cc->blk_key);
 	if (ret) {
 		DMERR("Failed to use inline encryption key");
 		goto bad_key;
@@ -2479,8 +2472,7 @@ bad_key:
 static void crypt_destroy_inline_crypt_key(struct crypt_config *cc)
 {
 	if (cc->blk_key) {
-		blk_crypto_evict_key(bdev_get_queue(cc->dev->bdev),
-				     cc->blk_key);
+		blk_crypto_evict_key(cc->dev->bdev, cc->blk_key);
 		kfree_sensitive(cc->blk_key);
 		cc->blk_key = NULL;
 	}
