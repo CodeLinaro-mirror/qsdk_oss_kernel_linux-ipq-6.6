@@ -96,6 +96,7 @@ extern int __qti_scm_tz_hvc_log(struct device *dev, u32 svc_id, u32 cmd_id,
 #define QCOM_SCM_BOOT_MC_FLAG_WARMBOOT	BIT(2)
 #define QCOM_SCM_IS_TZ_LOG_ENCRYPTED	0xb
 #define QCOM_SCM_GET_TZ_LOG_ENCRYPTED	0xc
+#define QCOM_SCM_ABNORMAL_MAGIC		0x40
 
 #define QCOM_SCM_SVC_PIL		0x02
 #define QCOM_SCM_PIL_PAS_INIT_IMAGE	0x01
