@@ -527,6 +527,9 @@ static int qce_crypto_probe(struct platform_device *pdev)
 	if (ret < 0)
 		return ret;
 
+	if (device_property_read_bool(dev, "qce,cmd_desc_support"))
+		qce->qce_cmd_desc_enable = true;
+
 	if (device_property_read_bool(dev, "qce,use_fixed_hw_key"))
 		qce->use_fixed_key = true;
 

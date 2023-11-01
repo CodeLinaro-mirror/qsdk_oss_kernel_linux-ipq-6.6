@@ -96,6 +96,7 @@ struct qce_device {
 	bool use_fixed_key;
 	struct kobject kobj;
 	struct kobject *kobj_parent;
+	bool qce_cmd_desc_enable;
 };
 
 /**
