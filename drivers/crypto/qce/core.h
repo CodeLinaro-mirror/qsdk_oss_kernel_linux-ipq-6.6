@@ -97,6 +97,8 @@ struct qce_device {
 	struct kobject kobj;
 	struct kobject *kobj_parent;
 	dma_addr_t base_dma;
+	__le32 *reg_read_buf;
+	dma_addr_t reg_read_buf_phys;
 	bool qce_cmd_desc_enable;
 };
 
@@ -113,5 +115,15 @@ struct qce_algo_ops {
 	void (*unregister_algs)(struct qce_device *qce);
 	int (*async_req_handle)(struct crypto_async_request *async_req);
 };
+
+int qce_write_reg_dma(struct qce_device *qce, unsigned int offset, u32 val,
+			int cnt);
+
+int qce_read_reg_dma(struct qce_device *qce, unsigned int offset, void *buff,
+			int cnt);
+
+void qce_clear_bam_transaction(struct qce_device *qce);
+
+int qce_submit_cmd_desc(struct qce_device *qce, unsigned long flags);
 
 #endif /* _CORE_H_ */
