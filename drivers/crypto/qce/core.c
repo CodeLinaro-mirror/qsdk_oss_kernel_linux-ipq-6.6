@@ -510,6 +510,7 @@ static int qce_crypto_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
 	struct qce_device *qce;
+	struct resource *res;
 	int ret;
 
 	qce = devm_kzalloc(dev, sizeof(*qce), GFP_KERNEL);
@@ -527,8 +528,13 @@ static int qce_crypto_probe(struct platform_device *pdev)
 	if (ret < 0)
 		return ret;
 
-	if (device_property_read_bool(dev, "qce,cmd_desc_support"))
+	if (device_property_read_bool(dev, "qce,cmd_desc_support")) {
 		qce->qce_cmd_desc_enable = true;
+		qce->base_dma = devm_platform_get_and_ioremap_resource(pdev,
+				0, &res);
+		if (dma_mapping_error(dev, nandc->base_dma))
+			return -ENXIO;
+	}
 
 	if (device_property_read_bool(dev, "qce,use_fixed_hw_key"))
 		qce->use_fixed_key = true;
