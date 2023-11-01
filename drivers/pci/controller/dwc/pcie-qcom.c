@@ -238,6 +238,7 @@ struct qcom_pcie {
 	void __iomem *parf;			/* DT parf */
 	void __iomem *elbi;			/* DT elbi */
 	void __iomem *mhi;
+	resource_size_t parf_size;
 	void __iomem *aggr_noc;
 	union qcom_pcie_resources res;
 	struct phy *phy;
@@ -1238,6 +1239,33 @@ static void qcom_pcie_host_deinit(struct dw_pcie_rp *pp)
 	pcie->cfg->ops->deinit(pcie);
 }
 
+int pcie_parf_read(struct pci_dev *dev, u32 offset, u32 *val)
+{
+	struct dw_pcie_rp *pp;
+	struct dw_pcie *pci;
+	struct qcom_pcie *pcie;
+
+	if(!dev)
+		goto err;
+
+	pp = dev->bus->sysdata;
+	pci = to_dw_pcie_from_pp(pp);
+	pcie = to_qcom_pcie(pci);
+
+	if (offset > pcie->parf_size ||
+			!IS_ALIGNED((uintptr_t)pcie->parf + offset, 4))
+		goto err;
+
+	*val = readl(pcie->parf + offset);
+
+	return 0;
+
+err:
+	*val = 0;
+	return -EINVAL;
+}
+EXPORT_SYMBOL(pcie_parf_read);
+
 static const struct dw_pcie_host_ops qcom_pcie_dw_ops = {
 	.host_init	= qcom_pcie_host_init,
 	.host_deinit	= qcom_pcie_host_deinit,
@@ -1519,6 +1547,10 @@ static int qcom_pcie_probe(struct platform_device *pdev)
 		ret = PTR_ERR(pcie->parf);
 		goto err_pm_runtime_put;
 	}
+
+	/* get the parf size which is needed for pcie_parf_read() */
+	if (res)
+		pcie->parf_size = resource_size(res);
 
 	pcie->elbi = devm_platform_ioremap_resource_byname(pdev, "elbi");
 	if (IS_ERR(pcie->elbi)) {

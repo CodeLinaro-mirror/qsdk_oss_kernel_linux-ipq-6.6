@@ -1078,6 +1078,15 @@ extern enum pcie_bus_config_types pcie_bus_config;
 
 extern struct bus_type pci_bus_type;
 
+#ifdef CONFIG_PCIE_QCOM
+int pcie_parf_read(struct pci_dev *dev, u32 offset, u32 *val);
+#else
+static inline int pcie_parf_read(struct pci_dev *dev, u32 offset, u32 *val)
+{
+	return -ENODEV;
+}
+#endif
+
 /* Do NOT directly access these two variables, unless you are arch-specific PCI
  * code, or PCI core code. */
 extern struct list_head pci_root_buses;	/* List of all known PCI buses */
