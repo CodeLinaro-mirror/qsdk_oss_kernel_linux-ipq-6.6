@@ -41,6 +41,7 @@ static void qce_skcipher_done(void *data)
 	struct qce_alg_template *tmpl = to_cipher_tmpl(crypto_skcipher_reqtfm(req));
 	struct qce_device *qce = tmpl->qce;
 	struct qce_result_dump *result_buf = qce->dma.result_buf;
+	struct qce_bam_transaction *qce_bam_txn = qce->dma.qce_bam_txn;
 	enum dma_data_direction dir_src, dir_dst;
 	u32 status;
 	int error;
@@ -60,6 +61,19 @@ static void qce_skcipher_done(void *data)
 	dma_unmap_sg(qce->dev, rctx->dst_sg, rctx->dst_nents, dir_dst);
 
 	sg_free_table(&rctx->dst_tbl);
+
+	if (qce->qce_cmd_desc_enable) {
+		if (qce_bam_txn->qce_read_sgl_cnt)
+			dma_unmap_sg(qce->dev,
+				qce_bam_txn->qce_reg_read_sgl,
+				qce_bam_txn->qce_read_sgl_cnt,
+				DMA_DEV_TO_MEM);
+		if (qce_bam_txn->qce_write_sgl_cnt)
+			dma_unmap_sg(qce->dev,
+				qce_bam_txn->qce_reg_write_sgl,
+				qce_bam_txn->qce_write_sgl_cnt,
+				DMA_MEM_TO_DEV);
+	}
 
 	error = qce_check_status(qce, &status);
 	if (error < 0)
@@ -90,6 +104,9 @@ qce_skcipher_async_req_handle(struct crypto_async_request *async_req)
 	diff_dst = (req->src != req->dst) ? true : false;
 	dir_src = diff_dst ? DMA_TO_DEVICE : DMA_BIDIRECTIONAL;
 	dir_dst = diff_dst ? DMA_FROM_DEVICE : DMA_BIDIRECTIONAL;
+
+	if (qce->qce_cmd_desc_enable)
+		qce_read_dma_get_lock(qce);
 
 	rctx->src_nents = sg_nents_for_len(req->src, req->cryptlen);
 	if (diff_dst)

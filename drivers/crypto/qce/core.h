@@ -118,12 +118,10 @@ struct qce_algo_ops {
 
 int qce_write_reg_dma(struct qce_device *qce, unsigned int offset, u32 val,
 			int cnt);
-
 int qce_read_reg_dma(struct qce_device *qce, unsigned int offset, void *buff,
 			int cnt);
-
 void qce_clear_bam_transaction(struct qce_device *qce);
-
 int qce_submit_cmd_desc(struct qce_device *qce, unsigned long flags);
-
+int qce_read_dma_get_lock(struct qce_device *qce);
+int qce_unlock_reg_dma(struct qce_device *qce);
 #endif /* _CORE_H_ */
