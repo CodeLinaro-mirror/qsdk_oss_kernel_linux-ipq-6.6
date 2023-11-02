@@ -30,6 +30,7 @@
 #include <linux/reset.h>
 #include <linux/slab.h>
 #include <linux/types.h>
+#include <linux/nvmem-consumer.h>
 
 #include "../../pci.h"
 #include "pcie-designware.h"
@@ -1638,6 +1639,26 @@ static int qcom_pcie_probe(struct platform_device *pdev)
 	struct dw_pcie *pci;
 	int ret;
 	uint32_t num_lanes = 0;
+	struct nvmem_cell *pcie_nvmem;
+	u8 *disable_status;
+	size_t len;
+
+	/* If nvmem-cells present on PCIe node in DTSI, then check the QFPROM
+	 * fuses for PCIe is disabled */
+	pcie_nvmem = of_nvmem_cell_get(pdev->dev.of_node, NULL);
+	if (IS_ERR(pcie_nvmem)) {
+		if (PTR_ERR(pcie_nvmem) == -EPROBE_DEFER)
+			return -EPROBE_DEFER;
+	} else {
+		disable_status = nvmem_cell_read(pcie_nvmem, &len);
+		nvmem_cell_put(pcie_nvmem);
+		if ( !IS_ERR(disable_status) && ((unsigned int)(*disable_status) == 1) ) {
+			dev_info(dev,"Disabled in qfprom efuse\n");
+			kfree(disable_status);
+			return -ENODEV;
+		}
+		kfree(disable_status);
+	}
 
 	pcie_cfg = of_device_get_match_data(dev);
 	if (!pcie_cfg || !pcie_cfg->ops) {
