@@ -5,6 +5,7 @@
 
 #include <linux/dmaengine.h>
 #include <crypto/scatterwalk.h>
+#include <linux/dma-mapping.h>
 
 #include "dma.h"
 #include "core.h"
@@ -258,17 +259,22 @@ error_rx:
 
 void qce_dma_release(struct qce_dma_data *dma)
 {
+	struct qce_device *qce = container_of(dma,
+			struct qce_device, dma);
+
 	dma_release_channel(dma->txchan);
 	dma_release_channel(dma->rxchan);
 	kfree(dma->result_buf);
+
 	if (qce->qce_cmd_desc_enable) {
 		if (qce->reg_read_buf)
 			dmam_free_coherent(qce->dev, QCE_MAX_REG_READ *
 				sizeof(*qce->reg_read_buf),
 				qce->reg_read_buf,
 				qce->reg_read_buf_phys);
-			kfree(dma->qce_bam_txn->qce_desc);
-			kfree(dma->qce_bam_txn);
+
+		kfree(dma->qce_bam_txn->qce_desc);
+		kfree(dma->qce_bam_txn);
 	}
 }
 

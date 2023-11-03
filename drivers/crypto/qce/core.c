@@ -530,9 +530,12 @@ static int qce_crypto_probe(struct platform_device *pdev)
 
 	if (device_property_read_bool(dev, "qce,cmd_desc_support")) {
 		qce->qce_cmd_desc_enable = true;
-		qce->base_dma = devm_platform_get_and_ioremap_resource(pdev,
-				0, &res);
-		if (dma_mapping_error(dev, nandc->base_dma))
+		res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
+		if (!res)
+			return -ENOMEM;
+		qce->base_dma = dma_map_resource(dev, res->start, resource_size(res),
+				DMA_BIDIRECTIONAL, 0);
+		if (dma_mapping_error(dev, qce->base_dma))
 			return -ENXIO;
 	}
 

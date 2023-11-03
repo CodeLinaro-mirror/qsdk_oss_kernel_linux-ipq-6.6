@@ -363,7 +363,6 @@ static int qce_setup_regs_skcipher_dma(struct crypto_async_request *async_req)
 	unsigned int ivsize = rctx->ivsize;
 	unsigned long flags = rctx->flags;
 	int ret;
-
 	qce_clear_bam_transaction(qce);
 	qce_setup_config_dma(qce);
 
@@ -375,7 +374,7 @@ static int qce_setup_regs_skcipher_dma(struct crypto_async_request *async_req)
 	qce_cpu_to_be32p_array(enckey, ctx->enc_key, keylen);
 	enckey_words = keylen / sizeof(u32);
 
-	qce_write_reg_dma(qce, REG_AUTH_SEG_CFG, 0, 1);
+	qce_write_reg_dma(qce, REG_AUTH_SEG_CFG, auth_cfg, 1);
 
 	encr_cfg = qce_encr_cfg(flags, keylen);
 
@@ -453,7 +452,6 @@ static int qce_setup_regs_skcipher(struct crypto_async_request *async_req)
 	u32 encr_cfg = 0, auth_cfg = 0, config;
 	unsigned int ivsize = rctx->ivsize;
 	unsigned long flags = rctx->flags;
-
 	qce_setup_config(qce);
 
 	if (IS_XTS(flags))
@@ -707,6 +705,9 @@ static int qce_setup_regs_aead(struct crypto_async_request *async_req)
 
 int qce_start(struct crypto_async_request *async_req, u32 type)
 {
+	struct skcipher_request *req = skcipher_request_cast(async_req);
+	struct qce_alg_template *tmpl = to_cipher_tmpl(crypto_skcipher_reqtfm(req));
+	struct qce_device *qce = tmpl->qce;
 	switch (type) {
 #ifdef CONFIG_CRYPTO_DEV_QCE_SKCIPHER
 	case CRYPTO_ALG_TYPE_SKCIPHER:
