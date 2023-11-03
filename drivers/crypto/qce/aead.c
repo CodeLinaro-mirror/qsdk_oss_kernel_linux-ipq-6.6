@@ -29,6 +29,7 @@ static void qce_aead_done(void *data)
 	struct qce_alg_template *tmpl = to_aead_tmpl(crypto_aead_reqtfm(req));
 	struct qce_device *qce = tmpl->qce;
 	struct qce_result_dump *result_buf = qce->dma.result_buf;
+	struct qce_bam_transaction *qce_bam_txn = qce->dma.qce_bam_txn;
 	enum dma_data_direction dir_src, dir_dst;
 	bool diff_dst;
 	int error;
@@ -49,6 +50,19 @@ static void qce_aead_done(void *data)
 		dma_unmap_sg(qce->dev, rctx->src_sg, rctx->src_nents, dir_src);
 
 	dma_unmap_sg(qce->dev, rctx->dst_sg, rctx->dst_nents, dir_dst);
+
+	if (qce->qce_cmd_desc_enable) {
+		if (qce_bam_txn->qce_read_sgl_cnt)
+			dma_unmap_sg(qce->dev,
+				qce_bam_txn->qce_reg_read_sgl,
+				qce_bam_txn->qce_read_sgl_cnt,
+				DMA_DEV_TO_MEM);
+		if (qce_bam_txn->qce_write_sgl_cnt)
+			dma_unmap_sg(qce->dev,
+				qce_bam_txn->qce_reg_write_sgl,
+				qce_bam_txn->qce_write_sgl_cnt,
+				DMA_MEM_TO_DEV);
+	}
 
 	if (IS_CCM(rctx->flags)) {
 		if (req->assoclen) {
@@ -437,6 +451,9 @@ qce_aead_async_req_handle(struct crypto_async_request *async_req)
 	dir_src = diff_dst ? DMA_TO_DEVICE : DMA_BIDIRECTIONAL;
 	dir_dst = diff_dst ? DMA_FROM_DEVICE : DMA_BIDIRECTIONAL;
 
+	if (qce->qce_cmd_desc_enable)
+		qce_read_dma_get_lock(qce);
+
 	if (IS_CCM(rctx->flags)) {
 		ret = qce_aead_create_ccm_nonce(rctx, ctx);
 		if (ret)
@@ -475,7 +492,7 @@ qce_aead_async_req_handle(struct crypto_async_request *async_req)
 
 	qce_dma_issue_pending(&qce->dma);
 
-	ret = qce_start(async_req, tmpl->crypto_alg_type);
+	ret = qce_start(async_req, tmpl->crypto_alg_type, qce);
 	if (ret)
 		goto error_terminate;
 

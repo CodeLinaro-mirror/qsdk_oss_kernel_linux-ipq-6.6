@@ -95,7 +95,6 @@ static int qce_ahash_async_req_handle(struct crypto_async_request *async_req)
 	struct qce_device *qce = tmpl->qce;
 	unsigned long flags = rctx->flags;
 	int ret;
-
 	if (IS_SHA_HMAC(flags)) {
 		rctx->authkey = ctx->authkey;
 		rctx->authklen = QCE_SHA_HMAC_KEY_SIZE;
@@ -107,7 +106,6 @@ static int qce_ahash_async_req_handle(struct crypto_async_request *async_req)
 	/* Get the LOCK for this request */
 	if (qce->qce_cmd_desc_enable)
 		qce_read_dma_get_lock(qce);
-
 	rctx->src_nents = sg_nents_for_len(req->src, req->nbytes);
 	if (rctx->src_nents < 0) {
 		dev_err(qce->dev, "Invalid numbers of src SG.\n");
@@ -132,8 +130,7 @@ static int qce_ahash_async_req_handle(struct crypto_async_request *async_req)
 		goto error_unmap_dst;
 
 	qce_dma_issue_pending(&qce->dma);
-
-	ret = qce_start(async_req, tmpl->crypto_alg_type);
+	ret = qce_start(async_req, tmpl->crypto_alg_type, qce);
 	if (ret)
 		goto error_terminate;
 

@@ -175,7 +175,7 @@ qce_skcipher_async_req_handle(struct crypto_async_request *async_req)
 
 	qce_dma_issue_pending(&qce->dma);
 
-	ret = qce_start(async_req, tmpl->crypto_alg_type);
+	ret = qce_start(async_req, tmpl->crypto_alg_type, qce);
 	if (ret)
 		goto error_terminate;
 
