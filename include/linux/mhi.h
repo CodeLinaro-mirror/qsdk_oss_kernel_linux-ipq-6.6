@@ -467,6 +467,8 @@ struct mhi_controller {
 	dma_addr_t nonce_dma_addr;
 	bool rddm_prealloc;
 	u32 rddm_seg_len;
+	u8 *bootargs_buf;
+	dma_addr_t bootargs_dma;
 };
 
 /**
