@@ -587,6 +587,7 @@ extern char *coresight_alloc_device_name(struct coresight_dev_list *devs,
 					 struct device *dev);
 
 extern bool coresight_loses_context_with_cpu(struct device *dev);
+extern void coresight_abort(void);
 
 u32 coresight_relaxed_read32(struct coresight_device *csdev, u32 offset);
 u32 coresight_read32(struct coresight_device *csdev, u32 offset);
@@ -625,6 +626,7 @@ static inline int coresight_claim_device(struct coresight_device *csdev)
 
 static inline void coresight_disclaim_device(struct coresight_device *csdev) {}
 static inline void coresight_disclaim_device_unlocked(struct coresight_device *csdev) {}
+static inline void coresight_abort(void) {}
 
 static inline bool coresight_loses_context_with_cpu(struct device *dev)
 {
