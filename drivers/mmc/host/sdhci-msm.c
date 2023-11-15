@@ -1010,6 +1010,8 @@ static int sdhci_msm_cm_dll_sdc4_calibration(struct sdhci_host *host)
 	struct sdhci_msm_host *msm_host = sdhci_pltfm_priv(pltfm_host);
 	const struct sdhci_msm_offset *msm_offset =
 					sdhci_priv_msm_offset(host);
+	struct device *dev = &msm_host->pdev->dev;
+	u32 ext_rclk_dly_val;
 
 	pr_debug("%s: %s: Enter\n", mmc_hostname(host->mmc), __func__);
 
@@ -1025,6 +1027,12 @@ static int sdhci_msm_cm_dll_sdc4_calibration(struct sdhci_host *host)
 	else
 		ddr_cfg_offset = msm_offset->core_ddr_config_old;
 	writel_relaxed(msm_host->ddr_config, host->ioaddr + ddr_cfg_offset);
+
+	if (!of_property_read_u32(dev->of_node, "qcom,ext_prg_rclk_dly_en",
+					&ext_rclk_dly_val)) {
+		writel_relaxed(ext_rclk_dly_val, host->ioaddr +
+						ddr_cfg_offset);
+	}
 
 	if (mmc->ios.enhanced_strobe) {
 		config = readl_relaxed(host->ioaddr +
