@@ -724,6 +724,8 @@ static int tmc_etr_alloc_rsvd_buf(struct tmc_drvdata *drvdata,
  */
 static void tmc_etr_free_rsvd_buf(struct etr_buf *etr_buf)
 {
+	struct etr_flat_buf *flat_buf = etr_buf->private;
+	kfree(flat_buf);
 }
 
 
