@@ -711,6 +711,26 @@ int qcom_scm_pas_mem_setup(u32 peripheral, phys_addr_t addr, phys_addr_t size)
 }
 EXPORT_SYMBOL_GPL(qcom_scm_pas_mem_setup);
 
+int qcom_scm_break_q6_start(u32 reset_cmd_id)
+{
+	int ret;
+	struct qcom_scm_desc desc = {
+		.svc = QCOM_SCM_SVC_PIL,
+		.cmd = reset_cmd_id,
+		.arginfo = QCOM_SCM_ARGS(1),
+		.args[0] = QCOM_BREAK_Q6,
+		.owner = ARM_SMCCC_OWNER_SIP,
+	};
+	struct qcom_scm_res res;
+
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+	if (ret || res.result[0])
+		return ret ? : res.result[0];
+
+	return 0;
+}
+EXPORT_SYMBOL(qcom_scm_break_q6_start);
+
 /**
  * qcom_scm_pas_auth_and_reset() - Authenticate the given peripheral firmware
  *				   and reset the remote processor
