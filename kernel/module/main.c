@@ -248,6 +248,11 @@ static __maybe_unused void *any_section_objs(const struct load_info *info,
 #define symversion(base, idx) ((base != NULL) ? ((base) + (idx)) : NULL)
 #endif
 
+#ifdef CONFIG_QCA_MINIDUMP
+struct list_head *minidump_modules = &modules;
+EXPORT_SYMBOL(minidump_modules);
+#endif /* CONFIG_QCA_MINIDUMP */
+
 static const char *kernel_symbol_name(const struct kernel_symbol *sym)
 {
 #ifdef CONFIG_HAVE_ARCH_PREL32_RELOCATIONS

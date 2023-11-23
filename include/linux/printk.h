@@ -182,6 +182,10 @@ extern int dmesg_restrict;
 
 extern void wake_up_klogd(void);
 
+#ifdef CONFIG_QCA_MINIDUMP
+extern void get_log_buf_info(uint64_t *log_buf, uint64_t *log_buf_len);
+#endif /* CONFIG_QCA_MINIDUMP */
+
 char *log_buf_addr_get(void);
 u32 log_buf_len_get(void);
 void log_buf_vmcoreinfo_setup(void);

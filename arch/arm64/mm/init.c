@@ -547,3 +547,11 @@ void dump_mem_limit(void)
 		pr_emerg("Memory Limit: none\n");
 	}
 }
+
+#ifdef CONFIG_QCA_MINIDUMP
+void minidump_get_pgd_info(uint64_t *pt_start, uint64_t *pt_len)
+{
+    *pt_start = (uintptr_t)swapper_pg_dir;
+    *pt_len = SZ_4K;
+}
+#endif /* CONFIG_QCA_MINIDUMP */
