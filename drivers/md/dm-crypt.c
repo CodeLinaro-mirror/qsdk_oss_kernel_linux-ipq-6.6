@@ -2424,8 +2424,14 @@ static int crypt_select_inline_crypt_mode(struct dm_target *ti, char *cipher,
 {
 	struct crypt_config *cc = ti->private;
 
-	if (strcmp(cipher, "xts(aes)") == 0) {
+	if (strcmp(cipher, "xts(aes128)") == 0) {
+		cc->crypto_mode = BLK_ENCRYPTION_MODE_AES_128_XTS;
+	} else if (strcmp(cipher, "xts(aes256)") == 0) {
 		cc->crypto_mode = BLK_ENCRYPTION_MODE_AES_256_XTS;
+	} else if (strcmp(cipher, "cbc(aes128)") == 0) {
+		cc->crypto_mode = BLK_ENCRYPTION_MODE_AES_128_CBC;
+	} else if (strcmp(cipher, "cbc(aes256)") == 0) {
+		cc->crypto_mode = BLK_ENCRYPTION_MODE_AES_256_CBC;
 	} else {
 		ti->error = "Invalid cipher for inline_crypt";
 		return -EINVAL;
