@@ -473,17 +473,21 @@ static void qmi_handle_message(struct qmi_handle *qmi,
 			       struct sockaddr_qrtr *sq,
 			       const void *buf, size_t len)
 {
-	const struct qmi_header *hdr;
+	struct qmi_header *hdr;
 	struct qmi_txn tmp_txn;
 	struct qmi_txn *txn = NULL;
 	int ret;
+	bool complete_req = false;
 
 	if (len < sizeof(*hdr)) {
 		pr_err("ignoring short QMI packet\n");
 		return;
 	}
 
-	hdr = buf;
+	hdr = (struct qmi_header *)buf;
+	hdr->txn_id = le16_to_cpu(hdr->txn_id);
+	hdr->msg_id = le16_to_cpu(hdr->msg_id);
+	hdr->msg_len = le16_to_cpu(hdr->msg_len);
 
 	/* If this is a response, find the matching transaction handle */
 	if (hdr->type == QMI_RESPONSE) {
@@ -499,18 +503,21 @@ static void qmi_handle_message(struct qmi_handle *qmi,
 		mutex_lock(&txn->lock);
 		mutex_unlock(&qmi->txn_lock);
 
-		if (txn->dest && txn->ei) {
+		complete_req  = txn->dest && txn->ei;
+
+		if (complete_req) {
 			ret = qmi_decode_message(buf, len, txn->ei, txn->dest);
 			if (ret < 0)
 				pr_err("failed to decode incoming message\n");
 
 			txn->result = ret;
-			complete(&txn->completion);
 		} else  {
 			qmi_invoke_handler(qmi, sq, txn, buf, len);
 		}
 
 		mutex_unlock(&txn->lock);
+		if (complete_req)
+			complete(&txn->completion);
 	} else {
 		/* Create a txn based on the txn_id of the incoming message */
 		memset(&tmp_txn, 0, sizeof(tmp_txn));
