@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause) */
+/* SPDX-License-Identifier: GPL-2.0-only */
 /*
  * Copyright (c) 2018-2023, The Linux Foundation. All rights reserved.
  */
@@ -161,5 +161,4 @@
 #define GCC_WCSS_Q6_TBU_BCR					152
 #define GCC_TCSR_BCR						153
 #define GCC_CRYPTO_BCR						154
-
 #endif

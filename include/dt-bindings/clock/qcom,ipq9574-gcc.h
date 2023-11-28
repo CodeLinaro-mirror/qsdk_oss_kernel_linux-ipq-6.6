@@ -1,4 +1,4 @@
-/* SPDX-License-Identifier: (GPL-2.0-only OR BSD-2-Clause) */
+/* SPDX-License-Identifier: GPL-2.0 */
 /*
  * Copyright (c) 2018-2023 The Linux Foundation. All rights reserved.
  */
@@ -210,10 +210,25 @@
 #define GCC_SNOC_PCIE1_1LANE_S_CLK			201
 #define GCC_SNOC_PCIE2_2LANE_S_CLK			202
 #define GCC_SNOC_PCIE3_2LANE_S_CLK			203
-#define GCC_CRYPTO_CLK_SRC				204
-#define GCC_CRYPTO_CLK					205
-#define GCC_CRYPTO_AXI_CLK				206
-#define GCC_CRYPTO_AHB_CLK				207
+#define GCC_PCIE0_PIPE_CLK                              204
+#define GCC_PCIE1_PIPE_CLK                              205
+#define GCC_PCIE2_PIPE_CLK                              206
+#define GCC_PCIE3_PIPE_CLK                              207
 #define GCC_USB0_PIPE_CLK				208
 #define GCC_USB0_SLEEP_CLK				209
+#define GCC_WCSS_AHB_S_CLK				210
+#define GCC_WCSS_AXI_M_CLK				211
+#define GCC_Q6_AXIM2_CLK				212
+#define GCC_WCSS_DBG_IFC_APB_BDG_CLK			213
+#define GCC_WCSS_DBG_IFC_ATB_BDG_CLK			214
+#define GCC_WCSS_DBG_IFC_DAPBUS_BDG_CLK			215
+#define GCC_WCSS_DBG_IFC_NTS_BDG_CLK			216
+#define CRYPTO_CLK_SRC					217
+#define GCC_CRYPTO_CLK					218
+#define GCC_CRYPTO_AXI_CLK				219
+#define GCC_CRYPTO_AHB_CLK				220
+#define GCC_LPASS_SWAY_CLK				221
+#define GCC_LPASS_CORE_AXIM_CLK			222
+#define GCC_SNOC_LPASS_CFG_CLK			223
+#define GCC_PCNOC_LPASS_CLK				224
 #endif
