@@ -17,6 +17,7 @@
 #include <linux/sizes.h>
 #include <linux/slab.h>
 #include <linux/soc/qcom/llcc-qcom.h>
+#include <linux/of_platform.h>
 
 #define ACTIVATE                      BIT(0)
 #define DEACTIVATE                    BIT(1)
@@ -1067,6 +1068,9 @@ static int qcom_llcc_probe(struct platform_device *pdev)
 		if (IS_ERR(llcc_edac))
 			dev_err(dev, "Failed to register llcc edac driver\n");
 	}
+
+	if (of_platform_populate(dev->of_node, NULL, NULL, dev))
+		dev_err(dev, "llcc perfmon populate failed!!\n");
 
 	return 0;
 err:
