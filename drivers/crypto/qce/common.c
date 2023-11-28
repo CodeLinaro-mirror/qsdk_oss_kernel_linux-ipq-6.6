@@ -636,7 +636,7 @@ int qce_read_dma_get_lock(struct qce_device *qce)
 	u32 val = 0;
 
 	qce_clear_bam_transaction(qce);
-	qce_read_reg_dma(qce, REG_STATUS, &val, 1);
+	qce_read_reg_dma(qce, REG_STATUS2, &val, 1);
 
 	ret = qce_submit_cmd_desc(qce, QCE_DMA_DESC_FLAG_LOCK);
 	if (ret) {
@@ -653,7 +653,7 @@ int qce_unlock_reg_dma(struct qce_device *qce)
 	u32 val = 0;
 
 	qce_clear_bam_transaction(qce);
-	qce_read_reg_dma(qce, REG_STATUS, &val, 1);
+	qce_read_reg_dma(qce, REG_STATUS2, &val, 1);
 
 	ret = qce_submit_cmd_desc(qce, QCE_DMA_DESC_FLAG_UNLOCK);
 	if (ret) {
@@ -983,9 +983,6 @@ int qce_check_status(struct qce_device *qce, u32 *status)
 
 	*status = qce_read(qce, REG_STATUS);
 
-	/* Unlock the crypto pipe here */
-	if (qce->qce_cmd_desc_enable)
-		qce_unlock_reg_dma(qce);
 	/*
 	 * Don't use result dump status. The operation may not be complete.
 	 * Instead, use the status we just read from device. In case, we need to

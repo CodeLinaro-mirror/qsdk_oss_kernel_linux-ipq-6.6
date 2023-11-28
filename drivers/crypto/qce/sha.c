@@ -47,6 +47,13 @@ static void qce_ahash_done(void *data)
 	int error;
 	u32 status;
 
+	error = qce_check_status(qce, &status);
+	if (error < 0)
+		dev_dbg(qce->dev, "ahash operation error (%x)\n", status);
+
+	if (qce->qce_cmd_desc_enable)
+		qce_unlock_reg_dma(qce);
+
 	error = qce_dma_terminate_all(&qce->dma);
 	if (error)
 		dev_dbg(qce->dev, "ahash dma termination error (%d)\n", error);
@@ -73,10 +80,6 @@ static void qce_ahash_done(void *data)
 				qce_bam_txn->qce_write_sgl_cnt,
 				DMA_MEM_TO_DEV);
 	}
-
-	error = qce_check_status(qce, &status);
-	if (error < 0)
-		dev_dbg(qce->dev, "ahash operation error (%x)\n", status);
 
 	req->src = rctx->src_orig;
 	req->nbytes = rctx->nbytes_orig;

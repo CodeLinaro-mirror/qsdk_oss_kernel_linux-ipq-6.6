@@ -42,6 +42,13 @@ static void qce_aead_done(void *data)
 	dir_src = diff_dst ? DMA_TO_DEVICE : DMA_BIDIRECTIONAL;
 	dir_dst = diff_dst ? DMA_FROM_DEVICE : DMA_BIDIRECTIONAL;
 
+	error = qce_check_status(qce, &status);
+	if (error < 0 && (error != -EBADMSG))
+		dev_err(qce->dev, "aead operation error (%x)\n", status);
+
+	if (qce->qce_cmd_desc_enable)
+		qce_unlock_reg_dma(qce);
+
 	error = qce_dma_terminate_all(&qce->dma);
 	if (error)
 		dev_dbg(qce->dev, "aead dma termination error (%d)\n",
@@ -76,10 +83,6 @@ static void qce_aead_done(void *data)
 	} else {
 		sg_free_table(&rctx->dst_tbl);
 	}
-
-	error = qce_check_status(qce, &status);
-	if (error < 0 && (error != -EBADMSG))
-		dev_err(qce->dev, "aead operation error (%x)\n", status);
 
 	if (IS_ENCRYPT(rctx->flags)) {
 		totallen = req->cryptlen + req->assoclen;
