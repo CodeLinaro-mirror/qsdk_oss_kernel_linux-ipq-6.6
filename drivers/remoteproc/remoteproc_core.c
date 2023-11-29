@@ -1263,7 +1263,7 @@ void rproc_resource_cleanup(struct rproc *rproc)
 }
 EXPORT_SYMBOL(rproc_resource_cleanup);
 
-static int rproc_start(struct rproc *rproc, const struct firmware *fw)
+int rproc_start(struct rproc *rproc, const struct firmware *fw)
 {
 	struct resource_table *loaded_table;
 	struct device *dev = &rproc->dev;
@@ -1327,6 +1327,7 @@ reset_table_ptr:
 
 	return ret;
 }
+EXPORT_SYMBOL(rproc_start);
 
 static int __rproc_attach(struct rproc *rproc)
 {
@@ -1703,7 +1704,7 @@ static int rproc_trigger_auto_boot(struct rproc *rproc)
 	return ret;
 }
 
-static int rproc_stop(struct rproc *rproc, bool crashed)
+int rproc_stop(struct rproc *rproc, bool crashed)
 {
 	struct device *dev = &rproc->dev;
 	int ret;
@@ -1738,6 +1739,7 @@ static int rproc_stop(struct rproc *rproc, bool crashed)
 
 	return 0;
 }
+EXPORT_SYMBOL(rproc_stop);
 
 /*
  * __rproc_detach(): Does the opposite of __rproc_attach()
