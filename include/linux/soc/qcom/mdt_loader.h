@@ -20,6 +20,7 @@ struct qcom_scm_pas_metadata;
 #if IS_ENABLED(CONFIG_QCOM_MDT_LOADER)
 
 ssize_t qcom_mdt_get_size(const struct firmware *fw);
+ssize_t qcom_mdt_get_file_size(const struct firmware *fw);
 int qcom_mdt_pas_init(struct device *dev, const struct firmware *fw,
 		      const char *fw_name, int pas_id, phys_addr_t mem_phys,
 		      struct qcom_scm_pas_metadata *pas_metadata_ctx);
