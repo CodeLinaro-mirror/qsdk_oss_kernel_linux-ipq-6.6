@@ -1682,3 +1682,28 @@ void mhi_unprepare_from_transfer(struct mhi_device *mhi_dev)
 	}
 }
 EXPORT_SYMBOL_GPL(mhi_unprepare_from_transfer);
+
+void mhi_dump_errdbg_reg(struct mhi_controller *mhi_cntrl)
+{
+	struct device *dev = &mhi_cntrl->mhi_dev->dev;
+	u32 val, i;
+	struct {
+		char *name;
+		u32 offset;
+	} error_reg[] = {
+		{ "ERROR_CODE", BHI_ERRCODE },
+		{ "ERROR_DBG1", BHI_ERRDBG1 },
+		{ "ERROR_DBG2", BHI_ERRDBG2 },
+		{ "ERROR_DBG3", BHI_ERRDBG3 },
+		{ NULL },
+	};
+
+	for (i = 0; error_reg[i].name; i++) {
+		if (mhi_read_reg(mhi_cntrl, mhi_cntrl->bhi,
+				 error_reg[i].offset, &val))
+			break;
+
+		dev_err(dev, "reg:%s value:0x%x\n", error_reg[i].name, val);
+	}
+}
+EXPORT_SYMBOL_GPL(mhi_dump_errdbg_reg);

@@ -822,4 +822,9 @@ int mhi_queue_skb(struct mhi_device *mhi_dev, enum dma_data_direction dir,
  */
 bool mhi_queue_is_full(struct mhi_device *mhi_dev, enum dma_data_direction dir);
 
+/**
+ * mhi_dump_errdbg_reg - Dump error debug registers
+ * @mhi_cntrl: MHI controller
+ */
+void mhi_dump_errdbg_reg(struct mhi_controller *mhi_cntrl);
 #endif /* _MHI_H_ */

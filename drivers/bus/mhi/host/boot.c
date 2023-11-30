@@ -173,7 +173,7 @@ static int __mhi_download_rddm_in_panic(struct mhi_controller *mhi_cntrl)
 error_exit_rddm:
 	dev_err(dev, "RDDM transfer failed. Current EE: %s\n",
 		TO_MHI_EXEC_STR(ee));
-
+	mhi_dump_errdbg_reg(mhi_cntrl);
 	return -EIO;
 }
 
@@ -182,6 +182,7 @@ int mhi_download_rddm_image(struct mhi_controller *mhi_cntrl, bool in_panic)
 {
 	void __iomem *base = mhi_cntrl->bhie;
 	struct device *dev = &mhi_cntrl->mhi_dev->dev;
+	rwlock_t *pm_lock = &mhi_cntrl->pm_lock;
 	struct mhi_buf *mhi_buf = NULL;
 	u32 rx_status;
 	int ret;
@@ -231,6 +232,15 @@ out:
 		dma_unmap_single(mhi_cntrl->cntrl_dev, mhi_buf->dma_addr,
 				 mhi_buf->len, DMA_TO_DEVICE);
 
+	if (ret) {
+		dev_err(dev, "RDDM transfer failed. RXVEC_STATUS: 0x%x\n",
+			rx_status);
+		read_lock_bh(pm_lock);
+		if (MHI_REG_ACCESS_VALID(mhi_cntrl->pm_state))
+			mhi_dump_errdbg_reg(mhi_cntrl);
+		read_unlock_bh(pm_lock);
+	}
+
 	return ret;
 }
 EXPORT_SYMBOL_GPL(mhi_download_rddm_image);
@@ -277,8 +287,22 @@ static int mhi_fw_load_bhie(struct mhi_controller *mhi_cntrl,
 						   &tx_status) || tx_status,
 				 msecs_to_jiffies(mhi_cntrl->timeout_ms));
 	if (MHI_PM_IN_ERROR_STATE(mhi_cntrl->pm_state) ||
-	    tx_status != BHIE_TXVECSTATUS_STATUS_XFER_COMPL)
+	    tx_status != BHIE_TXVECSTATUS_STATUS_XFER_COMPL) {
+		dev_err(dev, "Upper:0x%x Lower:0x%x len:0x%zx sequence:%u\n",
+			upper_32_bits(mhi_buf->dma_addr),
+			lower_32_bits(mhi_buf->dma_addr),
+			mhi_buf->len, sequence_id);
+
+		dev_err(dev, "MHI pm_state: %s tx_status: %d ee: %s\n",
+			to_mhi_pm_state_str(mhi_cntrl->pm_state), tx_status,
+			TO_MHI_EXEC_STR(mhi_get_exec_env(mhi_cntrl)));
+
+		read_lock_bh(pm_lock);
+		if (MHI_REG_ACCESS_VALID(mhi_cntrl->pm_state))
+			mhi_dump_errdbg_reg(mhi_cntrl);
+		read_unlock_bh(pm_lock);
 		return -EIO;
+	}
 
 	return (!ret) ? -ETIMEDOUT : 0;
 }
@@ -287,21 +311,11 @@ static int mhi_fw_load_bhi(struct mhi_controller *mhi_cntrl,
 			   dma_addr_t dma_addr,
 			   size_t size)
 {
-	u32 tx_status, val, session_id;
-	int i, ret;
+	u32 tx_status, session_id;
+	int ret;
 	void __iomem *base = mhi_cntrl->bhi;
 	rwlock_t *pm_lock = &mhi_cntrl->pm_lock;
 	struct device *dev = &mhi_cntrl->mhi_dev->dev;
-	struct {
-		char *name;
-		u32 offset;
-	} error_reg[] = {
-		{ "ERROR_CODE", BHI_ERRCODE },
-		{ "ERROR_DBG1", BHI_ERRDBG1 },
-		{ "ERROR_DBG2", BHI_ERRDBG2 },
-		{ "ERROR_DBG3", BHI_ERRDBG3 },
-		{ NULL },
-	};
 
 	read_lock_bh(pm_lock);
 	if (!MHI_REG_ACCESS_VALID(mhi_cntrl->pm_state)) {
@@ -333,16 +347,8 @@ static int mhi_fw_load_bhi(struct mhi_controller *mhi_cntrl,
 	if (tx_status == BHI_STATUS_ERROR) {
 		dev_err(dev, "Image transfer failed\n");
 		read_lock_bh(pm_lock);
-		if (MHI_REG_ACCESS_VALID(mhi_cntrl->pm_state)) {
-			for (i = 0; error_reg[i].name; i++) {
-				ret = mhi_read_reg(mhi_cntrl, base,
-						   error_reg[i].offset, &val);
-				if (ret)
-					break;
-				dev_err(dev, "Reg: %s value: 0x%x\n",
-					error_reg[i].name, val);
-			}
-		}
+		if (MHI_REG_ACCESS_VALID(mhi_cntrl->pm_state))
+			mhi_dump_errdbg_reg(mhi_cntrl);
 		read_unlock_bh(pm_lock);
 		goto invalid_pm_state;
 	}
