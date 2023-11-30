@@ -801,7 +801,7 @@ int mhi_download_amss_image(struct mhi_controller *mhi_cntrl)
 	if (!image_info)
 		return -EIO;
 
-	if (pdev && pdev->device == QCN9224_DEVICE_ID) {
+	if (IS_QCN9224_DEV(mhi_cntrl)) {
 		/* Download the License */
 		mhi_download_fw_license(mhi_cntrl);
 	}
