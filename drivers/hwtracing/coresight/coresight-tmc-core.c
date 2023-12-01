@@ -23,6 +23,7 @@
 #include <linux/of.h>
 #include <linux/coresight.h>
 #include <linux/amba/bus.h>
+#include <linux/of_reserved_mem.h>
 
 #include "coresight-priv.h"
 #include "coresight-tmc.h"
@@ -429,6 +430,32 @@ static u32 tmc_etr_get_max_burst_size(struct device *dev)
 	return burst_size;
 }
 
+static void tmc_get_reserved_region(struct device *dev)
+{
+	struct device_node *np;
+	struct reserved_mem *rmem;
+	struct tmc_drvdata *drvdata = dev_get_drvdata(dev);
+
+	np = of_parse_phandle(dev->of_node, "memory-region", 0);
+	if (!np) {
+		dev_info(dev, "No reserved region for ETR specified\n");
+		return;
+	}
+
+	rmem = of_reserved_mem_lookup(np);
+	of_node_put(np);
+	if (!rmem) {
+		dev_err(dev, "unable to acquire reserved ETR memory-region\n");
+		return;
+	}
+
+	drvdata->etr_rsvd_vaddr = devm_ioremap(dev, rmem->base,rmem->size);
+	if (drvdata->etr_rsvd_vaddr) {
+		drvdata->etr_rsvd_paddr = rmem->base;
+		drvdata->rsvd_size =  rmem->size;
+	}
+}
+
 static int tmc_probe(struct amba_device *adev, const struct amba_id *id)
 {
 	int ret = 0;
@@ -469,6 +496,7 @@ static int tmc_probe(struct amba_device *adev, const struct amba_id *id)
 	if (drvdata->config_type == TMC_CONFIG_TYPE_ETR) {
 		drvdata->size = tmc_etr_get_default_buffer_size(dev);
 		drvdata->max_burst_size = tmc_etr_get_max_burst_size(dev);
+		tmc_get_reserved_region(dev);
 	} else {
 		drvdata->size = readl_relaxed(drvdata->base + TMC_RSZ) * 4;
 	}

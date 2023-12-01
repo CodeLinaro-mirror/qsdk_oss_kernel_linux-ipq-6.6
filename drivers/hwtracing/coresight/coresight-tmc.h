@@ -135,6 +135,7 @@ enum etr_mode {
 	ETR_MODE_FLAT,		/* Uses contiguous flat buffer */
 	ETR_MODE_ETR_SG,	/* Uses in-built TMC ETR SG mechanism */
 	ETR_MODE_CATU,		/* Use SG mechanism in CATU */
+	ETR_MODE_RESERVED,
 };
 
 struct etr_buf_operations;
@@ -211,6 +212,9 @@ struct tmc_drvdata {
 	struct mutex		idr_mutex;
 	struct etr_buf		*sysfs_buf;
 	struct etr_buf		*perf_buf;
+	void __iomem		*etr_rsvd_vaddr;
+	dma_addr_t		etr_rsvd_paddr;
+	u32			rsvd_size;
 };
 
 struct etr_buf_operations {
