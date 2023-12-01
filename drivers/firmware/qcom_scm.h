@@ -116,7 +116,6 @@ extern int __qti_scm_tz_hvc_log(struct device *dev, u32 svc_id, u32 cmd_id,
 #define QCOM_SCM_SVC_UTIL		0x03
 #define QCOM_SCM_CMD_SET_REGSAVE	0x02
 #define QCOM_SCM_CDUMP_FEATURE_ID	0x4
-#define QCOM_SCM_CDUMP_PAGE_SIZE	0x80000
 
 #define QCOM_SCM_SVC_IO			0x05
 #define QCOM_SCM_IO_READ		0x01

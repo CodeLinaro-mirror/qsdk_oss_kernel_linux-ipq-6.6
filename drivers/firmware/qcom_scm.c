@@ -535,34 +535,6 @@ long  qcom_scm_is_feature_available(u32 feature_id)
 }
 EXPORT_SYMBOL_GPL(qcom_scm_is_feature_available);
 
-static void qcom_scm_set_cpu_regsave(void)
-{
-	long ret;
-	void *buf;
-
-	ret = qcom_scm_is_feature_available(QCOM_SCM_CDUMP_FEATURE_ID);
-	if (ret >= 0) {
-		dev_info(__scm->dev,
-			"Crash Dump feature ID is %lx\n", ret);
-		return;
-	}
-	dev_info(__scm->dev,
-		"TZ doesn't support the static buffer to save CPU context");
-
-	/* Fallback to old method to save CPU context register */
-	buf = (void *) __get_free_pages(GFP_KERNEL,
-			get_order(QCOM_SCM_CDUMP_PAGE_SIZE));
-	if (!buf) {
-		dev_err(__scm->dev,
-			"Failed to allocate buffer memory\n");
-		return;
-	}
-	ret = qcom_scm_regsave(buf, QCOM_SCM_CDUMP_PAGE_SIZE);
-	if (ret) {
-		dev_err(__scm->dev, "Setting CPU context save buffer failed\n");
-	}
-}
-
 static void qcom_scm_set_abnormal_magic(bool enable)
 {
 	int ret;
@@ -2971,7 +2943,6 @@ static int qcom_scm_probe(struct platform_device *pdev)
 	 */
 	if (download_mode) {
 		qcom_scm_set_download_mode(true);
-		qcom_scm_set_cpu_regsave();
 	}
 	else {
 		qcom_scm_sdi_disable(__scm->dev);

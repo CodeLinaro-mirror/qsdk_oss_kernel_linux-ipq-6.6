@@ -49,7 +49,7 @@ static int qce_disp_stats(struct qce_device *qce)
 	pstat = &qce->qce_stat;
 	read_buf = qce->qce_debug_read_buf;
 	len = scnprintf(read_buf, DEBUG_MAX_RW_BUF - 1,
-			"\nQualcomm crypto accelerator Statistics\n");
+			"\nQTI crypto accelerator Statistics\n");
 
 	len += scnprintf(read_buf + len, DEBUG_MAX_RW_BUF - len - 1,
 			"   ABLK CIPHER AES encryption          : %llu\n",
