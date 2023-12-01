@@ -1777,12 +1777,28 @@ static int tmc_disable_etr_sink(struct coresight_device *csdev)
 	return 0;
 }
 
+static void tmc_abort_etr_sink(struct coresight_device *csdev)
+{
+	struct tmc_drvdata *drvdata = dev_get_drvdata(csdev->dev.parent);
+	unsigned long flags;
+
+	spin_lock_irqsave(&drvdata->spinlock, flags);
+	if (drvdata->reading)
+		goto out0;
+
+	tmc_etr_disable_hw(drvdata);
+	dev_info(&drvdata->csdev->dev, "TMC aborted\n");
+out0:
+	spin_unlock_irqrestore(&drvdata->spinlock, flags);
+}
+
 static const struct coresight_ops_sink tmc_etr_sink_ops = {
 	.enable		= tmc_enable_etr_sink,
 	.disable	= tmc_disable_etr_sink,
 	.alloc_buffer	= tmc_alloc_etr_buffer,
 	.update_buffer	= tmc_update_etr_buffer,
 	.free_buffer	= tmc_free_etr_buffer,
+	.abort		= tmc_abort_etr_sink,
 };
 
 const struct coresight_ops tmc_etr_cs_ops = {

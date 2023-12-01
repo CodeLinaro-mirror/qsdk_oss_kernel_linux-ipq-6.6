@@ -1796,6 +1796,17 @@ done:
 }
 EXPORT_SYMBOL_GPL(coresight_alloc_device_name);
 
+void coresight_abort(void)
+{
+	struct coresight_device *curr_sink = coresight_get_enabled_sink(false);
+
+	if (curr_sink && curr_sink->enable && sink_ops(curr_sink)->abort) {
+		sink_ops(curr_sink)->abort(curr_sink);
+		curr_sink->enable = false;
+	}
+}
+EXPORT_SYMBOL_GPL(coresight_abort);
+
 struct bus_type coresight_bustype = {
 	.name	= "coresight",
 };
