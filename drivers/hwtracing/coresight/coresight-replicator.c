@@ -228,7 +228,8 @@ static int replicator_probe(struct device *dev, struct resource *res)
 		dev_warn_once(dev,
 			      "Uses OBSOLETE CoreSight replicator binding\n");
 
-	desc.name = coresight_alloc_device_name(&replicator_devs, dev);
+	if (of_property_read_string(dev->of_node, "coresight-name", &desc.name))
+		desc.name = coresight_alloc_device_name(&replicator_devs, dev);
 	if (!desc.name)
 		return -ENOMEM;
 

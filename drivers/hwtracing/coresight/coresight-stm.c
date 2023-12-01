@@ -815,7 +815,8 @@ static int stm_probe(struct amba_device *adev, const struct amba_id *id)
 	struct resource ch_res;
 	struct coresight_desc desc = { 0 };
 
-	desc.name = coresight_alloc_device_name(&stm_devs, dev);
+	if (of_property_read_string(dev->of_node, "coresight-name", &desc.name))
+		desc.name = coresight_alloc_device_name(&stm_devs, dev);
 	if (!desc.name)
 		return -ENOMEM;
 

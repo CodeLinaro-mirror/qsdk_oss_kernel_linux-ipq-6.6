@@ -535,8 +535,8 @@ static int tmc_probe(struct amba_device *adev, const struct amba_id *id)
 		ret = -EINVAL;
 		goto out;
 	}
-
-	desc.name = coresight_alloc_device_name(dev_list, dev);
+	if (of_property_read_string(dev->of_node, "coresight-name", &desc.name))
+		desc.name = coresight_alloc_device_name(dev_list, dev);
 	if (!desc.name) {
 		ret = -ENOMEM;
 		goto out;
