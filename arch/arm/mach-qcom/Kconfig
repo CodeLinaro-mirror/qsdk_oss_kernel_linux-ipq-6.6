@@ -46,4 +46,21 @@ config ARCH_MDM9615
 	bool "Enable support for MDM9615"
 	select CLKSRC_QCOM
 
+config IPQ_MEM_PROFILE
+	int "Select Memory Profile"
+	range 0 1024
+	default 0
+	help
+	  This option select memory profile to be used, which defines
+	  the reserved memory configuration used in device tree.
+
+	  If unsure, say 0
+
+config SKB_FIXED_SIZE_2K
+	bool "SKB size fixed at 2K"
+	default n
+	help
+	  This is a hint to the NSS driver that the ‘skbuff’ size might
+	  need to be fixed at 2KB, to conserve memory.
+
 endif
