@@ -649,10 +649,13 @@ static int mhi_update_scratch_reg(struct mhi_controller *mhi_cntrl, u32 val)
 {
 	struct device *dev = &mhi_cntrl->mhi_dev->dev;
 	u32 rd_val;
+	int ret = 0;
 
 	/* Program Window register to update boot args pointer */
-	mhi_read_reg(mhi_cntrl, mhi_cntrl->regs, PCIE_REMAP_BAR_CTRL_OFFSET,
+	ret = mhi_read_reg(mhi_cntrl, mhi_cntrl->regs, PCIE_REMAP_BAR_CTRL_OFFSET,
 			&rd_val);
+	if (ret)
+		return ret;
 
 	rd_val = rd_val & ~(0x3f);
 
@@ -662,8 +665,10 @@ static int mhi_update_scratch_reg(struct mhi_controller *mhi_cntrl, u32 val)
 	mhi_write_reg(mhi_cntrl, mhi_cntrl->regs + MAX_UNWINDOWED_ADDRESS,
 			PCIE_REG_FOR_BOOT_ARGS, val);
 
-	mhi_read_reg(mhi_cntrl, mhi_cntrl->regs + MAX_UNWINDOWED_ADDRESS,
+	ret = mhi_read_reg(mhi_cntrl, mhi_cntrl->regs + MAX_UNWINDOWED_ADDRESS,
 			PCIE_REG_FOR_BOOT_ARGS,	&rd_val);
+	if (ret)
+		return ret;
 
 	if (rd_val != val) {
 		dev_err(dev, "Write to PCIE_REG_FOR_BOOT_ARGS register failed\n");
