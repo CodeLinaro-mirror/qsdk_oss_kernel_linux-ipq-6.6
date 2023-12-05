@@ -24,3 +24,5 @@ obj-$(CONFIG_PHY_QCOM_USB_SS)		+= phy-qcom-usb-ss.o
 obj-$(CONFIG_PHY_QCOM_USB_SNPS_FEMTO_V2)+= phy-qcom-snps-femto-v2.o
 obj-$(CONFIG_PHY_QCOM_IPQ806X_USB)	+= phy-qcom-ipq806x-usb.o
 obj-$(CONFIG_PHY_QCOM_SGMII_ETH)	+= phy-qcom-sgmii-eth.o
+obj-$(CONFIG_PHY_IPQ_UNIPHY_PCIE)       += phy-qca-pcie-uniphy.o
+obj-$(CONFIG_PHY_IPQ_UNIPHY_USB)	+= phy-qca-uniphy.o
