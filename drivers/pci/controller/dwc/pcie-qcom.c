@@ -46,6 +46,7 @@
 #define PARF_MHI_CLOCK_RESET_CTRL		0x174
 #define PARF_AXI_MSTR_WR_ADDR_HALT		0x178
 #define PARF_AXI_MSTR_WR_ADDR_HALT_V2		0x1a8
+#define PARF_AXI_MSTR_WR_ADDR_HALT_V2_MASK	0x1F
 #define PARF_Q2A_FLUSH				0x1ac
 #define PARF_LTSSM				0x1b0
 #define PARF_SID_OFFSET				0x234
@@ -106,6 +107,10 @@
 /* PARF_SLV_ADDR_SPACE_SIZE register value */
 #define SLV_ADDR_SPACE_SZ			0x10000000
 #define SLV_ADDR_SPACE_SZ_1_27_0		0x08000000
+
+/* RATEADAPT_VAL = 256 / ((NOC frequency / PCIe AXI frequency) - 1) */
+/* RATEADAPT_VAL = 256 / ((342M / 240M) - 1) */
+#define AGGR_NOC_PCIE_1LANE_RATEADAPT_VAL	0x200
 
 /* PARF_MHI_CLOCK_RESET_CTRL register fields */
 #define AHB_CLK_EN				BIT(0)
@@ -233,6 +238,7 @@ struct qcom_pcie {
 	void __iomem *parf;			/* DT parf */
 	void __iomem *elbi;			/* DT elbi */
 	void __iomem *mhi;
+	void __iomem *aggr_noc;
 	union qcom_pcie_resources res;
 	struct phy *phy;
 	struct gpio_desc *reset;
@@ -240,6 +246,7 @@ struct qcom_pcie {
 	const struct qcom_pcie_cfg *cfg;
 	struct dentry *debugfs;
 	bool suspended;
+	uint32_t axi_wr_addr_halt;
 };
 
 #define to_qcom_pcie(x)		dev_get_drvdata((x)->dev)
@@ -1122,6 +1129,16 @@ static int qcom_pcie_post_init(struct qcom_pcie *pcie)
 
 	writel(0, pcie->parf + PARF_Q2A_FLUSH);
 
+	if (pcie->axi_wr_addr_halt) {
+		val = readl(pcie->parf + PARF_AXI_MSTR_WR_ADDR_HALT_V2);
+		val &= ~PARF_AXI_MSTR_WR_ADDR_HALT_V2_MASK;
+		writel(val | pcie->axi_wr_addr_halt,
+			pcie->parf + PARF_AXI_MSTR_WR_ADDR_HALT_V2);
+	}
+
+	if (pcie->aggr_noc != NULL && !IS_ERR(pcie->aggr_noc))
+		writel(AGGR_NOC_PCIE_1LANE_RATEADAPT_VAL, pcie->aggr_noc);
+
 	dw_pcie_dbi_ro_wr_en(pci);
 
 	writel(PCIE_CAP_SLOT_VAL, pci->dbi_base + offset + PCI_EXP_SLTCAP);
@@ -1508,6 +1525,18 @@ static int qcom_pcie_probe(struct platform_device *pdev)
 		ret = PTR_ERR(pcie->elbi);
 		goto err_pm_runtime_put;
 	}
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "aggr_noc");
+	if (res != NULL) {
+		pcie->aggr_noc = devm_ioremap_resource(dev, res);
+		if (IS_ERR(pcie->aggr_noc)) {
+			ret = PTR_ERR(pcie->aggr_noc);
+			goto err_pm_runtime_put;
+		}
+	}
+
+	of_property_read_u32(pdev->dev.of_node, "axi-halt-val",
+				&pcie->axi_wr_addr_halt);
 
 	/* MHI region is optional */
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "mhi");
