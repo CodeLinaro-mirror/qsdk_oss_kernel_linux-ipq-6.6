@@ -21,6 +21,7 @@
 #define QTI_TZ_QSEE_LOG_ENCR_ID		0x1
 #define QTI_TZ_LOG_NO_UPDATE		-6
 #define QTI_SCM_SVC_FUSE		0x8
+#define QTI_TRYBIT			BIT(12)
 
 #define QCOM_BREAK_Q6			0x1
 
@@ -298,6 +299,8 @@ extern int qcom_sec_upgrade_auth(unsigned int scm_cmd_id,
 extern int qcom_sec_upgrade_auth_meta_data(unsigned int scm_cmd_id,unsigned int sw_type,
 					   unsigned int img_size,unsigned int load_addr,
 					   void* hash_addr,unsigned int hash_size);
+extern int qcom_scm_enable_try_mode(void);
+extern int qcom_read_dload_reg(void);
 extern int qti_scm_qseecom_remove_xpu(void);
 extern int qti_scm_qseecom_notify(struct qsee_notify_app *req,
 				  size_t req_size,
