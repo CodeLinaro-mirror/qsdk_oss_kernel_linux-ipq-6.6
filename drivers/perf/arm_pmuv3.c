@@ -70,9 +70,6 @@ static const unsigned armv8_pmuv3_perf_cache_map[PERF_COUNT_HW_CACHE_MAX]
 	[C(ITLB)][C(OP_READ)][C(RESULT_MISS)]	= ARMV8_PMUV3_PERFCTR_L1I_TLB_REFILL,
 	[C(ITLB)][C(OP_READ)][C(RESULT_ACCESS)]	= ARMV8_PMUV3_PERFCTR_L1I_TLB,
 
-	[C(LL)][C(OP_READ)][C(RESULT_MISS)]	= ARMV8_PMUV3_PERFCTR_LL_CACHE_MISS_RD,
-	[C(LL)][C(OP_READ)][C(RESULT_ACCESS)]	= ARMV8_PMUV3_PERFCTR_LL_CACHE_RD,
-
 	[C(BPU)][C(OP_READ)][C(RESULT_ACCESS)]	= ARMV8_PMUV3_PERFCTR_BR_PRED,
 	[C(BPU)][C(OP_READ)][C(RESULT_MISS)]	= ARMV8_PMUV3_PERFCTR_BR_MIS_PRED,
 };
@@ -112,6 +109,17 @@ static const unsigned armv8_a73_perf_cache_map[PERF_COUNT_HW_CACHE_MAX]
 
 	[C(L1D)][C(OP_READ)][C(RESULT_ACCESS)]	= ARMV8_IMPDEF_PERFCTR_L1D_CACHE_RD,
 	[C(L1D)][C(OP_WRITE)][C(RESULT_ACCESS)]	= ARMV8_IMPDEF_PERFCTR_L1D_CACHE_WR,
+
+	[C(LL)][C(OP_READ)][C(RESULT_ACCESS)]	= ARMV8_IMPDEF_PERFCTR_L2D_CACHE_RD,
+	[C(LL)][C(OP_READ)][C(RESULT_MISS)]	= ARMV8_IMPDEF_PERFCTR_L2D_CACHE_WB_VICTIM,
+
+	/* [C(LL)][C(OP_READ)][C(RESULT_MISS)]	= ARMV8_IMPDEF_PERFCTR_L2D_CACHE_REFILL_RD,
+	[C(LL)][C(OP_WRITE)][C(RESULT_MISS)]	= ARMV8_IMPDEF_PERFCTR_L2D_CACHE_REFILL_WR, */
+
+	[C(LL)][C(OP_WRITE)][C(RESULT_ACCESS)]	= ARMV8_IMPDEF_PERFCTR_L2D_CACHE_WR,
+	[C(LL)][C(OP_WRITE)][C(RESULT_MISS)]	= ARMV8_IMPDEF_PERFCTR_L2D_CACHE_WB_CLEAN,
+
+	[C(LL)][C(OP_PREFETCH)][C(RESULT_ACCESS)]	= ARMV8_IMPDEF_PERFCTR_L2D_CACHE_INVAL,
 };
 
 static const unsigned armv8_thunder_perf_cache_map[PERF_COUNT_HW_CACHE_MAX]
@@ -259,6 +267,12 @@ static struct attribute *armv8_pmuv3_event_attrs[] = {
 	ARMV8_EVENT_ATTR(mem_access_checked, ARMV8_MTE_PERFCTR_MEM_ACCESS_CHECKED),
 	ARMV8_EVENT_ATTR(mem_access_checked_rd, ARMV8_MTE_PERFCTR_MEM_ACCESS_CHECKED_RD),
 	ARMV8_EVENT_ATTR(mem_access_checked_wr, ARMV8_MTE_PERFCTR_MEM_ACCESS_CHECKED_WR),
+	/* Implementation defined events */
+	ARMV8_EVENT_ATTR(l2d_cache_rd, ARMV8_IMPDEF_PERFCTR_L2D_CACHE_RD),
+	ARMV8_EVENT_ATTR(l2d_cache_wr, ARMV8_IMPDEF_PERFCTR_L2D_CACHE_WR),
+	ARMV8_EVENT_ATTR(l2d_cache_wb_victim, ARMV8_IMPDEF_PERFCTR_L2D_CACHE_WB_VICTIM),
+	ARMV8_EVENT_ATTR(l2d_cache_wb_clean, ARMV8_IMPDEF_PERFCTR_L2D_CACHE_WB_CLEAN),
+	ARMV8_EVENT_ATTR(l2d_cache_inval, ARMV8_IMPDEF_PERFCTR_L2D_CACHE_INVAL),
 	NULL,
 };
 
@@ -1095,9 +1109,11 @@ static void __armv8pmu_probe_pmu(void *info)
 {
 	struct armv8pmu_probe_info *probe = info;
 	struct arm_pmu *cpu_pmu = probe->pmu;
+	struct platform_device *pdev = cpu_pmu->plat_device;
 	u64 pmceid_raw[2];
-	u32 pmceid[2];
+	u32 pmceid[4];
 	int pmuver;
+	const char *compatible;
 
 	pmuver = read_pmuver();
 	if (!pmuv3_implemented(pmuver))
@@ -1124,6 +1140,15 @@ static void __armv8pmu_probe_pmu(void *info)
 
 	bitmap_from_arr32(cpu_pmu->pmceid_ext_bitmap,
 			     pmceid, ARMV8_PMUV3_MAX_COMMON_EVENTS);
+
+	of_property_read_string(pdev->dev.of_node, "compatible", &compatible);
+	if (strncmp("arm,cortex-a73-pmu", compatible, sizeof("arm,cortex-a73-pmu")) == 0) {
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L2D_CACHE_RD, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L2D_CACHE_WR, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L2D_CACHE_WB_VICTIM, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L2D_CACHE_WB_CLEAN, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L2D_CACHE_INVAL, 1);
+	}
 
 	/* store PMMIR register for sysfs */
 	if (is_pmuv3p4(pmuver) && (pmceid_raw[1] & BIT(31)))
