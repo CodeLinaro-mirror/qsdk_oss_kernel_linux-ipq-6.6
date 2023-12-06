@@ -2787,6 +2787,7 @@ void __init mm_core_init(void)
 	ptlock_cache_init();
 	pgtable_cache_init();
 	debug_objects_mem_init();
+	debug_mem_usage_init();
 	vmalloc_init();
 	/* If no deferred init page_ext now, as vmap is fully initialized */
 	if (!deferred_struct_pages)
