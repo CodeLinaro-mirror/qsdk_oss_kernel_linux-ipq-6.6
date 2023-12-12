@@ -6,6 +6,7 @@
 #ifndef _CORE_H_
 #define _CORE_H_
 
+#include <linux/interrupt.h>
 #include "dma.h"
 
 #define DEBUG_MAX_RW_BUF 2048
