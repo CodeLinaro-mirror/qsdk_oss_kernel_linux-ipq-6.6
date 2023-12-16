@@ -38,6 +38,16 @@ enum geni_se_protocol_type {
 	GENI_SE_SPI_SLAVE,
 };
 
+#ifdef CONFIG_QCOM_GENI_SE_FW_LOAD
+enum {
+	QUPV3_SE_UART = 0,
+	QUPV3_SE_HSUART,
+	QUPV3_SE_SPI,
+	QUPV3_SE_I2C,
+	QUPV3_SE_MAX,
+};
+#endif
+
 struct geni_wrapper;
 struct clk;
 
@@ -521,5 +531,9 @@ void geni_icc_set_tag(struct geni_se *se, u32 tag);
 int geni_icc_enable(struct geni_se *se);
 
 int geni_icc_disable(struct geni_se *se);
+
+#ifdef CONFIG_QCOM_GENI_SE_FW_LOAD
+void geni_se_fw_load(struct geni_se *se, uint8_t se_mode);
+#endif
 #endif
 #endif

@@ -194,6 +194,11 @@ static int qcom_geni_serial_request_port(struct uart_port *uport)
 	if (IS_ERR(uport->membase))
 		return PTR_ERR(uport->membase);
 	port->se.base = uport->membase;
+
+#ifdef CONFIG_QCOM_GENI_SE_FW_LOAD
+	geni_se_fw_load(&port->se, QUPV3_SE_UART);
+#endif /* CONFIG_QCOM_GENI_SE_FW_LOAD */
+
 	return 0;
 }
 
