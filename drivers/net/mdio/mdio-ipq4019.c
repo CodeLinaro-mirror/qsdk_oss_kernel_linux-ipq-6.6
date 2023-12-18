@@ -12,6 +12,7 @@
 #include <linux/phy.h>
 #include <linux/platform_device.h>
 #include <linux/clk.h>
+#include <linux/gpio/consumer.h>
 
 #define MDIO_MODE_REG				0x40
 #define MDIO_ADDR_REG				0x44
@@ -28,12 +29,16 @@
 
 /* 0 = Clause 22, 1 = Clause 45 */
 #define MDIO_MODE_C45				BIT(8)
+/* MDC frequency is SYS_CLK/(MDIO_CLK_DIV_FACTOR + 1), SYS_CLK is 100MHz */
+#define MDIO_CLK_DIV_MASK			GENMASK(7, 0)
 
 #define IPQ4019_MDIO_TIMEOUT	10000
 #define IPQ4019_MDIO_SLEEP		10
 
 /* MDIO clock source frequency is fixed to 100M */
 #define IPQ_MDIO_CLK_RATE	100000000
+#define IPQ_UNIPHY_AHB_CLK_RATE	100000000
+#define IPQ_UNIPHY_SYS_CLK_RATE	24000000
 
 #define IPQ_PHY_SET_DELAY_US	100000
 
@@ -44,6 +49,7 @@
 #define PHY_ADDR_NUM		4
 #define UNIPHY_ADDR_NUM		3
 
+/* qca8386 related */
 #define EPHY_CFG				0xC90F018
 #define GEPHY0_TX_CBCR				0xC800058
 #define SRDS0_SYS_CBCR				0xC8001A8
@@ -64,11 +70,34 @@
 #define PHY_ICC_EFUSE_REG			0x280
 #define PHY_10BT_SG_THRESH_REG			0x3380
 #define PHY_MMD1_CTRL2ANA_OPTION2_REG		0x40018102
+#define ETH_LDO_RDY_CNT				3
+
+#define CMN_PLL_REFCLK_INDEX	GENMASK(3, 0)
+#define CMN_PLL_REFCLK_EXTERNAL	BIT(9)
+#define CMN_ANA_EN_SW_RSTN	BIT(6)
+
+enum mdio_clk_id {
+	MDIO_CLK_MDIO_AHB,
+	MDIO_CLK_UNIPHY0_AHB,
+	MDIO_CLK_UNIPHY0_SYS,
+	MDIO_CLK_UNIPHY1_AHB,
+	MDIO_CLK_UNIPHY1_SYS,
+	MDIO_CLK_CNT
+};
 
 struct ipq4019_mdio_data {
-	void __iomem	*membase;
-	void __iomem *eth_ldo_rdy;
-	struct clk *mdio_clk;
+	void __iomem	*membase[2];
+	void __iomem *eth_ldo_rdy[ETH_LDO_RDY_CNT];
+	int clk_div;
+	struct gpio_descs *reset_gpios;
+	void (*preinit)(struct mii_bus *bus);
+	struct clk *clk[MDIO_CLK_CNT];
+	bool force_c22;
+};
+
+const char * const ppe_clk_name[] = {
+	"gcc_mdio_ahb_clk", "uniphy0_ahb_clk", "uniphy0_sys_clk",
+	"uniphy1_ahb_clk", "uniphy1_sys_clk"
 };
 
 static int ipq4019_mdio_wait_busy(struct mii_bus *bus)
@@ -76,13 +105,13 @@ static int ipq4019_mdio_wait_busy(struct mii_bus *bus)
 	struct ipq4019_mdio_data *priv = bus->priv;
 	unsigned int busy;
 
-	return readl_poll_timeout(priv->membase + MDIO_CMD_REG, busy,
+	return readl_poll_timeout(priv->membase[0] + MDIO_CMD_REG, busy,
 				  (busy & MDIO_CMD_ACCESS_BUSY) == 0,
 				  IPQ4019_MDIO_SLEEP, IPQ4019_MDIO_TIMEOUT);
 }
 
-static int ipq4019_mdio_read_c45(struct mii_bus *bus, int mii_id, int mmd,
-				 int reg)
+static int _ipq4019_mdio_read_c45(struct mii_bus *bus, int mii_id, int mmd,
+				  int reg)
 {
 	struct ipq4019_mdio_data *priv = bus->priv;
 	unsigned int data;
@@ -91,22 +120,23 @@ static int ipq4019_mdio_read_c45(struct mii_bus *bus, int mii_id, int mmd,
 	if (ipq4019_mdio_wait_busy(bus))
 		return -ETIMEDOUT;
 
-	data = readl(priv->membase + MDIO_MODE_REG);
+	data = readl(priv->membase[0] + MDIO_MODE_REG);
 
 	data |= MDIO_MODE_C45;
+	data |= FIELD_PREP(MDIO_CLK_DIV_MASK, priv->clk_div);
 
-	writel(data, priv->membase + MDIO_MODE_REG);
+	writel(data, priv->membase[0] + MDIO_MODE_REG);
 
 	/* issue the phy address and mmd */
-	writel((mii_id << 8) | mmd, priv->membase + MDIO_ADDR_REG);
+	writel((mii_id << 8) | mmd, priv->membase[0] + MDIO_ADDR_REG);
 
 	/* issue reg */
-	writel(reg, priv->membase + MDIO_DATA_WRITE_REG);
+	writel(reg, priv->membase[0] + MDIO_DATA_WRITE_REG);
 
 	cmd = MDIO_CMD_ACCESS_START | MDIO_CMD_ACCESS_CODE_C45_ADDR;
 
 	/* issue read command */
-	writel(cmd, priv->membase + MDIO_CMD_REG);
+	writel(cmd, priv->membase[0] + MDIO_CMD_REG);
 
 	/* Wait read complete */
 	if (ipq4019_mdio_wait_busy(bus))
@@ -114,13 +144,13 @@ static int ipq4019_mdio_read_c45(struct mii_bus *bus, int mii_id, int mmd,
 
 	cmd = MDIO_CMD_ACCESS_START | MDIO_CMD_ACCESS_CODE_C45_READ;
 
-	writel(cmd, priv->membase + MDIO_CMD_REG);
+	writel(cmd, priv->membase[0] + MDIO_CMD_REG);
 
 	if (ipq4019_mdio_wait_busy(bus))
 		return -ETIMEDOUT;
 
 	/* Read and return data */
-	return readl(priv->membase + MDIO_DATA_READ_REG);
+	return readl(priv->membase[0] + MDIO_DATA_READ_REG);
 }
 
 static int ipq4019_mdio_read_c22(struct mii_bus *bus, int mii_id, int regnum)
@@ -132,30 +162,31 @@ static int ipq4019_mdio_read_c22(struct mii_bus *bus, int mii_id, int regnum)
 	if (ipq4019_mdio_wait_busy(bus))
 		return -ETIMEDOUT;
 
-	data = readl(priv->membase + MDIO_MODE_REG);
+	data = readl(priv->membase[0] + MDIO_MODE_REG);
 
 	data &= ~MDIO_MODE_C45;
+	data |= FIELD_PREP(MDIO_CLK_DIV_MASK, priv->clk_div);
 
-	writel(data, priv->membase + MDIO_MODE_REG);
+	writel(data, priv->membase[0] + MDIO_MODE_REG);
 
 	/* issue the phy address and reg */
-	writel((mii_id << 8) | regnum, priv->membase + MDIO_ADDR_REG);
+	writel((mii_id << 8) | regnum, priv->membase[0] + MDIO_ADDR_REG);
 
 	cmd = MDIO_CMD_ACCESS_START | MDIO_CMD_ACCESS_CODE_READ;
 
 	/* issue read command */
-	writel(cmd, priv->membase + MDIO_CMD_REG);
+	writel(cmd, priv->membase[0] + MDIO_CMD_REG);
 
 	/* Wait read complete */
 	if (ipq4019_mdio_wait_busy(bus))
 		return -ETIMEDOUT;
 
 	/* Read and return data */
-	return readl(priv->membase + MDIO_DATA_READ_REG);
+	return readl(priv->membase[0] + MDIO_DATA_READ_REG);
 }
 
-static int ipq4019_mdio_write_c45(struct mii_bus *bus, int mii_id, int mmd,
-				  int reg, u16 value)
+static int _ipq4019_mdio_write_c45(struct mii_bus *bus, int mii_id, int mmd,
+				   int reg, u16 value)
 {
 	struct ipq4019_mdio_data *priv = bus->priv;
 	unsigned int data;
@@ -164,30 +195,31 @@ static int ipq4019_mdio_write_c45(struct mii_bus *bus, int mii_id, int mmd,
 	if (ipq4019_mdio_wait_busy(bus))
 		return -ETIMEDOUT;
 
-	data = readl(priv->membase + MDIO_MODE_REG);
+	data = readl(priv->membase[0] + MDIO_MODE_REG);
 
 	data |= MDIO_MODE_C45;
+	data |= FIELD_PREP(MDIO_CLK_DIV_MASK, priv->clk_div);
 
-	writel(data, priv->membase + MDIO_MODE_REG);
+	writel(data, priv->membase[0] + MDIO_MODE_REG);
 
 	/* issue the phy address and mmd */
-	writel((mii_id << 8) | mmd, priv->membase + MDIO_ADDR_REG);
+	writel((mii_id << 8) | mmd, priv->membase[0] + MDIO_ADDR_REG);
 
 	/* issue reg */
-	writel(reg, priv->membase + MDIO_DATA_WRITE_REG);
+	writel(reg, priv->membase[0] + MDIO_DATA_WRITE_REG);
 
 	cmd = MDIO_CMD_ACCESS_START | MDIO_CMD_ACCESS_CODE_C45_ADDR;
 
-	writel(cmd, priv->membase + MDIO_CMD_REG);
+	writel(cmd, priv->membase[0] + MDIO_CMD_REG);
 
 	if (ipq4019_mdio_wait_busy(bus))
 		return -ETIMEDOUT;
 
 	/* issue write data */
-	writel(value, priv->membase + MDIO_DATA_WRITE_REG);
+	writel(value, priv->membase[0] + MDIO_DATA_WRITE_REG);
 
 	cmd = MDIO_CMD_ACCESS_START | MDIO_CMD_ACCESS_CODE_C45_WRITE;
-	writel(cmd, priv->membase + MDIO_CMD_REG);
+	writel(cmd, priv->membase[0] + MDIO_CMD_REG);
 
 	/* Wait write complete */
 	if (ipq4019_mdio_wait_busy(bus))
@@ -207,28 +239,63 @@ static int ipq4019_mdio_write_c22(struct mii_bus *bus, int mii_id, int regnum,
 		return -ETIMEDOUT;
 
 	/* Enter Clause 22 mode */
-	data = readl(priv->membase + MDIO_MODE_REG);
+	data = readl(priv->membase[0] + MDIO_MODE_REG);
 
 	data &= ~MDIO_MODE_C45;
+	data |= FIELD_PREP(MDIO_CLK_DIV_MASK, priv->clk_div);
 
-	writel(data, priv->membase + MDIO_MODE_REG);
+	writel(data, priv->membase[0] + MDIO_MODE_REG);
 
 	/* issue the phy address and reg */
-	writel((mii_id << 8) | regnum, priv->membase + MDIO_ADDR_REG);
+	writel((mii_id << 8) | regnum, priv->membase[0] + MDIO_ADDR_REG);
 
 	/* issue write data */
-	writel(value, priv->membase + MDIO_DATA_WRITE_REG);
+	writel(value, priv->membase[0] + MDIO_DATA_WRITE_REG);
 
 	/* issue write command */
 	cmd = MDIO_CMD_ACCESS_START | MDIO_CMD_ACCESS_CODE_WRITE;
 
-	writel(cmd, priv->membase + MDIO_CMD_REG);
+	writel(cmd, priv->membase[0] + MDIO_CMD_REG);
 
 	/* Wait write complete */
 	if (ipq4019_mdio_wait_busy(bus))
 		return -ETIMEDOUT;
 
 	return 0;
+}
+
+static int ipq4019_mdio_read_c45(struct mii_bus *bus, int mii_id, int mmd,
+				 int reg)
+{
+	struct ipq4019_mdio_data *priv = bus->priv;
+
+	if (priv && priv->force_c22) {
+		ipq4019_mdio_write_c22(bus, mii_id, MII_MMD_CTRL, mmd);
+		ipq4019_mdio_write_c22(bus, mii_id, MII_MMD_DATA, reg);
+		ipq4019_mdio_write_c22(bus, mii_id, MII_MMD_CTRL,
+				       mmd | MII_MMD_CTRL_NOINCR);
+
+		return ipq4019_mdio_read_c22(bus, mii_id, MII_MMD_DATA);
+	}
+
+	return _ipq4019_mdio_read_c45(bus, mii_id, mmd, reg);
+}
+
+static int ipq4019_mdio_write_c45(struct mii_bus *bus, int mii_id, int mmd,
+				  int reg, u16 value)
+{
+	struct ipq4019_mdio_data *priv = bus->priv;
+
+	if (priv && priv->force_c22) {
+		ipq4019_mdio_write_c22(bus, mii_id, MII_MMD_CTRL, mmd);
+		ipq4019_mdio_write_c22(bus, mii_id, MII_MMD_DATA, reg);
+		ipq4019_mdio_write_c22(bus, mii_id, MII_MMD_CTRL,
+				       mmd | MII_MMD_CTRL_NOINCR);
+
+		return ipq4019_mdio_write_c22(bus, mii_id, MII_MMD_DATA, value);
+	}
+
+	return _ipq4019_mdio_write_c45(bus, mii_id, mmd, reg, value);
 }
 
 static inline void split_addr(u32 regaddr, u16 *r1, u16 *r2, u16 *page, u16 *sw_addr)
@@ -551,7 +618,6 @@ static void ipq_qca8386_clock_init(struct mii_bus *mii_bus)
 	usleep_range(10000, 11000);
 }
 
-
 void ipq_mii_preinit(struct mii_bus *bus)
 {
 	struct device_node *np = bus->parent->of_node;
@@ -566,33 +632,133 @@ void ipq_mii_preinit(struct mii_bus *bus)
 }
 EXPORT_SYMBOL_GPL(ipq_mii_preinit);
 
+static void ipq_cmn_clk_reset(struct mii_bus *bus)
+{
+	u32 reg_val;
+	const char *cmn_ref_clk;
+	struct ipq4019_mdio_data *priv = bus->priv;
+
+	if (priv && priv->membase[1]) {
+		/* Select reference clock source */
+		reg_val = readl(priv->membase[1] + 4);
+		reg_val &= ~(CMN_PLL_REFCLK_EXTERNAL | CMN_PLL_REFCLK_INDEX);
+
+		cmn_ref_clk = of_get_property(bus->parent->of_node, "cmn_ref_clk", NULL);
+		if (!cmn_ref_clk) {
+			/* Internal 48MHZ selected by default */
+			reg_val |= FIELD_PREP(CMN_PLL_REFCLK_INDEX, 7);
+		} else {
+			if (!strcmp(cmn_ref_clk, "external_25MHz"))
+				reg_val |= (CMN_PLL_REFCLK_EXTERNAL |
+						FIELD_PREP(CMN_PLL_REFCLK_INDEX, 3));
+			else if (!strcmp(cmn_ref_clk, "external_31250KHz"))
+				reg_val |= (CMN_PLL_REFCLK_EXTERNAL |
+						FIELD_PREP(CMN_PLL_REFCLK_INDEX, 4));
+			else if (!strcmp(cmn_ref_clk, "external_40MHz"))
+				reg_val |= (CMN_PLL_REFCLK_EXTERNAL |
+						FIELD_PREP(CMN_PLL_REFCLK_INDEX, 6));
+			else if (!strcmp(cmn_ref_clk, "external_48MHz"))
+				reg_val |= (CMN_PLL_REFCLK_EXTERNAL |
+						FIELD_PREP(CMN_PLL_REFCLK_INDEX, 7));
+			else if (!strcmp(cmn_ref_clk, "external_50MHz"))
+				reg_val |= (CMN_PLL_REFCLK_EXTERNAL |
+						FIELD_PREP(CMN_PLL_REFCLK_INDEX, 8));
+			else
+				reg_val |= FIELD_PREP(CMN_PLL_REFCLK_INDEX, 7);
+		}
+
+		writel(reg_val, priv->membase[1] + 4);
+
+		/* Do the cmn clock reset */
+		reg_val = readl(priv->membase[1]);
+		reg_val &= ~CMN_ANA_EN_SW_RSTN;
+		writel(reg_val, priv->membase[1]);
+		msleep(1);
+
+		reg_val |= CMN_ANA_EN_SW_RSTN;
+		writel(reg_val, priv->membase[1]);
+		msleep(1);
+
+		dev_info(bus->parent, "CMN clock reset done\n");
+	}
+}
+
 static int ipq_mdio_reset(struct mii_bus *bus)
 {
 	struct ipq4019_mdio_data *priv = bus->priv;
 	u32 val;
-	int ret;
+	int ret, i;
 
-	/* To indicate CMN_PLL that ethernet_ldo has been ready if platform resource 1
-	 * is specified in the device tree.
+	ipq_cmn_clk_reset(bus);
+
+	/* For the platform ipq5332, the uniphy clock should be configured for resetting
+	 * the connected device such as qca8386 switch or qca8081 PHY.
 	 */
-	if (priv->eth_ldo_rdy) {
-		val = readl(priv->eth_ldo_rdy);
-		val |= BIT(0);
-		writel(val, priv->eth_ldo_rdy);
+	if (of_machine_is_compatible("qcom,ipq5332")) {
+		unsigned long rate = 0;
+
+		for (i = MDIO_CLK_UNIPHY0_AHB; i < MDIO_CLK_CNT; i++) {
+			switch (i) {
+			case MDIO_CLK_UNIPHY0_AHB:
+			case MDIO_CLK_UNIPHY1_AHB:
+				rate = IPQ_UNIPHY_AHB_CLK_RATE;
+				break;
+			case MDIO_CLK_UNIPHY0_SYS:
+			case MDIO_CLK_UNIPHY1_SYS:
+				rate = IPQ_UNIPHY_SYS_CLK_RATE;
+				break;
+			default:
+				break;
+			}
+			ret = clk_set_rate(priv->clk[i], rate);
+			if (ret)
+				continue;
+
+			ret = clk_prepare_enable(priv->clk[i]);
+		}
+	}
+
+	/* To indicate CMN_PLL that ethernet_ldo has been ready if the additional
+	 * platform resources are specified in the device tree.
+	 */
+	for (i = 0; i < ETH_LDO_RDY_CNT; i++) {
+		if (priv->eth_ldo_rdy[i]) {
+			val = readl(priv->eth_ldo_rdy[i]);
+			val |= BIT(0);
+			writel(val, priv->eth_ldo_rdy[i]);
+			fsleep(IPQ_PHY_SET_DELAY_US);
+		}
+	}
+
+	/* Do the optional reset on the devices connected with MDIO bus */
+	if (priv->reset_gpios) {
+		unsigned long *values = bitmap_zalloc(priv->reset_gpios->ndescs, GFP_KERNEL);
+		if (!values)
+			return -ENOMEM;
+
+		bitmap_fill(values, priv->reset_gpios->ndescs);
+		gpiod_set_array_value_cansleep(priv->reset_gpios->ndescs, priv->reset_gpios->desc,
+				priv->reset_gpios->info, values);
+
 		fsleep(IPQ_PHY_SET_DELAY_US);
+
+		bitmap_zero(values, priv->reset_gpios->ndescs);
+		gpiod_set_array_value_cansleep(priv->reset_gpios->ndescs, priv->reset_gpios->desc,
+				priv->reset_gpios->info, values);
+		bitmap_free(values);
 	}
 
 	/* Configure MDIO clock source frequency if clock is specified in the device tree */
-	ret = clk_set_rate(priv->mdio_clk, IPQ_MDIO_CLK_RATE);
+	ret = clk_set_rate(priv->clk[MDIO_CLK_MDIO_AHB], IPQ_MDIO_CLK_RATE);
 	if (ret)
 		return ret;
 
-	ret = clk_prepare_enable(priv->mdio_clk);
+	ret = clk_prepare_enable(priv->clk[MDIO_CLK_MDIO_AHB]);
 	if (ret == 0) {
 		mdelay(10);
 
 		/* Configure the fixup PHY address and clocks for qca8386 chip if specified */
-		ipq_mii_preinit(bus);
+		priv->preinit(bus);
 	}
 
 	return ret;
@@ -603,7 +769,7 @@ static int ipq4019_mdio_probe(struct platform_device *pdev)
 	struct ipq4019_mdio_data *priv;
 	struct mii_bus *bus;
 	struct resource *res;
-	int ret;
+	int ret, i;
 
 	bus = devm_mdiobus_alloc_size(&pdev->dev, sizeof(*priv));
 	if (!bus)
@@ -611,19 +777,50 @@ static int ipq4019_mdio_probe(struct platform_device *pdev)
 
 	priv = bus->priv;
 
-	priv->membase = devm_platform_ioremap_resource(pdev, 0);
-	if (IS_ERR(priv->membase))
-		return PTR_ERR(priv->membase);
+	priv->membase[0] = devm_platform_ioremap_resource(pdev, 0);
+	if (IS_ERR(priv->membase[0]))
+		return PTR_ERR(priv->membase[0]);
 
-	priv->mdio_clk = devm_clk_get_optional(&pdev->dev, "gcc_mdio_ahb_clk");
-	if (IS_ERR(priv->mdio_clk))
-		return PTR_ERR(priv->mdio_clk);
+	/* The CMN block resource is for providing clock to ethernet, which is only
+	 * for the platform ipq95xx/ipq53xx.
+	 */
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "cmn_blk");
+	if (res) {
+		priv->membase[1] = devm_ioremap_resource(&pdev->dev, res);
+		if (IS_ERR(priv->membase[1]))
+			return PTR_ERR(priv->membase[1]);
+	}
+
+	for (i = 0; i < MDIO_CLK_CNT; i++) {
+		priv->clk[i] = devm_clk_get_optional(&pdev->dev, ppe_clk_name[i]);
+		if (IS_ERR(priv->clk[i]))
+			return PTR_ERR(priv->clk[i]);
+	}
 
 	/* The platform resource is provided on the chipset IPQ5018 */
 	/* This resource is optional */
-	res = platform_get_resource(pdev, IORESOURCE_MEM, 1);
-	if (res)
-		priv->eth_ldo_rdy = devm_ioremap_resource(&pdev->dev, res);
+	for (i = 0; i < ETH_LDO_RDY_CNT; i++) {
+		res = platform_get_resource(pdev, IORESOURCE_MEM, i + 1);
+		if (res && strcmp(res->name, "cmn_blk")) {
+			priv->eth_ldo_rdy[i] = devm_ioremap_resource(&pdev->dev, res);
+			if (IS_ERR(priv->eth_ldo_rdy[i]))
+				return PTR_ERR(priv->eth_ldo_rdy[i]);
+		}
+	}
+
+	priv->reset_gpios= devm_gpiod_get_array_optional(&pdev->dev, "phy-reset", GPIOD_OUT_LOW);
+	if (IS_ERR(priv->reset_gpios)) {
+		ret = dev_err_probe(&pdev->dev, PTR_ERR(priv->reset_gpios),
+				    "mii_bus %s couldn't get reset GPIO\n",
+				    bus->id);
+		return ret;
+	}
+
+	/* MDIO default frequency is 6.25MHz */
+	priv->clk_div = 0xf;
+	priv->force_c22 = of_property_read_bool(pdev->dev.of_node, "force_clause22");
+
+	priv->preinit = ipq_mii_preinit;
 
 	bus->name = "ipq4019_mdio";
 	bus->read = ipq4019_mdio_read_c22;
@@ -657,6 +854,7 @@ static int ipq4019_mdio_remove(struct platform_device *pdev)
 static const struct of_device_id ipq4019_mdio_dt_ids[] = {
 	{ .compatible = "qcom,ipq4019-mdio" },
 	{ .compatible = "qcom,ipq5018-mdio" },
+	{ .compatible = "qcom,qca-mdio" },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, ipq4019_mdio_dt_ids);

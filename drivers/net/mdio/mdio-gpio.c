@@ -32,6 +32,10 @@ struct mdio_gpio_info {
 	struct gpio_desc *mdc, *mdio, *mdo;
 };
 
+#if IS_ENABLED(CONFIG_MDIO_IPQ4019)
+extern void ipq_mii_preinit(struct mii_bus *bus);
+#endif
+
 static int mdio_gpio_get_data(struct device *dev,
 			      struct mdio_gpio_info *bitbang)
 {
@@ -114,6 +118,7 @@ static struct mii_bus *mdio_gpio_bus_init(struct device *dev,
 	struct mii_bus *new_bus;
 
 	bitbang->ctrl.ops = &mdio_gpio_ops;
+	bitbang->ctrl.preinit = ipq_mii_preinit;
 
 	new_bus = alloc_mdio_bitbang(&bitbang->ctrl);
 	if (!new_bus)
@@ -187,6 +192,9 @@ static int mdio_gpio_probe(struct platform_device *pdev)
 	if (!new_bus)
 		return -ENODEV;
 
+#if IS_ENABLED(CONFIG_MDIO_IPQ4019)
+	bitbang->ctrl.preinit(new_bus);
+#endif
 	ret = of_mdiobus_register(new_bus, pdev->dev.of_node);
 	if (ret)
 		mdio_gpio_bus_deinit(&pdev->dev);
