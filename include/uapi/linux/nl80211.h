@@ -2817,6 +2817,8 @@ enum nl80211_commands {
  *
  * @NL80211_ATTR_RADIO_IFACE: radio interface name of vif
  *
+ * @NL80211_ATTR_MLD_IFACE_NAME: mld interface name
+ *
  * @NUM_NL80211_ATTR: total number of nl80211_attrs available
  * @NL80211_ATTR_MAX: highest attribute number currently defined
  * @__NL80211_ATTR_AFTER_LAST: internal use
@@ -3356,6 +3358,7 @@ enum nl80211_attrs {
 	NL80211_ATTR_MLO_LINK_DISABLED,
 
 	NL80211_ATTR_RADIO_IFACE = 350,
+	NL80211_ATTR_MLD_IFACE_NAME = 351,
 
 	/* add attributes here, update the policy in nl80211.c */
 
