@@ -454,19 +454,12 @@ static inline __be32 vxlan_compute_rco(unsigned int start, unsigned int offset)
 }
 
 /*
- * is_vxlan_dev()
- *       Check if it is a VxLAN netdevice.
+ * vxlan_get_vni()
+ * Returns the vni corresponding to tunnel
  */
-static inline bool is_vxlan_dev(const struct net_device *dev)
+static inline u32 vxlan_get_vni(struct vxlan_dev *vxlan_tun)
 {
-	if (!dev)
-		return false;
-
-	if ((dev->dev.type) &&
-		!strncmp(dev->dev.type->name, "vxlan", sizeof("vxlan"))) {
-			return true;
-	}
-	return false;
+	return be32_to_cpu(vxlan_tun->cfg.vni);
 }
 
 static inline unsigned short vxlan_get_sk_family(struct vxlan_sock *vs)
