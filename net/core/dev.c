@@ -4274,6 +4274,10 @@ bool dev_fast_xmit(struct sk_buff *skb,
 	int cpu;
 	netdev_tx_t rc;
 
+	/* the fast_xmit flag will avoid multiple checks in wifi xmit path */
+	if (likely(!skb_is_nonlinear(skb)))
+		skb->fast_xmit = 1;
+
 	if (unlikely(!(dev->flags & IFF_UP))) {
 		return false;
 	}
