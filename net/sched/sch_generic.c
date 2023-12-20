@@ -1480,6 +1480,7 @@ void dev_shutdown(struct net_device *dev)
 
 	WARN_ON(timer_pending(&dev->watchdog_timer));
 }
+EXPORT_SYMBOL(dev_shutdown);
 
 /**
  * psched_ratecfg_precompute__() - Pre-compute values for reciprocal division
