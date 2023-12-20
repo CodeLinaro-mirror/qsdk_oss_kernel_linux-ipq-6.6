@@ -859,14 +859,16 @@ void br_dev_update_stats(struct net_device *dev,
 	if (!(dev->priv_flags & IFF_EBRIDGE))
 		return;
 
-	stats = per_cpu_ptr(dev->tstats, 0);
+	stats = this_cpu_ptr(dev->tstats);
 
+	local_bh_disable();
 	u64_stats_update_begin(&stats->syncp);
 	u64_stats_add(&stats->rx_packets, nlstats->rx_packets);
 	u64_stats_add(&stats->rx_bytes, nlstats->rx_bytes);
 	u64_stats_add(&stats->tx_packets, nlstats->tx_packets);
 	u64_stats_add(&stats->tx_bytes, nlstats->tx_bytes);
 	u64_stats_update_end(&stats->syncp);
+	local_bh_enable();
 }
 EXPORT_SYMBOL_GPL(br_dev_update_stats);
 
