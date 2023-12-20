@@ -107,5 +107,6 @@ struct nf_ct_timeout_hooks {
 
 extern const struct nf_ct_timeout_hooks __rcu *nf_ct_timeout_hook;
 #endif
+extern unsigned int *udp_get_timeouts(struct net *net);
 
 #endif /* _NF_CONNTRACK_TIMEOUT_H */
