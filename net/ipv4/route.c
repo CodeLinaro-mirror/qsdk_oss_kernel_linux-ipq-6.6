@@ -1248,6 +1248,9 @@ static void ipv4_link_failure(struct sk_buff *skb)
 {
 	struct rtable *rt;
 
+	/* Forwarding packets, do not have IPCB() initialized, do so
+	 */
+	memset(IPCB(skb), 0, sizeof(struct inet_skb_parm));
 	ipv4_send_dest_unreach(skb);
 
 	rt = skb_rtable(skb);
