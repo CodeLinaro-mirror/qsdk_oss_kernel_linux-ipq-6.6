@@ -452,7 +452,7 @@ forward:
 				return RX_HANDLER_PASS;
 			}
 		}
-		break;
+		goto drop;
 
 	case BR_STATE_FORWARDING:
 	case BR_STATE_LEARNING:

@@ -1384,6 +1384,60 @@ static int __br_fdb_delete(struct net_bridge *br,
 	return err;
 }
 
+/* This function has to be called only for bridge-port netdevs.*/
+/* For bridge netdev br_fdb_delete has to be called.*/
+int br_fdb_delete_by_netdev(struct net_device *dev,
+			    const unsigned char *addr, u16 vid)
+{
+	int err = 0;
+	struct net_bridge_vlan_group *vg;
+	struct net_bridge_vlan *v;
+	struct net_bridge_port *p = NULL;
+
+	rcu_read_lock();
+	p = br_port_get_check_rcu(dev);
+	if (!p) {
+		rcu_read_unlock();
+		pr_info("bridge: %s not a bridge port\n",
+			dev->name);
+		return -EINVAL;
+	}
+	vg = nbp_vlan_group(p);
+
+	if (vid) {
+		v = br_vlan_find(vg, vid);
+		if (!v) {
+			rcu_read_unlock();
+			pr_info("bridge: with unconfigured vlan %d on %s\n"
+				, vid, dev->name);
+			return -EINVAL;
+		}
+
+		err =  __br_fdb_delete(p->br, p, addr, vid);
+		rcu_read_unlock();
+		return err;
+	}
+	err = __br_fdb_delete(p->br, p, addr, 0);
+
+	if (!vg || !vg->num_vlans) {
+		rcu_read_unlock();
+		return err;
+	}
+
+	/* We have vlans configured on this port and user didn't
+	 * specify a VLAN. So, delete entry for every vlan on this port.
+	 */
+	list_for_each_entry(v, &vg->vlan_list, vlist) {
+		if (!br_vlan_should_use(v))
+			continue;
+		err &= __br_fdb_delete(p->br, p, addr, v->vid);
+	}
+	rcu_read_unlock();
+
+	return err;
+}
+EXPORT_SYMBOL_GPL(br_fdb_delete_by_netdev);
+
 /* Remove neighbor entry with RTM_DELNEIGH */
 int br_fdb_delete(struct ndmsg *ndm, struct nlattr *tb[],
 		  struct net_device *dev,

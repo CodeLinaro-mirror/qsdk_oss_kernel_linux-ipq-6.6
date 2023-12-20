@@ -1131,8 +1131,8 @@ static inline void br_netfilter_sysctl_default(struct brnf_net *brnf)
 	brnf->call_iptables = 1;
 	brnf->call_ip6tables = 1;
 	brnf->call_arptables = 1;
-	brnf->call_ebtables = 1;
-	brnf->call_custom = 1;
+	brnf->call_ebtables = 0;
+	brnf->call_custom = 0;
 	brnf->filter_vlan_tagged = 0;
 	brnf->filter_pppoe_tagged = 0;
 	brnf->pass_vlan_indev = 0;
