@@ -316,8 +316,8 @@ void mhi_free_bhie_table(struct mhi_controller *mhi_cntrl,
 	struct mhi_buf *mhi_buf = image_info->mhi_buf;
 
 	for (i = 0; i < image_info->entries; i++, mhi_buf++)
-		dma_free_coherent(mhi_cntrl->cntrl_dev, mhi_buf->len,
-				  mhi_buf->buf, mhi_buf->dma_addr);
+		mhi_fw_free_coherent(mhi_cntrl, mhi_buf->len,
+				     mhi_buf->buf, mhi_buf->dma_addr);
 
 	kfree(image_info->mhi_buf);
 	kfree(image_info);
@@ -353,9 +353,9 @@ int mhi_alloc_bhie_table(struct mhi_controller *mhi_cntrl,
 			vec_size = sizeof(struct bhi_vec_entry) * i;
 
 		mhi_buf->len = vec_size;
-		mhi_buf->buf = dma_alloc_coherent(mhi_cntrl->cntrl_dev,
-						  vec_size, &mhi_buf->dma_addr,
-						  GFP_KERNEL);
+		mhi_buf->buf = mhi_fw_alloc_coherent(mhi_cntrl, vec_size,
+						     &mhi_buf->dma_addr,
+						     GFP_KERNEL);
 		if (!mhi_buf->buf)
 			goto error_alloc_segment;
 	}
@@ -368,8 +368,8 @@ int mhi_alloc_bhie_table(struct mhi_controller *mhi_cntrl,
 
 error_alloc_segment:
 	for (--i, --mhi_buf; i >= 0; i--, mhi_buf--)
-		dma_free_coherent(mhi_cntrl->cntrl_dev, mhi_buf->len,
-				  mhi_buf->buf, mhi_buf->dma_addr);
+		mhi_fw_free_coherent(mhi_cntrl, mhi_buf->len,
+				     mhi_buf->buf, mhi_buf->dma_addr);
 
 error_alloc_mhi_buf:
 	kfree(img_info);
@@ -404,8 +404,11 @@ static int mhi_select_window(struct mhi_controller *mhi_cntrl, u32 addr)
 	u32 prev_window = 0, curr_window = 0;
 	u32 read_val = 0;
 	int retry = 0;
+	int ret;
 
-	mhi_read_reg(mhi_cntrl, mhi_cntrl->regs, PCIE_REMAP_BAR_CTRL_OFFSET, &prev_window);
+	 ret = mhi_read_reg(mhi_cntrl, mhi_cntrl->regs, PCIE_REMAP_BAR_CTRL_OFFSET, &prev_window);
+	 if (ret)
+		 return ret;
 
 	/* Using the last 6 bits for Window 1. Window 2 and 3 are unaffected */
 	curr_window = (prev_window & ~(WINDOW_VALUE_MASK)) | window;
@@ -417,12 +420,16 @@ static int mhi_select_window(struct mhi_controller *mhi_cntrl, u32 addr)
 
 	mhi_write_reg(mhi_cntrl, mhi_cntrl->regs, PCIE_REMAP_BAR_CTRL_OFFSET, curr_window);
 
-	mhi_read_reg(mhi_cntrl, mhi_cntrl->regs, PCIE_REMAP_BAR_CTRL_OFFSET, &read_val);
+	ret = mhi_read_reg(mhi_cntrl, mhi_cntrl->regs, PCIE_REMAP_BAR_CTRL_OFFSET, &read_val);
+	if (ret)
+		return ret;
 
 	/* Wait till written value reflects */
 	while((read_val != curr_window) && (retry < 10)) {
 		mdelay(1);
-		mhi_read_reg(mhi_cntrl, mhi_cntrl->regs, PCIE_REMAP_BAR_CTRL_OFFSET, &read_val);
+		ret = mhi_read_reg(mhi_cntrl, mhi_cntrl->regs, PCIE_REMAP_BAR_CTRL_OFFSET, &read_val);
+		if (ret)
+			return ret;
 		retry++;
 	}
 
@@ -452,8 +459,10 @@ static int mhi_get_nonce(struct mhi_controller *mhi_cntrl)
 
 	dev_info(dev, "Reading NONCE from Endpoint\n");
 
-	mhi_read_reg(mhi_cntrl, mhi_cntrl->regs, PCIE_PCIE_LOCAL_REG_PCIE_LOCAL_RSV1,
+	ret = mhi_read_reg(mhi_cntrl, mhi_cntrl->regs, PCIE_PCIE_LOCAL_REG_PCIE_LOCAL_RSV1,
 			&sram_addr);
+	if (ret)
+		return ret;
 	if (sram_addr != 0) {
 		mhi_cntrl->nonce_buf = dma_alloc_coherent(mhi_cntrl->cntrl_dev, NONCE_SIZE,
 							  &mhi_cntrl->nonce_dma_addr, GFP_KERNEL);
@@ -470,7 +479,9 @@ static int mhi_get_nonce(struct mhi_controller *mhi_cntrl)
 		for (i=0; i < NONCE_SIZE; i+=4) {
 			/* Calculate read address based on the Window range and read it */
 			rd_addr = ((sram_addr + i) & WINDOW_RANGE_MASK) + WINDOW_START;
-			mhi_read_reg(mhi_cntrl, mhi_cntrl->regs, rd_addr, &rd_val);
+			ret = mhi_read_reg(mhi_cntrl, mhi_cntrl->regs, rd_addr, &rd_val);
+			if (ret)
+				return ret;
 
 			/* Copy the read value to nonce_buf */
 			memcpy(mhi_cntrl->nonce_buf + i, &rd_val, 4);
@@ -594,8 +605,7 @@ void mhi_fw_load_handler(struct mhi_controller *mhi_cntrl)
 	fw_sz = firmware->size;
 
 skip_req_fw:
-	buf = dma_alloc_coherent(mhi_cntrl->cntrl_dev, size, &dma_addr,
-				 GFP_KERNEL);
+	buf = mhi_fw_alloc_coherent(mhi_cntrl, size, &dma_addr, GFP_KERNEL);
 	if (!buf) {
 		release_firmware(firmware);
 		goto error_fw_load;
@@ -604,7 +614,7 @@ skip_req_fw:
 	/* Download image using BHI */
 	memcpy(buf, fw_data, size);
 	ret = mhi_fw_load_bhi(mhi_cntrl, dma_addr, size);
-	dma_free_coherent(mhi_cntrl->cntrl_dev, size, buf, dma_addr);
+	mhi_fw_free_coherent(mhi_cntrl, size, buf, dma_addr);
 
 	/* Error or in EDL mode, we're done */
 	if (ret) {

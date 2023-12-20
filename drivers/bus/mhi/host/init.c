@@ -8,9 +8,12 @@
 #include <linux/debugfs.h>
 #include <linux/device.h>
 #include <linux/dma-direction.h>
+#include <linux/dma-map-ops.h>
 #include <linux/dma-mapping.h>
 #include <linux/idr.h>
 #include <linux/interrupt.h>
+#include <linux/of_address.h>
+#include <linux/of_reserved_mem.h>
 #include <linux/list.h>
 #include <linux/mhi.h>
 #include <linux/mod_devicetable.h>
@@ -899,6 +902,65 @@ error_ev_cfg:
 	return ret;
 }
 
+#ifdef CONFIG_MHI_BUS_RESERVED_DMA_POOL
+static void mhi_init_fw_coherent_memory(struct mhi_controller *mhi_cntrl,
+					struct mhi_device *mhi_dev)
+{
+	struct reserved_mem *mhi_rmem = NULL;
+	struct device *dev = &mhi_dev->dev;
+	struct device_node *cma_node;
+	phys_addr_t cma_addr;
+	size_t cma_size;
+	int ret;
+
+	dev->coherent_dma_mask = mhi_cntrl->cntrl_dev->coherent_dma_mask;
+
+	cma_node = of_parse_phandle(mhi_cntrl->cntrl_dev->of_node,
+				    "memory-region", 1);
+	if (!cma_node) {
+		dev_err(mhi_cntrl->cntrl_dev, "mhi coherent pool is not reserved");
+		return;
+	}
+
+	mhi_rmem = of_reserved_mem_lookup(cma_node);
+	of_node_put(cma_node);
+
+	if (!mhi_rmem) {
+		dev_err(mhi_cntrl->cntrl_dev, "Failed to get DMA reserved memory");
+		return;
+	}
+
+	cma_addr = mhi_rmem->base;
+	cma_size = mhi_rmem->size;
+
+	ret = dma_declare_coherent_memory(dev, cma_addr, cma_addr, cma_size);
+	if (ret)
+		dev_err(mhi_cntrl->cntrl_dev, "Failed to declare dma coherent memory");
+	else
+		dev_info(mhi_cntrl->cntrl_dev, "DMA Memory initialized at %pa size 0x%zx",
+			 &cma_addr, cma_size);
+}
+
+static void mhi_deinit_fw_coherent_memory(struct mhi_controller *mhi_cntrl)
+{
+	struct mhi_device *mhi_dev = mhi_cntrl->mhi_dev;
+
+	dma_release_coherent_memory(&mhi_dev->dev);
+	mhi_dev->dev.dma_mem = NULL;
+}
+#else
+static inline
+void mhi_init_fw_coherent_memory(struct mhi_controller *mhi_cntrl,
+				 struct mhi_device *mhi_dev)
+{
+}
+
+static inline
+void mhi_deinit_fw_coherent_memory(struct mhi_controller *mhi_cntrl)
+{
+}
+#endif
+
 int mhi_register_controller(struct mhi_controller *mhi_cntrl,
 			    const struct mhi_controller_config *config)
 {
@@ -1010,6 +1072,7 @@ int mhi_register_controller(struct mhi_controller *mhi_cntrl,
 		goto error_setup_irq;
 	}
 
+	mhi_init_fw_coherent_memory(mhi_cntrl, mhi_dev);
 	mhi_dev->dev_type = MHI_DEVICE_CONTROLLER;
 	mhi_dev->mhi_cntrl = mhi_cntrl;
 	dev_set_name(&mhi_dev->dev, "mhi%d", mhi_cntrl->index);
@@ -1029,6 +1092,7 @@ int mhi_register_controller(struct mhi_controller *mhi_cntrl,
 	return 0;
 
 err_release_dev:
+	mhi_deinit_fw_coherent_memory(mhi_cntrl);
 	put_device(&mhi_dev->dev);
 error_setup_irq:
 	mhi_deinit_free_irq(mhi_cntrl);
@@ -1068,6 +1132,7 @@ void mhi_unregister_controller(struct mhi_controller *mhi_cntrl)
 	}
 	vfree(mhi_cntrl->mhi_chan);
 
+	mhi_deinit_fw_coherent_memory(mhi_cntrl);
 	device_del(&mhi_dev->dev);
 	put_device(&mhi_dev->dev);
 

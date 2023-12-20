@@ -29,3 +29,10 @@ config MHI_BUS_PCI_GENERIC
 	  This driver provides MHI PCI controller driver for devices such as
 	  Qualcomm SDX55 based PCIe modems.
 
+config MHI_BUS_RESERVED_DMA_POOL
+	bool "MHI reserved DMA pool support"
+	depends on MHI_BUS
+	help
+	  Enable support for declaration and allocations of DMA
+	  buffers for FW image from reserved DMA pool.
+
