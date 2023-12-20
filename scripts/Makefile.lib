@@ -257,6 +257,10 @@ else ifeq ($(CONFIG_IPQ_MEM_PROFILE),512)
 dtc_cpp_flags += -D __IPQ_MEM_PROFILE_512_MB__
 endif
 
+ifeq ($(CONFIG_CPU_THERMAL),y)
+dtc_cpp_flags += -D __CPU_THERMAL__
+endif
+
 ifdef CONFIG_OBJTOOL
 
 objtool := $(objtree)/tools/objtool/objtool

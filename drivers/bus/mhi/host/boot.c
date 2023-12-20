@@ -16,7 +16,20 @@
 #include <linux/random.h>
 #include <linux/slab.h>
 #include <linux/wait.h>
+#include <linux/pci.h>
+#include <soc/qcom/license_manager.h>
 #include "internal.h"
+
+#define PCIE_PCIE_LOCAL_REG_PCIE_LOCAL_RSV1     0x3168
+#define PCIE_REMAP_BAR_CTRL_OFFSET              0x310C
+#define MAX_UNWINDOWED_ADDRESS                  0x80000
+#define WINDOW_ENABLE_BIT                       0x40000000
+#define WINDOW_SHIFT                            19
+#define WINDOW_VALUE_MASK                       0x3F
+#define WINDOW_START                            MAX_UNWINDOWED_ADDRESS
+#define WINDOW_RANGE_MASK                       0x7FFFF
+
+#define NONCE_SIZE                              34
 
 /* Setup RDDM vector table for RDDM transfer and program RXVEC */
 int mhi_rddm_prepare(struct mhi_controller *mhi_cntrl,
@@ -385,6 +398,126 @@ static void mhi_firmware_copy(struct mhi_controller *mhi_cntrl,
 	}
 }
 
+static int mhi_select_window(struct mhi_controller *mhi_cntrl, u32 addr)
+{
+	u32 window = (addr >> WINDOW_SHIFT) & WINDOW_VALUE_MASK;
+	u32 prev_window = 0, curr_window = 0;
+	u32 read_val = 0;
+	int retry = 0;
+
+	mhi_read_reg(mhi_cntrl, mhi_cntrl->regs, PCIE_REMAP_BAR_CTRL_OFFSET, &prev_window);
+
+	/* Using the last 6 bits for Window 1. Window 2 and 3 are unaffected */
+	curr_window = (prev_window & ~(WINDOW_VALUE_MASK)) | window;
+
+	if (curr_window == prev_window)
+		return 0;
+
+	curr_window |= WINDOW_ENABLE_BIT;
+
+	mhi_write_reg(mhi_cntrl, mhi_cntrl->regs, PCIE_REMAP_BAR_CTRL_OFFSET, curr_window);
+
+	mhi_read_reg(mhi_cntrl, mhi_cntrl->regs, PCIE_REMAP_BAR_CTRL_OFFSET, &read_val);
+
+	/* Wait till written value reflects */
+	while((read_val != curr_window) && (retry < 10)) {
+		mdelay(1);
+		mhi_read_reg(mhi_cntrl, mhi_cntrl->regs, PCIE_REMAP_BAR_CTRL_OFFSET, &read_val);
+		retry++;
+	}
+
+	if(read_val != curr_window)
+		return -EINVAL;
+
+	return 0;
+}
+
+void mhi_free_nonce_buffer(struct mhi_controller *mhi_cntrl)
+{
+	struct device *dev = &mhi_cntrl->mhi_dev->dev;
+
+	if (mhi_cntrl->nonce_buf != NULL) {
+		dma_free_coherent(dev, NONCE_SIZE, mhi_cntrl->nonce_buf,
+				mhi_cntrl->nonce_dma_addr);
+		mhi_cntrl->nonce_buf = NULL;
+	}
+}
+
+static int mhi_get_nonce(struct mhi_controller *mhi_cntrl)
+{
+	struct device *dev = &mhi_cntrl->mhi_dev->dev;
+	unsigned int sram_addr, rd_addr;
+	unsigned int rd_val;
+	int ret, i;
+
+	dev_info(dev, "Reading NONCE from Endpoint\n");
+
+	mhi_read_reg(mhi_cntrl, mhi_cntrl->regs, PCIE_PCIE_LOCAL_REG_PCIE_LOCAL_RSV1,
+			&sram_addr);
+	if (sram_addr != 0) {
+		mhi_cntrl->nonce_buf = dma_alloc_coherent(dev, NONCE_SIZE,
+					&mhi_cntrl->nonce_dma_addr, GFP_KERNEL);
+		if (!mhi_cntrl->nonce_buf) {
+			dev_err(dev, "Error Allocating memory buffer for NONCE\n");
+			return -ENOMEM;
+		}
+
+		/* Select window to read the NONCE from Q6 SRAM address */
+		ret = mhi_select_window(mhi_cntrl, sram_addr);
+		if (ret)
+			return ret;
+
+		for (i=0; i < NONCE_SIZE; i+=4) {
+			/* Calculate read address based on the Window range and read it */
+			rd_addr = ((sram_addr + i) & WINDOW_RANGE_MASK) + WINDOW_START;
+			mhi_read_reg(mhi_cntrl, mhi_cntrl->regs, rd_addr, &rd_val);
+
+			/* Copy the read value to nonce_buf */
+			memcpy(mhi_cntrl->nonce_buf + i, &rd_val, 4);
+		}
+	}
+	else {
+		dev_err(dev, "No NONCE from device\n");
+		mhi_cntrl->nonce_buf = NULL;
+		mhi_cntrl->nonce_dma_addr = 0;
+	}
+
+	return 0;
+}
+
+static void mhi_download_fw_license(struct mhi_controller *mhi_cntrl)
+{
+	struct device *dev = &mhi_cntrl->mhi_dev->dev;
+	int  ret;
+
+	ret = mhi_get_nonce(mhi_cntrl);
+	if (ret) {
+		mhi_cntrl->nonce_dma_addr = 0;
+		mhi_free_nonce_buffer(mhi_cntrl);
+	}
+
+	mhi_cntrl->license_buf = lm_get_license(EXTERNAL, &mhi_cntrl->license_dma_addr,
+			&mhi_cntrl->license_buf_size, mhi_cntrl->nonce_dma_addr);
+
+	if (!mhi_cntrl->license_buf) {
+		mhi_free_nonce_buffer(mhi_cntrl);
+		mhi_write_reg(mhi_cntrl, mhi_cntrl->regs,
+				PCIE_PCIE_LOCAL_REG_PCIE_LOCAL_RSV1, (u32)0x0);
+		dev_info(dev, "No license file passed in RSV1\n");
+		return;
+	}
+
+	/* Let device know the about license data. Assuming 32 bit only*/
+	mhi_write_reg(mhi_cntrl, mhi_cntrl->regs,
+				PCIE_PCIE_LOCAL_REG_PCIE_LOCAL_RSV1,
+					      lower_32_bits(mhi_cntrl->license_dma_addr));
+	dev_dbg(dev, "DMA address 0x%x is copied to EP's RSV1\n",lower_32_bits(mhi_cntrl->license_dma_addr));
+
+	dev_info(dev, "License file address copied to PCIE_PCIE_LOCAL_REG_PCIE_LOCAL_RSV1\n");
+
+	return;
+}
+
 void mhi_fw_load_handler(struct mhi_controller *mhi_cntrl)
 {
 	const struct firmware *firmware = NULL;
@@ -537,10 +670,16 @@ int mhi_download_amss_image(struct mhi_controller *mhi_cntrl)
 	struct image_info *image_info = mhi_cntrl->fbc_image;
 	struct device *dev = &mhi_cntrl->mhi_dev->dev;
 	enum mhi_pm_state new_state;
+	struct pci_dev *pdev = to_pci_dev(mhi_cntrl->cntrl_dev);
 	int ret;
 
 	if (!image_info)
 		return -EIO;
+
+	if (pdev && pdev->device == QCN9224_DEVICE_ID) {
+		/* Download the License */
+		mhi_download_fw_license(mhi_cntrl);
+	}
 
 	ret = mhi_fw_load_bhie(mhi_cntrl,
 			       /* Vector table is the last entry */

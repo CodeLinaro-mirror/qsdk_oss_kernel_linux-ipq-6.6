@@ -14,6 +14,7 @@
 #include <linux/module.h>
 #include <linux/slab.h>
 #include <linux/wait.h>
+#include "soc/qcom/license_manager.h"
 #include "internal.h"
 
 /*
@@ -448,6 +449,16 @@ static int mhi_pm_mission_mode_transition(struct mhi_controller *mhi_cntrl)
 error_mission_mode:
 	mhi_cntrl->wake_put(mhi_cntrl, false);
 	read_unlock_bh(&mhi_cntrl->pm_lock);
+
+	/* Free NONCE and ECDSA buffer */
+	mhi_free_nonce_buffer(mhi_cntrl);
+
+	if (mhi_cntrl->license_buf) {
+		lm_free_license(mhi_cntrl->license_buf,
+				mhi_cntrl->license_dma_addr,
+				mhi_cntrl->license_buf_size);
+		mhi_cntrl->license_buf = NULL;
+	}
 
 	return ret;
 }
