@@ -1672,6 +1672,7 @@ const char *netdev_cmd_to_name(enum netdev_cmd cmd)
 	N(PRE_CHANGEADDR) N(OFFLOAD_XSTATS_ENABLE) N(OFFLOAD_XSTATS_DISABLE)
 	N(OFFLOAD_XSTATS_REPORT_USED) N(OFFLOAD_XSTATS_REPORT_DELTA)
 	N(XDP_FEAT_CHANGE)
+	N(BR_JOIN) N(BR_LEAVE)
 	}
 #undef N
 	return "UNKNOWN_NETDEV_EVENT";
@@ -7569,7 +7570,7 @@ EXPORT_SYMBOL(netdev_lower_get_first_private_rcu);
  * Find a master upper device and return pointer to it or NULL in case
  * it's not there. The caller must hold the RCU read lock.
  */
-struct net_device *netdev_master_upper_dev_get_rcu(struct net_device *dev)
+struct net_device *netdev_master_upper_dev_get_rcu(const struct net_device *dev)
 {
 	struct netdev_adjacent *upper;
 
