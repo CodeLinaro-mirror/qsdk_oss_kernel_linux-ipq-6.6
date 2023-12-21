@@ -16394,6 +16394,13 @@ static int nl80211_set_hw_timestamp(struct sk_buff *skb,
 		 NL80211_FLAG_NEED_RTNL)		\
 	SELECTOR(__sel, NETDEV_UP,			\
 		 NL80211_FLAG_NEED_NETDEV_UP)		\
+	SELECTOR(__sel, NETDEV_UP_RTNL,			\
+		 NL80211_FLAG_NEED_NETDEV_UP |		\
+		 NL80211_FLAG_NEED_RTNL)		\
+	SELECTOR(__sel, NETDEV_UP_REMOVELINK_RTNL,	\
+		 NL80211_FLAG_NEED_NETDEV_UP |		\
+		 NL80211_FLAG_MLO_VALID_LINK_ID |	\
+		 NL80211_FLAG_NEED_RTNL)		\
 	SELECTOR(__sel, NETDEV_UP_LINK,			\
 		 NL80211_FLAG_NEED_NETDEV_UP |		\
 		 NL80211_FLAG_MLO_VALID_LINK_ID)	\
@@ -17495,14 +17502,16 @@ static const struct genl_small_ops nl80211_small_ops[] = {
 		.cmd = NL80211_CMD_ADD_LINK,
 		.doit = nl80211_add_link,
 		.flags = GENL_UNS_ADMIN_PERM,
-		.internal_flags = IFLAGS(NL80211_FLAG_NEED_NETDEV_UP),
+		.internal_flags = IFLAGS(NL80211_FLAG_NEED_NETDEV_UP |
+					 NL80211_FLAG_NEED_RTNL),
 	},
 	{
 		.cmd = NL80211_CMD_REMOVE_LINK,
 		.doit = nl80211_remove_link,
 		.flags = GENL_UNS_ADMIN_PERM,
 		.internal_flags = IFLAGS(NL80211_FLAG_NEED_NETDEV_UP |
-					 NL80211_FLAG_MLO_VALID_LINK_ID),
+					 NL80211_FLAG_MLO_VALID_LINK_ID |
+					 NL80211_FLAG_NEED_RTNL),
 	},
 	{
 		.cmd = NL80211_CMD_ADD_LINK_STA,
