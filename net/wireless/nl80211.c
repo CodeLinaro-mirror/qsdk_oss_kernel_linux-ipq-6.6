@@ -818,6 +818,7 @@ static const struct nla_policy nl80211_policy[NUM_NL80211_ATTR] = {
 	[NL80211_ATTR_HW_TIMESTAMP_ENABLED] = { .type = NLA_FLAG },
 	[NL80211_ATTR_EMA_RNR_ELEMS] = { .type = NLA_NESTED },
 	[NL80211_ATTR_MLO_LINK_DISABLED] = { .type = NLA_FLAG },
+	[NL80211_ATTR_RADIO_IFACE] = { .type = NLA_BINARY, .len = IFNAMSIZ-1 },
 };
 
 /* policy for the key attributes */
@@ -4277,6 +4278,12 @@ static int _nl80211_new_interface(struct sk_buff *skb, struct genl_info *info)
 	err = nl80211_parse_mon_options(rdev, type, info, &params);
 	if (err < 0)
 		return err;
+
+	if (rdev->wiphy.flags & WIPHY_FLAG_SUPPORTS_MLO) {
+		if (info->attrs[NL80211_ATTR_RADIO_IFACE])
+			params.radio_iface =
+				nla_data(info->attrs[NL80211_ATTR_RADIO_IFACE]);
+	}
 
 	msg = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
 	if (!msg)
