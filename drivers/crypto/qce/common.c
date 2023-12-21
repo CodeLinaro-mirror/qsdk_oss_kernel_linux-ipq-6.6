@@ -355,7 +355,9 @@ static int qce_setup_regs_skcipher(struct crypto_async_request *async_req)
 		return -EINVAL;
 	}
 
-	qce_write_array(qce, REG_ENCR_KEY0, (u32 *)enckey, enckey_words);
+	if (!qce->use_fixed_key)
+		qce_write_array(qce, REG_ENCR_KEY0, (u32 *)enckey,
+				enckey_words);
 
 	if (!IS_ECB(flags)) {
 		if (IS_XTS(flags))

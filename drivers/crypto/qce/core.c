@@ -8,6 +8,8 @@
 #include <linux/interconnect.h>
 #include <linux/interrupt.h>
 #include <linux/module.h>
+#include <linux/of.h>
+#include <linux/firmware/qcom/qcom_scm.h>
 #include <linux/mod_devicetable.h>
 #include <linux/platform_device.h>
 #include <linux/spinlock.h>
@@ -242,6 +244,77 @@ static void qce_unregister_algs(struct qce_device *qce)
 	}
 }
 
+#define to_qcedev(k) container_of(k, struct qce_device, kobj)
+
+/* Expose fixed key field so that qce can request key from TZ */
+static ssize_t fixed_sec_key_show(struct kobject *kobj,
+			struct attribute *attr, char *buf)
+{
+	struct qce_device *qce = to_qcedev(kobj);
+
+	return scnprintf(buf, sizeof(int), "%d\n", qce->use_fixed_key);
+}
+
+/* Store fixed key field from sysfs */
+static ssize_t fixed_sec_key_store(struct kobject *kobj,
+		struct attribute *attr, const char *buf, size_t count)
+{
+	int use_fixed_key;
+	struct qce_device *qce = to_qcedev(kobj);
+
+	sscanf(buf, "%du", &use_fixed_key);
+	if (use_fixed_key == 1) {
+		qce->use_fixed_key = true;
+	} else {
+		qti_qcekey_release_xpu_prot();
+		qce->use_fixed_key = false;
+	}
+	return count;
+}
+
+static struct attribute qce_fixed_key_attribute = {
+	.name = "fixed_sec_key",
+	.mode = 0660,
+};
+
+static struct attribute *qce_attrs[] = {
+	&qce_fixed_key_attribute,
+	NULL
+};
+ATTRIBUTE_GROUPS(qce);
+
+static struct sysfs_ops qce_sysfs_ops = {
+	.show = fixed_sec_key_show,
+	.store = fixed_sec_key_store,
+};
+
+static struct kobj_type qce_ktype = {
+	.sysfs_ops = &qce_sysfs_ops,
+	.default_groups = qce_groups,
+};
+
+static int qce_sysfs_init(struct qce_device *qce)
+{
+	int ret;
+
+	qce->kobj_parent = kobject_create_and_add("crypto", kernel_kobj);
+	if (!qce->kobj_parent)
+		return -ENOMEM;
+
+	ret = kobject_init_and_add(&qce->kobj, &qce_ktype, qce->kobj_parent,
+			"%s", "qce");
+	if (ret)
+		kobject_del(qce->kobj_parent);
+
+	return ret;
+}
+
+static void qce_sysfs_deinit(struct qce_device *qce)
+{
+	kobject_del(&qce->kobj);
+	kobject_del(qce->kobj_parent);
+}
+
 static int qce_register_algs(struct qce_device *qce)
 {
 	const struct qce_algo_ops *ops;
@@ -345,7 +418,7 @@ static int qce_async_request_enqueue(struct qce_device *qce,
 	pstat = &qce->qce_stat;
 	if (req) {
 		cra_drv_name = crypto_tfm_alg_driver_name(req->tfm);
-		rctx = ablkcipher_request_ctx((void *)req);
+		rctx = skcipher_request_ctx((void *)req);
 		if (rctx)
 			ablk_flags = rctx->flags;
 
@@ -389,9 +462,9 @@ static void qce_async_request_done(struct qce_device *qce, int ret)
 		if (!ret && (type == CRYPTO_ALG_TYPE_AHASH))
 			pstat->ahash_op_success++;
 
-		if (ret && (type == CRYPTO_ALG_TYPE_ABLKCIPHER))
+		if (ret && (type == CRYPTO_ALG_TYPE_SKCIPHER))
 			pstat->ablk_cipher_op_fail++;
-		if (!ret && (type == CRYPTO_ALG_TYPE_ABLKCIPHER))
+		if (!ret && (type == CRYPTO_ALG_TYPE_SKCIPHER))
 			pstat->ablk_cipher_op_success++;
 	}
 	tasklet_schedule(&qce->done_tasklet);
@@ -454,6 +527,9 @@ static int qce_crypto_probe(struct platform_device *pdev)
 	if (ret < 0)
 		return ret;
 
+	if (device_property_read_bool(dev, "qce,use_fixed_hw_key"))
+		qce->use_fixed_key = true;
+
 	qce->core = devm_clk_get_optional(qce->dev, "core");
 	if (IS_ERR(qce->core))
 		return PTR_ERR(qce->core);
@@ -510,8 +586,14 @@ static int qce_crypto_probe(struct platform_device *pdev)
 	if (ret)
 		goto unregister_algs;
 
+	ret = qce_sysfs_init(qce);
+	if (ret)
+		goto remove_debugfs;
+
 	return 0;
 
+remove_debugfs:
+	debugfs_remove_recursive(qce->qce_debug_dent);
 unregister_algs:
 	qce_unregister_algs(qce);
 err_dma:
@@ -539,6 +621,7 @@ static int qce_crypto_remove(struct platform_device *pdev)
 	clk_disable_unprepare(qce->iface);
 	clk_disable_unprepare(qce->core);
 	debugfs_remove_recursive(qce->qce_debug_dent);
+	qce_sysfs_deinit(qce);
 	return 0;
 }
 
