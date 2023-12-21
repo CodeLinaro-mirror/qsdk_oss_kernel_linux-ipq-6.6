@@ -162,6 +162,13 @@ config IPQ_GCC_5332
 	  Say Y if you want to use peripheral devices such as UART, SPI,
 	  i2c, USB, SD/eMMC, etc.
 
+config IPQ_GCC_DEVSOC
+	tristate "DEVSOC Global Clock Controller"
+	help
+	  Support for the global clock controller on devsoc devices.
+	  Say Y if you want to use peripheral devices such as UART, SPI,
+	  i2c, USB, SD/eMMC, etc.
+
 config IPQ_GCC_6018
 	tristate "IPQ6018 Global Clock Controller"
 	help
