@@ -654,6 +654,9 @@ static void tmc_etr_sync_flat_buf(struct etr_buf *etr_buf, u64 rrp, u64 rwp)
 	else
 		etr_buf->len = rwp - rrp;
 
+	/* No need to perform the DMA sync for the reserved memory */
+	if (etr_buf->mode == ETR_MODE_RESERVED)
+		return;
 	/*
 	 * The driver always starts tracing at the beginning of the buffer,
 	 * the only reason why we would get a wrap around is when the buffer
@@ -684,6 +687,53 @@ static ssize_t tmc_etr_get_data_flat_buf(struct etr_buf *etr_buf,
 static const struct etr_buf_operations etr_flat_buf_ops = {
 	.alloc = tmc_etr_alloc_flat_buf,
 	.free = tmc_etr_free_flat_buf,
+	.sync = tmc_etr_sync_flat_buf,
+	.get_data = tmc_etr_get_data_flat_buf,
+};
+
+static int tmc_etr_alloc_rsvd_buf(struct tmc_drvdata *drvdata,
+				  struct etr_buf *etr_buf, int node,
+				  void **pages)
+{
+	struct etr_flat_buf *flat_buf;
+
+	flat_buf = kzalloc(sizeof(*flat_buf), GFP_KERNEL);
+	if (!flat_buf)
+		return -ENOMEM;
+
+	flat_buf->vaddr = drvdata->etr_rsvd_vaddr;
+
+	if (!flat_buf->vaddr) {
+		kfree(flat_buf);
+		return -ENOMEM;
+	}
+
+	flat_buf->size = drvdata->rsvd_size;
+	flat_buf->dev = &drvdata->csdev->dev;
+	flat_buf->daddr = drvdata->etr_rsvd_paddr;
+	etr_buf->hwaddr = drvdata->etr_rsvd_paddr;
+	etr_buf->mode = ETR_MODE_RESERVED;
+	etr_buf->private = flat_buf;
+
+	return 0;
+}
+
+/*
+ * Don't free the q6mem ETR region, no-op function to avoid warning
+ * from tmc_free_etr_buf function
+ */
+static void tmc_etr_free_rsvd_buf(struct etr_buf *etr_buf)
+{
+}
+
+
+/*
+ * sync and get_data callback are same as in etr_flat_buf_ops,
+ * since Q6 ETR region also a contiguous memory
+ */
+static const struct etr_buf_operations etr_rsvd_mem_buf_ops = {
+	.alloc = tmc_etr_alloc_rsvd_buf,
+	.free = tmc_etr_free_rsvd_buf,
 	.sync = tmc_etr_sync_flat_buf,
 	.get_data = tmc_etr_get_data_flat_buf,
 };
@@ -794,6 +844,7 @@ static const struct etr_buf_operations *etr_buf_ops[] = {
 	[ETR_MODE_FLAT] = &etr_flat_buf_ops,
 	[ETR_MODE_ETR_SG] = &etr_sg_buf_ops,
 	[ETR_MODE_CATU] = NULL,
+	[ETR_MODE_RESERVED] = &etr_rsvd_mem_buf_ops,
 };
 
 void tmc_etr_set_catu_ops(const struct etr_buf_operations *catu)
@@ -819,6 +870,7 @@ static inline int tmc_etr_mode_alloc_buf(int mode,
 	case ETR_MODE_FLAT:
 	case ETR_MODE_ETR_SG:
 	case ETR_MODE_CATU:
+	case ETR_MODE_RESERVED:
 		if (etr_buf_ops[mode] && etr_buf_ops[mode]->alloc)
 			rc = etr_buf_ops[mode]->alloc(drvdata, etr_buf,
 						      node, pages);
@@ -872,7 +924,12 @@ static struct etr_buf *tmc_alloc_etr_buf(struct tmc_drvdata *drvdata,
 	 * Fallback to available mechanisms.
 	 *
 	 */
-	if (!pages &&
+	if (size == SZ_1M){
+		rc =  tmc_etr_mode_alloc_buf(ETR_MODE_RESERVED, drvdata,
+					    etr_buf, node, pages);
+		goto err_check;
+	}
+	if (rc && !pages &&
 	    (!has_sg || has_iommu || size < SZ_1M))
 		rc = tmc_etr_mode_alloc_buf(ETR_MODE_FLAT, drvdata,
 					    etr_buf, node, pages);
@@ -882,6 +939,7 @@ static struct etr_buf *tmc_alloc_etr_buf(struct tmc_drvdata *drvdata,
 	if (rc && has_catu)
 		rc = tmc_etr_mode_alloc_buf(ETR_MODE_CATU, drvdata,
 					    etr_buf, node, pages);
+err_check:
 	if (rc) {
 		kfree(etr_buf);
 		return ERR_PTR(rc);
