@@ -819,6 +819,7 @@ static const struct nla_policy nl80211_policy[NUM_NL80211_ATTR] = {
 	[NL80211_ATTR_EMA_RNR_ELEMS] = { .type = NLA_NESTED },
 	[NL80211_ATTR_MLO_LINK_DISABLED] = { .type = NLA_FLAG },
 	[NL80211_ATTR_RADIO_IFACE] = { .type = NLA_BINARY, .len = IFNAMSIZ-1 },
+	[NL80211_ATTR_MLD_IFACE_NAME] = { .type = NLA_BINARY, .len = IFNAMSIZ-1 },
 };
 
 /* policy for the key attributes */
@@ -4283,6 +4284,25 @@ static int _nl80211_new_interface(struct sk_buff *skb, struct genl_info *info)
 		if (info->attrs[NL80211_ATTR_RADIO_IFACE])
 			params.radio_iface =
 				nla_data(info->attrs[NL80211_ATTR_RADIO_IFACE]);
+	}
+
+	if (info->attrs[NL80211_ATTR_MLD_ADDR]) {
+		if (rdev->wiphy.flags & WIPHY_FLAG_SUPPORTS_MLO) {
+			nla_memcpy(params.mld_macaddr,
+				   info->attrs[NL80211_ATTR_MLD_ADDR],
+				   ETH_ALEN);
+			if (!is_valid_ether_addr(params.mld_macaddr))
+				return -EADDRNOTAVAIL;
+		} else
+			return -ENOTSUPP;
+	}
+
+	if (info->attrs[NL80211_ATTR_MLD_IFACE_NAME]) {
+		if (rdev->wiphy.flags & WIPHY_FLAG_SUPPORTS_MLO)
+			params.mld_iface_name =
+				nla_data(info->attrs[NL80211_ATTR_MLD_IFACE_NAME]);
+		else
+			return -ENOTSUPP;
 	}
 
 	msg = nlmsg_new(NLMSG_DEFAULT_SIZE, GFP_KERNEL);
