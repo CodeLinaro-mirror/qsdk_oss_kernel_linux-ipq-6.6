@@ -400,6 +400,24 @@ int qcom_scm_set_cold_boot_addr(void *entry)
 }
 EXPORT_SYMBOL_GPL(qcom_scm_set_cold_boot_addr);
 
+/*
+ * qcom_qcekey_release_xpu_prot() - release XPU protection
+ */
+int qcom_qcekey_release_xpu_prot(void)
+{
+	int ret;
+	struct qcom_scm_res res;
+	struct qcom_scm_desc desc = {
+		.svc = QCOM_SCM_QCE_CRYPTO_SIP,
+		.cmd = QCOM_SCM_QCE_UNLOCK_CMD,
+		.arginfo = QCOM_SCM_ARGS(0, QCOM_SCM_VAL),
+	};
+
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+	return ret ? : res.result[0];
+}
+EXPORT_SYMBOL_GPL(qcom_qcekey_release_xpu_prot);
+
 /**
  * qcom_scm_cpu_power_down() - Power down the cpu
  * @flags:	Flags to flush cache

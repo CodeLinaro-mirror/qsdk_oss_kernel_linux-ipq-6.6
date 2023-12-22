@@ -266,7 +266,7 @@ static ssize_t fixed_sec_key_store(struct kobject *kobj,
 	if (use_fixed_key == 1) {
 		qce->use_fixed_key = true;
 	} else {
-		qti_qcekey_release_xpu_prot();
+		qcom_qcekey_release_xpu_prot();
 		qce->use_fixed_key = false;
 	}
 	return count;
