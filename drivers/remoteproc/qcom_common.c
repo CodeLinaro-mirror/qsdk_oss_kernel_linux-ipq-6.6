@@ -519,5 +519,28 @@ void qcom_remove_ssr_subdev(struct rproc *rproc, struct qcom_rproc_ssr *ssr)
 }
 EXPORT_SYMBOL_GPL(qcom_remove_ssr_subdev);
 
+/**
+ * qcom_get_pd_asid() - get the pd asid number from DT node
+ * @node:	device tree node
+ *
+ * Returns asid if node name has 'pd' string
+ */
+s8 qcom_get_pd_asid(struct device_node *node)
+{
+	char *str;
+	u8 pd_asid;
+
+	if (!node)
+		return -EINVAL;
+
+	str = strstr(node->name, "pd");
+	if (!str)
+		return 0;
+
+	str += strlen("pd");
+	return kstrtos8(str, 10, &pd_asid) ? -EINVAL : pd_asid;
+}
+EXPORT_SYMBOL_GPL(qcom_get_pd_asid);
+
 MODULE_DESCRIPTION("Qualcomm Remoteproc helper driver");
 MODULE_LICENSE("GPL v2");
