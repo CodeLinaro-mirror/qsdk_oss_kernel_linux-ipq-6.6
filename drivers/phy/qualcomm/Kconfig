@@ -218,3 +218,23 @@ config PHY_QCOM_SGMII_ETH
 	help
 	  Enable this to support the internal SerDes/SGMII PHY on various
 	  Qualcomm chipsets.
+
+config PHY_IPQ_UNIPHY_PCIE
+	bool "Qualcomm PCIE UNI PHY driver"
+	depends on HAS_IOMEM
+	depends on OF && (ARCH_QCOM || COMPILE_TEST)
+	select GENERIC_PHY
+	help
+	  This patch adds a new PCIe phy driver for the phy that exists on
+	  some QTI platforms. This driver uses the generic PHY framework and
+	  will interact with the DWC3 controller.
+
+config PHY_IPQ_UNIPHY_USB
+	tristate "USB Uniphy driver support"
+	depends on (USB || USB_GADGET) && ARCH_QCOM
+	select USB_PHY
+	help
+	  Enable this to support the USB UNI PHY. It handles PHY
+	  initialization, clock management required after resetting
+	  the hardware and power management. This driver is required
+	  even for peripheral only or host only mode configurations.
