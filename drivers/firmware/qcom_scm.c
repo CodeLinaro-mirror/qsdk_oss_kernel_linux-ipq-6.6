@@ -40,6 +40,8 @@ struct qcom_scm {
 	int scm_vote_count;
 
 	u64 dload_mode_addr;
+	u32 hvc_log_cmd_id;
+	u32 smmu_state_cmd_id;
 };
 
 struct qcom_scm_current_perm_info {
@@ -1603,6 +1605,159 @@ out:
 	return IRQ_HANDLED;
 }
 
+int qti_scm_is_tz_log_encryption_supported(void)
+{
+	int ret;
+	ret = __qcom_scm_is_call_available(__scm->dev, QCOM_SCM_SVC_BOOT,
+					   QCOM_SCM_IS_TZ_LOG_ENCRYPTED);
+
+	return (ret == 1) ? 1 : 0;
+}
+EXPORT_SYMBOL_GPL(qti_scm_is_tz_log_encryption_supported);
+
+int qti_scm_is_tz_log_encrypted(void)
+{
+	int ret;
+	struct qcom_scm_res res;
+	struct qcom_scm_desc desc = {
+		.svc = QCOM_SCM_SVC_BOOT,
+		.cmd = QCOM_SCM_IS_TZ_LOG_ENCRYPTED,
+		.owner = ARM_SMCCC_OWNER_TRUSTED_OS,
+		.arginfo = QCOM_SCM_ARGS(0),
+	};
+
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+	return ret ? : res.result[0];
+}
+EXPORT_SYMBOL_GPL(qti_scm_is_tz_log_encrypted);
+
+int qti_scm_get_encrypted_tz_log(void *ker_buf, u32 buf_len, u32 log_id)
+{
+	int ret;
+	dma_addr_t log_buf;
+	struct qcom_scm_res res;
+	struct qcom_scm_desc desc = {
+		.svc = QCOM_SCM_SVC_BOOT,
+		.cmd = QCOM_SCM_GET_TZ_LOG_ENCRYPTED,
+		.owner = ARM_SMCCC_OWNER_TRUSTED_OS,
+	};
+
+	log_buf = dma_map_single(__scm->dev, ker_buf, buf_len, DMA_FROM_DEVICE);
+	ret = dma_mapping_error(__scm->dev, log_buf);
+
+	if (ret) {
+		dev_err(__scm->dev, "DMA Mapping error: %d\n", ret);
+		return ret;
+	}
+	desc.args[0] = log_buf;
+	desc.args[1] = buf_len;
+	desc.args[2] = log_id;
+	desc.arginfo = QCOM_SCM_ARGS(3, QCOM_SCM_RW, QCOM_SCM_VAL, QCOM_SCM_VAL);
+
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+	dma_unmap_single(__scm->dev, log_buf, buf_len, DMA_FROM_DEVICE);
+
+	return ret ? : res.result[0];
+}
+EXPORT_SYMBOL_GPL(qti_scm_get_encrypted_tz_log);
+
+/**
+ * qti_scm_tz_log() - Get trustzone diag log
+ * ker_buf: kernel buffer to store the diag log
+ * buf_len: kernel buffer length
+ *
+ * Return negative errno on failure or 0 on success. Diag log will
+ * be present in the kernel buffer passed.
+ */
+int qti_scm_tz_log(void *ker_buf, u32 buf_len)
+{
+	return __qti_scm_tz_hvc_log(__scm->dev, QCOM_SCM_SVC_INFO,
+				     QTI_SCM_TZ_DIAG_CMD, ker_buf, buf_len);
+}
+EXPORT_SYMBOL_GPL(qti_scm_tz_log);
+
+/**
+ * qti_scm_hvc_log() - Get hypervisor diag log
+ * ker_buf: kernel buffer to store the diag log
+ * buf_len: kernel buffer length
+ *
+ * Return negative errno on failure or 0 on success. Diag log will
+ * be present in the kernel buffer passed.
+ */
+int qti_scm_hvc_log(void *ker_buf, u32 buf_len)
+{
+	return __qti_scm_tz_hvc_log(__scm->dev, QCOM_SCM_SVC_INFO,
+				    __scm->hvc_log_cmd_id, ker_buf, buf_len);
+}
+EXPORT_SYMBOL_GPL(qti_scm_hvc_log);
+/**
+ * __qti_scm_tz_hvc_log() - Get trustzone diag log or hypervisor diag log
+ * @svc_id: SCM service id
+ * @cmd_id: SCM command id
+ * ker_buf: kernel buffer to store the diag log
+ * buf_len: kernel buffer length
+ *
+ * This function can be used to get either the trustzone diag log
+ * or the hypervisor diag log based on the command id passed to this
+ * function.
+ */
+
+int __qti_scm_tz_hvc_log(struct device *dev, u32 svc_id, u32 cmd_id,
+			 void *ker_buf, u32 buf_len)
+{
+	int ret;
+	dma_addr_t dma_buf;
+	struct qcom_scm_res res;
+	struct qcom_scm_desc desc = {
+		.svc = svc_id,
+		.cmd = cmd_id,
+		.owner = ARM_SMCCC_OWNER_SIP,
+		.arginfo = QCOM_SCM_ARGS(2, QCOM_SCM_RW, QCOM_SCM_VAL),
+	};
+
+	dma_buf = dma_map_single(__scm->dev, ker_buf, buf_len, DMA_FROM_DEVICE);
+
+	ret = dma_mapping_error(__scm->dev, dma_buf);
+	if (ret != 0) {
+		pr_err("DMA Mapping Error : %d\n", ret);
+		return ret;
+	}
+
+	desc.args[0] = dma_buf;
+	desc.args[1] = buf_len;
+
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+	dma_unmap_single(__scm->dev, dma_buf, buf_len, DMA_FROM_DEVICE);
+
+	return ret ? : res.result[0];
+}
+
+/**
+ * __qti_scm_get_smmustate () - Get SMMU state
+ * @svc_id: SCM service id
+ * @cmd_id: SCM command id
+ *
+ * Returns 0 - SMMU_DISABLE_NONE
+ *	   1 - SMMU_DISABLE_S2
+ *	   2 - SMMU_DISABLE_ALL on success.
+ *	  -1 - Failure
+ */
+
+int qti_scm_get_smmustate(void)
+{
+	int ret;
+	struct qcom_scm_res res;
+	struct qcom_scm_desc desc = {
+		.svc = QCOM_SCM_SVC_BOOT,
+		.cmd = __scm->smmu_state_cmd_id,
+		.owner = ARM_SMCCC_OWNER_SIP,
+		.arginfo = QCOM_SCM_ARGS(0),
+	};
+
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+	return ret ? : res.result[0];
+}
+
 static int qcom_scm_probe(struct platform_device *pdev)
 {
 	struct qcom_scm *scm;
@@ -1615,6 +1770,15 @@ static int qcom_scm_probe(struct platform_device *pdev)
 	ret = qcom_scm_find_dload_address(&pdev->dev, &scm->dload_mode_addr);
 	if (ret < 0)
 		return ret;
+
+	ret = of_property_read_u32(pdev->dev.of_node, "hvc-log-cmd-id", &scm->hvc_log_cmd_id);
+	if (ret)
+		scm->hvc_log_cmd_id = QTI_SCM_HVC_DIAG_CMD;
+
+	ret = of_property_read_u32(pdev->dev.of_node, "smmu-state-cmd-id",
+				   &scm->smmu_state_cmd_id);
+	if (ret)
+		scm->smmu_state_cmd_id = QTI_SCM_SMMUSTATE_CMD;
 
 	mutex_init(&scm->scm_bw_lock);
 

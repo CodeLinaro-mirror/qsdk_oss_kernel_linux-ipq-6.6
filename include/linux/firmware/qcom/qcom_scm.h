@@ -16,6 +16,11 @@
 #define QCOM_SCM_CPU_PWR_DOWN_L2_OFF	0x1
 #define QCOM_SCM_HDCP_MAX_REQ_CNT	5
 
+#define QTI_TZ_DIAG_LOG_ENCR_ID		0x0
+#define QTI_TZ_QSEE_LOG_ENCR_ID		0x1
+#define QTI_TZ_LOG_NO_UPDATE		-6
+#define QTI_SCM_SVC_FUSE		0x8
+
 struct qcom_scm_hdcp_req {
 	u32 addr;
 	u32 val;
@@ -125,5 +130,13 @@ extern int qcom_scm_lmh_dcvsh(u32 payload_fn, u32 payload_reg, u32 payload_val,
 			      u64 limit_node, u32 node_id, u64 version);
 extern int qcom_scm_lmh_profile_change(u32 profile_id);
 extern bool qcom_scm_lmh_dcvsh_available(void);
+
+extern int qti_scm_is_tz_log_encrypted(void);
+extern int qti_scm_get_encrypted_tz_log(void *ker_buf, u32 buf_len, u32 log_id);
+extern int qti_scm_is_tz_log_encryption_supported(void);
+extern int qti_scm_tz_log(void *ker_buf, u32 buf_len);
+extern int qti_scm_hvc_log(void *ker_buf, u32 buf_len);
+extern int qti_qfprom_show_authenticate(void);
+extern int qti_scm_get_smmustate(void);
 
 #endif
