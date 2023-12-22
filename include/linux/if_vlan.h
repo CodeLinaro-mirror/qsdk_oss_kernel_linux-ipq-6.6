@@ -143,7 +143,11 @@ extern struct net_device *__vlan_find_dev_deep_rcu(struct net_device *real_dev,
 extern int vlan_for_each(struct net_device *dev,
 			 int (*action)(struct net_device *dev, int vid,
 				       void *arg), void *arg);
+extern void __vlan_dev_update_accel_stats(struct net_device *dev,
+				    struct rtnl_link_stats64 *stats);
+
 extern struct net_device *vlan_dev_real_dev(const struct net_device *dev);
+extern struct net_device *vlan_dev_next_dev(const struct net_device *dev);
 extern u16 vlan_dev_vlan_id(const struct net_device *dev);
 extern __be16 vlan_dev_vlan_proto(const struct net_device *dev);
 
@@ -236,6 +240,12 @@ extern void vlan_vids_del_by_dev(struct net_device *dev,
 extern bool vlan_uses_dev(const struct net_device *dev);
 
 #else
+static inline void __vlan_dev_update_accel_stats(struct net_device *dev,
+					   struct rtnl_link_stats64 *stats)
+{
+
+}
+
 static inline struct net_device *
 __vlan_find_dev_deep_rcu(struct net_device *real_dev,
 		     __be16 vlan_proto, u16 vlan_id)
