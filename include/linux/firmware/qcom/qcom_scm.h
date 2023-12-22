@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /* Copyright (c) 2010-2015, 2018-2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
  * Copyright (C) 2015 Linaro Ltd.
  */
 #ifndef __QCOM_SCM_H
@@ -29,6 +30,12 @@ struct qcom_scm_hdcp_req {
 struct qcom_scm_vmperm {
 	int vmid;
 	int perm;
+};
+
+struct fuse_blow {
+	dma_addr_t address;
+	size_t size;
+	unsigned long *status;
 };
 
 enum qcom_scm_ocmem_client {
@@ -64,6 +71,23 @@ enum qcom_scm_ice_cipher {
 #define QCOM_SCM_PERM_RW (QCOM_SCM_PERM_READ | QCOM_SCM_PERM_WRITE)
 #define QCOM_SCM_PERM_RWX (QCOM_SCM_PERM_RW | QCOM_SCM_PERM_EXEC)
 
+#define FUSEPROV_SUCCESS           0x0
+#define QCOM_SCM_SVC_FUSE          0x8
+#define FUSEPROV_INVALID_HASH      0x9
+#define FUSEPROV_SECDAT_LOCK_BLOWN 0xB
+#define QCOM_KERNEL_AUTH_CMD       0x15
+#define TZ_BLOW_FUSE_SECDAT        0x20
+#define QCOM_KERNEL_META_AUTH_CMD  0x23
+
+extern int qcom_fuseipq_scm_call(u32 svc_id, u32 cmd_id,
+				 void *cmd_buf, size_t size);
+extern int qcom_qfprom_write_version(uint32_t sw_type,
+				     uint32_t value,
+				     uint32_t qfprom_ret_ptr);
+extern int qcom_qfprom_read_version(uint32_t sw_type,
+				    uint32_t value,
+				    uint32_t qfprom_ret_ptr);
+extern int qcom_qfprom_show_authenticate(void);
 extern bool qcom_scm_is_available(void);
 
 extern int qcom_scm_set_cold_boot_addr(void *entry);
@@ -139,4 +163,11 @@ extern int qti_scm_hvc_log(void *ker_buf, u32 buf_len);
 extern int qti_qfprom_show_authenticate(void);
 extern int qti_scm_get_smmustate(void);
 
+extern bool qcom_scm_sec_auth_available(unsigned int scm_cmd_id);
+extern int qcom_sec_upgrade_auth(unsigned int scm_cmd_id,
+				 unsigned int sw_type, unsigned int img_size,
+				 unsigned int load_addr);
+extern int qcom_sec_upgrade_auth_meta_data(unsigned int scm_cmd_id,unsigned int sw_type,
+					   unsigned int img_size,unsigned int load_addr,
+					   void* hash_addr,unsigned int hash_size);
 #endif

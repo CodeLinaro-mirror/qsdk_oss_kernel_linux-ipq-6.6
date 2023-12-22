@@ -1,5 +1,6 @@
 /* SPDX-License-Identifier: GPL-2.0-only */
 /* Copyright (c) 2010-2015,2019 The Linux Foundation. All rights reserved.
+ * Copyright (c) 2023, Qualcomm Innovation Center, Inc. All rights reserved.
  */
 #ifndef __QCOM_SCM_INT_H
 #define __QCOM_SCM_INT_H
@@ -100,6 +101,10 @@ extern int __qti_scm_tz_hvc_log(struct device *dev, u32 svc_id, u32 cmd_id,
 #define QCOM_SCM_PIL_PAS_AUTH_AND_RESET	0x05
 #define QCOM_SCM_PIL_PAS_SHUTDOWN	0x06
 #define QCOM_SCM_PIL_PAS_IS_SUPPORTED	0x07
+#define QCOM_QFPROM_IS_AUTHENTICATE_CMD 0x07
+#define QCOM_QFPROM_ROW_READ_CMD        0x08
+#define QCOM_QFPROM_ROW_WRITE_CMD       0x09
+#define QCOM_SCM_SVC_SEC_AUTH           0x01
 #define QCOM_SCM_PIL_PAS_MSS_RESET	0x0a
 
 #define QCOM_SCM_SVC_UTIL		0x03
