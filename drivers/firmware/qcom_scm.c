@@ -530,6 +530,28 @@ static void qcom_scm_set_cpu_regsave(void)
 	}
 }
 
+static void qcom_scm_set_abnormal_magic(bool enable)
+{
+	int ret;
+	u32 val;
+
+	if (!__scm->dload_mode_addr) {
+		dev_err(__scm->dev,"Download mode address is null\n");
+		return;
+	}
+
+	ret = qcom_scm_io_readl(__scm->dload_mode_addr, &val);
+	if (ret) {
+		dev_err(__scm->dev,
+			"failed to read dload mode address value: %d\n", ret);
+		return;
+	}
+
+	ret = qcom_scm_io_writel(__scm->dload_mode_addr, enable ?
+			val | QCOM_SCM_ABNORMAL_MAGIC :
+			val & ~(QCOM_SCM_ABNORMAL_MAGIC));
+}
+
 static void qcom_scm_set_download_mode(bool enable)
 {
 	bool avail;
@@ -2507,6 +2529,9 @@ static int qcom_scm_probe(struct platform_device *pdev)
 		qcom_scm_set_download_mode(true);
 		qcom_scm_set_cpu_regsave();
 	}
+	else {
+		qcom_scm_set_abnormal_magic(true);
+	}
 
 	return 0;
 }
@@ -2515,6 +2540,7 @@ static void qcom_scm_shutdown(struct platform_device *pdev)
 {
 	/* Clean shutdown, disable download mode to allow normal restart */
 	qcom_scm_set_download_mode(false);
+	qcom_scm_set_abnormal_magic(false);
 }
 
 static const struct of_device_id qcom_scm_dt_match[] = {
