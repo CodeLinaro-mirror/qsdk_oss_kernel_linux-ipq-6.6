@@ -709,4 +709,6 @@ void rproc_add_subdev(struct rproc *rproc, struct rproc_subdev *subdev);
 
 void rproc_remove_subdev(struct rproc *rproc, struct rproc_subdev *subdev);
 
+int rproc_start(struct rproc *rproc, const struct firmware *fw);
+int rproc_stop(struct rproc *rproc, bool crashed);
 #endif /* REMOTEPROC_H */
