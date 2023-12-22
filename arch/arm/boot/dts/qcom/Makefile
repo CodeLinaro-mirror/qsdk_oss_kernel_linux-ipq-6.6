@@ -25,6 +25,47 @@ dtb-$(CONFIG_ARCH_QCOM) += \
 	qcom-ipq4019-ap.dk07.1-c2.dtb \
 	qcom-ipq8064-ap148.dtb \
 	qcom-ipq8064-rb3011.dtb \
+	ipq9574-rdp417.dtb \
+	ipq9574-rdp418.dtb \
+	ipq9574-rdp433.dtb \
+	ipq9574-rdp433-mht-phy.dtb \
+	ipq9574-rdp433-mht-switch.dtb \
+	ipq9574-rdp437.dtb \
+	ipq9574-rdp449.dtb \
+	ipq9574-rdp453.dtb \
+	ipq9574-rdp454.dtb \
+	ipq9574-rdp455.dtb \
+	ipq9574-rdp456.dtb \
+	ipq9574-rdp457.dtb \
+	ipq9574-rdp458.dtb \
+	ipq9574-rdp459.dtb \
+	ipq9574-rdp461.dtb \
+	ipq9574-rdp467.dtb \
+	ipq9574-rdp469.dtb \
+	ipq9574-rdp475.dtb \
+	ipq9574-rdp476.dtb \
+	ipq9574-db-al01-c1.dtb \
+	ipq9574-db-al01-c2.dtb \
+	ipq9574-db-al01-c3.dtb \
+	ipq9574-db-al02-c1.dtb \
+	ipq9574-db-al02-c2.dtb \
+	ipq9574-db-al02-c3.dtb \
+	devsoc-emulation.dtb \
+	devsoc-emulation-ssoc.dtb \
+	ipq5332-rdp441.dtb \
+	ipq5332-rdp442.dtb \
+	ipq5332-rdp446.dtb \
+	ipq5332-rdp468.dtb \
+	ipq5332-rdp472.dtb \
+	ipq5332-rdp474.dtb \
+	ipq5332-rdp477.dtb \
+	ipq5332-rdp478.dtb \
+	ipq5332-rdp479.dtb \
+	ipq5332-rdp481.dtb \
+	ipq5332-rdp484.dtb \
+	ipq5332-db-mi01.1.dtb \
+	ipq5332-db-mi02.1.dtb \
+	ipq5332-db-mi03.1.dtb \
 	qcom-msm8226-samsung-s3ve3g.dtb \
 	qcom-msm8660-surf.dtb \
 	qcom-msm8916-samsung-e5.dtb \
