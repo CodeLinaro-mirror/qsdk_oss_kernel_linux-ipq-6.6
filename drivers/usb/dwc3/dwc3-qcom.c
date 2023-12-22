@@ -22,6 +22,8 @@
 #include <linux/iopoll.h>
 #include <linux/usb/hcd.h>
 #include <linux/usb.h>
+#include <linux/regmap.h>
+#include <linux/mfd/syscon.h>
 #include "core.h"
 
 /* USB QSCRATCH Hardware registers */
@@ -89,6 +91,9 @@ struct dwc3_qcom {
 	enum usb_dr_mode	mode;
 	bool			is_suspended;
 	bool			pm_suspended;
+	bool			phy_mux;
+	struct regmap		*phy_mux_map;
+	u32			phy_mux_reg;
 	struct icc_path		*icc_path_ddr;
 	struct icc_path		*icc_path_apps;
 };
@@ -793,6 +798,39 @@ dwc3_qcom_create_urs_usb_platdev(struct device *dev)
 	return acpi_create_platform_device(adev, NULL);
 }
 
+static int dwc3_qcom_phy_sel(struct dwc3_qcom *qcom)
+{
+	struct of_phandle_args args;
+	int ret;
+
+	ret = of_parse_phandle_with_fixed_args(qcom->dev->of_node,
+			"qcom,phy-mux-regs", 1, 0, &args);
+	if (ret) {
+		dev_err(qcom->dev, "failed to parse qcom,phy-mux-regs\n");
+		return ret;
+	}
+
+	qcom->phy_mux_map = syscon_node_to_regmap(args.np);
+	of_node_put(args.np);
+	if (IS_ERR(qcom->phy_mux_map)) {
+		pr_err("phy mux regs map failed:%ld\n",
+						PTR_ERR(qcom->phy_mux_map));
+		return PTR_ERR(qcom->phy_mux_map);
+	}
+
+	qcom->phy_mux_reg = args.args[0];
+	/*usb phy mux sel*/
+	ret = regmap_write(qcom->phy_mux_map, qcom->phy_mux_reg, 0x1);
+	if (ret) {
+		dev_err(qcom->dev,
+			"Not able to configure phy mux selection:%d\n", ret);
+		return ret;
+	}
+
+	return 0;
+}
+
+
 static int dwc3_qcom_probe(struct platform_device *pdev)
 {
 	struct device_node	*np = pdev->dev.of_node;
@@ -818,6 +856,11 @@ static int dwc3_qcom_probe(struct platform_device *pdev)
 			return -EINVAL;
 		}
 	}
+
+	qcom->phy_mux = device_property_read_bool(dev,
+				"qcom,multiplexed-phy");
+	if (qcom->phy_mux)
+		dwc3_qcom_phy_sel(qcom);
 
 	qcom->resets = devm_reset_control_array_get_optional_exclusive(dev);
 	if (IS_ERR(qcom->resets)) {
@@ -951,7 +994,7 @@ static void dwc3_qcom_remove(struct platform_device *pdev)
 	struct dwc3_qcom *qcom = platform_get_drvdata(pdev);
 	struct device_node *np = pdev->dev.of_node;
 	struct device *dev = &pdev->dev;
-	int i;
+	int i, ret;
 
 	device_remove_software_node(&qcom->dwc3->dev);
 	if (np)
@@ -967,6 +1010,15 @@ static void dwc3_qcom_remove(struct platform_device *pdev)
 
 	dwc3_qcom_interconnect_exit(qcom);
 	reset_control_assert(qcom->resets);
+
+	if (qcom->phy_mux) {
+		/*usb phy mux deselection*/
+		ret = regmap_write(qcom->phy_mux_map, qcom->phy_mux_reg,
+					0x0);
+		if (ret)
+			dev_err(qcom->dev,
+			  "Not able to configure phy mux selection:%d\n", ret);
+	}
 
 	pm_runtime_allow(dev);
 	pm_runtime_disable(dev);
