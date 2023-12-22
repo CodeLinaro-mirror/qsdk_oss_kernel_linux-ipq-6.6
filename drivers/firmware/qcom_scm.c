@@ -341,6 +341,34 @@ static int qcom_scm_set_boot_addr_mc(void *entry, unsigned int flags)
 }
 
 /**
+ * qcom_scm_regsave() - pass a buffer to TZ for saving CPU register context
+ * @buf:	Allocated buffer which is used to store the cpu context
+ * @size:       size of the buffer
+ *
+ * Return: 0 on success.
+ *
+ * Upon successful return, TZ Dump the CPU register context in the
+ * buffer on crash
+ */
+int qcom_scm_regsave(void *buf, u32 size)
+{
+	int ret;
+	struct qcom_scm_desc desc = {
+		.svc = QCOM_SCM_SVC_UTIL,
+		.cmd = QCOM_SCM_CMD_SET_REGSAVE,
+		.arginfo = QCOM_SCM_ARGS(2, QCOM_SCM_RW, QCOM_SCM_VAL),
+		.args[0] = (u64)virt_to_phys(buf),
+		.args[1] = size,
+		.owner = ARM_SMCCC_OWNER_SIP,
+	};
+	struct qcom_scm_res res;
+
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+
+	return ret ? : res.result[0];
+}
+
+/**
  * qcom_scm_set_warm_boot_addr() - Set the warm boot address for all cpus
  * @entry: Entry point function for the cpus
  *
@@ -423,6 +451,62 @@ static int __qcom_scm_set_dload_mode(struct device *dev, bool enable)
 	desc.args[1] = enable ? QCOM_SCM_BOOT_SET_DLOAD_MODE : 0;
 
 	return qcom_scm_call_atomic(__scm->dev, &desc, NULL);
+}
+
+/**
+`* qcom_scm_is_feature_available() - Check if a given feature is enabled by TZ,
+ * 				     and its version if enabled.
+ * @feature_id: ID of the feature to check in TZ for availablilty/version.
+ *
+ * Return: 0 on success and the version of the feature in result.
+ *
+ * TZ returns 0xFFFFFFFF if this smc call is not supported or
+ * if smc call supported but feature ID not supported
+ */
+long  qcom_scm_is_feature_available(u32 feature_id)
+{
+	long ret;
+	struct qcom_scm_res res;
+	struct qcom_scm_desc desc = {
+		.svc = QCOM_SCM_SVC_INFO,
+		.cmd = QCOM_SCM_IS_FEATURE_AVAIL,
+		.arginfo = QCOM_SCM_ARGS(1),
+		.args[0] = feature_id,
+		.owner = ARM_SMCCC_OWNER_SIP,
+	};
+
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+
+	return ret ? : res.result[0];
+}
+EXPORT_SYMBOL_GPL(qcom_scm_is_feature_available);
+
+static void qcom_scm_set_cpu_regsave(void)
+{
+	long ret;
+	void *buf;
+
+	ret = qcom_scm_is_feature_available(QCOM_SCM_CDUMP_FEATURE_ID);
+	if (ret >= 0) {
+		dev_info(__scm->dev,
+			"Crash Dump feature ID is %lx\n", ret);
+		return;
+	}
+	dev_info(__scm->dev,
+		"TZ doesn't support the static buffer to save CPU context");
+
+	/* Fallback to old method to save CPU context register */
+	buf = (void *) __get_free_pages(GFP_KERNEL,
+			get_order(QCOM_SCM_CDUMP_PAGE_SIZE));
+	if (!buf) {
+		dev_err(__scm->dev,
+			"Failed to allocate buffer memory\n");
+		return;
+	}
+	ret = qcom_scm_regsave(buf, QCOM_SCM_CDUMP_PAGE_SIZE);
+	if (ret) {
+		dev_err(__scm->dev, "Setting CPU context save buffer failed\n");
+	}
 }
 
 static void qcom_scm_set_download_mode(bool enable)
@@ -1586,8 +1670,10 @@ static int qcom_scm_probe(struct platform_device *pdev)
 	 * will cause the boot stages to enter download mode, unless
 	 * disabled below by a clean shutdown/reboot.
 	 */
-	if (download_mode)
+	if (download_mode) {
 		qcom_scm_set_download_mode(true);
+		qcom_scm_set_cpu_regsave();
+	}
 
 	return 0;
 }

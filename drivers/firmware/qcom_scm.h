@@ -97,12 +97,18 @@ extern int scm_legacy_call(struct device *dev, const struct qcom_scm_desc *desc,
 #define QCOM_SCM_PIL_PAS_IS_SUPPORTED	0x07
 #define QCOM_SCM_PIL_PAS_MSS_RESET	0x0a
 
+#define QCOM_SCM_SVC_UTIL		0x03
+#define QCOM_SCM_CMD_SET_REGSAVE	0x02
+#define QCOM_SCM_CDUMP_FEATURE_ID	0x4
+#define QCOM_SCM_CDUMP_PAGE_SIZE	0x80000
+
 #define QCOM_SCM_SVC_IO			0x05
 #define QCOM_SCM_IO_READ		0x01
 #define QCOM_SCM_IO_WRITE		0x02
 
 #define QCOM_SCM_SVC_INFO		0x06
 #define QCOM_SCM_INFO_IS_CALL_AVAIL	0x01
+#define QCOM_SCM_IS_FEATURE_AVAIL	0x03
 
 #define QCOM_SCM_SVC_MP				0x0c
 #define QCOM_SCM_MP_RESTORE_SEC_CFG		0x02
