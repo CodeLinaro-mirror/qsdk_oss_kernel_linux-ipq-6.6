@@ -2801,6 +2801,7 @@ struct net_device *ovs_accel_egress_dev_find(void *dp_inst,
 	struct net_device *dev;
 	const struct nlattr *a;
 	int rem;
+	int egress_cnt = 0;
 
 	rcu_read_lock();
 	flow = ovs_accel_flow_find(dp_inst, key);
@@ -2817,16 +2818,29 @@ struct net_device *ovs_accel_egress_dev_find(void *dp_inst,
 		case OVS_ACTION_ATTR_OUTPUT:
 			port_no = nla_get_u32(a);
 			vport = ovs_vport_ovsl_rcu(dp, port_no);
-			if (!vport) {
+
+			/*
+			 * Avoid offloading flows with internal port as egress port
+			 */
+			if (!vport || (vport->ops->type == OVS_VPORT_TYPE_INTERNAL)) {
 				goto done;
 			}
 
 			dev = vport->dev;
-			dev_hold(dev);
-			rcu_read_unlock();
-			return dev;
+			egress_cnt++;
 		}
 	}
+
+	/*
+	 * Return dev only if flow is not a broadcast i.e.
+	 * there is only one egress interface for the flow
+	 */
+	if (egress_cnt == 1) {
+		dev_hold(dev);
+		rcu_read_unlock();
+		return dev;
+	}
+
 done:
 	rcu_read_unlock();
 	return NULL;
