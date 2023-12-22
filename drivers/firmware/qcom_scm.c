@@ -1688,6 +1688,42 @@ int __qti_seccrypt_clearkey(struct device *dev)
 	return ret ? : res.result[0];
 }
 
+int qcom_scm_enable_try_mode(void)
+{
+	int ret;
+	u32 val;
+	struct qcom_scm_res res;
+	struct qcom_scm_desc desc = {0};
+
+	val = qcom_read_dload_reg();
+	desc.svc = QCOM_SCM_SVC_IO;
+	desc.cmd = QCOM_SCM_IO_WRITE;
+	desc.arginfo = QCOM_SCM_ARGS(2, QCOM_SCM_VAL, QCOM_SCM_VAL);
+	desc.args[0] = __scm->dload_mode_addr;
+	desc.args[1] = val | QTI_TRYBIT;
+	desc.owner = ARM_SMCCC_OWNER_SIP;
+
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+
+	return ret ? : res.result[0];
+}
+EXPORT_SYMBOL_GPL(qcom_scm_enable_try_mode);
+
+int qcom_read_dload_reg(void)
+{
+	int ret;
+	u32 dload_addr_val;
+
+	ret = qcom_scm_io_readl(__scm->dload_mode_addr, &dload_addr_val);
+	if (ret) {
+		dev_err(__scm->dev,
+			"failed to read dload mode address value: %d\n", ret);
+		return -EINVAL;
+	}
+	return dload_addr_val;
+}
+EXPORT_SYMBOL_GPL(qcom_read_dload_reg);
+
 /**
  * qcom_scm_is_available() - Checks if SCM is available
  */
