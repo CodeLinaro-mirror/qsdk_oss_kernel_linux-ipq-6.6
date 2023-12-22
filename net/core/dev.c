@@ -4733,8 +4733,21 @@ static int get_rps_cpu(struct net_device *dev, struct sk_buff *skb,
 
 	flow_table = rcu_dereference(rxqueue->rps_flow_table);
 	map = rcu_dereference(rxqueue->rps_map);
-	if (!flow_table && !map)
-		goto done;
+
+	if (!flow_table) {
+		if (!map) {
+			goto done;
+		}
+
+		/* Skip hash calculation & lookup if we have only one CPU to transmit and RFS is disabled */
+		if (map->len == 1) {
+			tcpu = map->cpus[0];
+			if (cpu_online(tcpu)) {
+				cpu = tcpu;
+				goto done;
+			}
+		}
+	}
 
 	skb_reset_network_header(skb);
 	hash = skb_get_hash(skb);
