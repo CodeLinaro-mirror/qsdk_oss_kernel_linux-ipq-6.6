@@ -1451,7 +1451,7 @@ void consume_skb(struct sk_buff *skb)
 	 * for us to recycle this one later than to allocate a new one
 	 * from scratch.
 	 */
-	if (likely(skb_recycler_consume(skb)))
+	if (likely(skb->head) && likely(skb_recycler_consume(skb)))
 		return;
 
 #ifdef CONFIG_TRACEPOINTS
@@ -1461,7 +1461,9 @@ void consume_skb(struct sk_buff *skb)
 	 * have done in __kfree_skb (above and beyond the skb_release_head_state
 	 * that we already did).
 	 */
-	skb_release_data(skb, SKB_CONSUMED, false);
+	if (likely(skb->head))
+		skb_release_data(skb, SKB_CONSUMED, false);
+
 	kfree_skbmem(skb);
 }
 EXPORT_SYMBOL(consume_skb);
