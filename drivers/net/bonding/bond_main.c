@@ -2525,13 +2525,23 @@ static int __bond_release_one(struct net_device *bond_dev,
 	}
 
 	bond_set_carrier(bond);
-	if (!bond_has_slaves(bond))
-		eth_hw_addr_random(bond_dev);
+
+	/*
+	 * Avoid changing the mac address of bond netdevice for MLO case,
+	 * This will only be supported from wifi driver.
+	 */
+	if (BOND_MODE(bond) != BOND_MODE_MLO) {
+		if (!bond_has_slaves(bond))
+			eth_hw_addr_random(bond_dev);
+	}
 
 	unblock_netpoll_tx();
 	synchronize_rcu();
 	bond->slave_cnt--;
 
+	/*
+	 * TODO: Avoid MAC address change notification for BOND_MODE_MLO
+	 */
 	if (!bond_has_slaves(bond)) {
 		call_netdevice_notifiers(NETDEV_CHANGEADDR, bond->dev);
 		call_netdevice_notifiers(NETDEV_RELEASE, bond->dev);

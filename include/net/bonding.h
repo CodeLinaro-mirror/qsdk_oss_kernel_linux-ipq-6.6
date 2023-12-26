@@ -297,6 +297,19 @@ struct bond_vlan_tag {
 	unsigned short	vlan_id;
 };
 
+/**
+ * Returns False if the net_device is not MLO bond netdvice
+ *
+ */
+static inline bool bond_is_mlo_device(struct net_device *bond_dev)
+{
+	struct bonding *bond = netdev_priv(bond_dev);
+	if (BOND_MODE(bond) == BOND_MODE_MLO)
+		return true;
+
+	return false;
+}
+
 /*
  * Returns NULL if the net_device does not belong to any of the bond's slaves
  *
