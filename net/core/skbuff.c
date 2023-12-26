@@ -1411,7 +1411,6 @@ void skb_tx_error(struct sk_buff *skb)
 }
 EXPORT_SYMBOL(skb_tx_error);
 
-#ifdef CONFIG_TRACEPOINTS
 /**
  *	consume_skb - free an skbuff
  *	@skb: buffer to free
@@ -1452,8 +1451,9 @@ void consume_skb(struct sk_buff *skb)
 	if (likely(skb_recycler_consume(skb)))
 		return;
 
+#ifdef CONFIG_TRACEPOINTS
 	trace_consume_skb(skb, __builtin_return_address(0));
-
+#endif
 	/* We're not recycling so now we need to do the rest of what we would
 	 * have done in __kfree_skb (above and beyond the skb_release_head_state
 	 * that we already did).
@@ -1462,7 +1462,6 @@ void consume_skb(struct sk_buff *skb)
 	kfree_skbmem(skb);
 }
 EXPORT_SYMBOL(consume_skb);
-#endif
 
 /**
  *	consume_skb_list_fast - free a list of skbs
