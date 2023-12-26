@@ -1,11 +1,12 @@
 /* SPDX-License-Identifier: GPL-2.0-or-later */
 /***************************************************************************
  * Linux PPP over X - Generic PPP transport layer sockets
- * Linux PPP over Ethernet (PPPoE) Socket Implementation (RFC 2516) 
+ * Linux PPP over Ethernet (PPPoE) Socket Implementation (RFC 2516)
  *
  * This file supplies definitions required by the PPP over Ethernet driver
  * (pppox.c).  All version information wrt this file is located in pppox.c
  */
+
 #ifndef __LINUX_IF_PPPOX_H
 #define __LINUX_IF_PPPOX_H
 
@@ -90,5 +91,18 @@ enum {
     PPPOX_RELAY		= 4,  /* forwarding is enabled */
     PPPOX_DEAD		= 16  /* dead, useless, please clean me up!*/
 };
+
+/*
+ * PPPoE Channel specific operations
+ */
+struct pppoe_channel_ops {
+	/* Must be first - general to all PPP channels */
+	struct ppp_channel_ops ops;
+	int (*get_addressing)(struct ppp_channel *, struct pppoe_opt *);
+};
+
+/* Return PPPoE channel specific addressing information */
+extern int pppoe_channel_addressing_get(struct ppp_channel *chan,
+					 struct pppoe_opt *addressing);
 
 #endif /* !(__LINUX_IF_PPPOX_H) */
