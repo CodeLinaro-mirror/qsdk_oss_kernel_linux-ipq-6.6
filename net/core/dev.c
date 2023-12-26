@@ -156,6 +156,7 @@
 
 #include "dev.h"
 #include "net-sysfs.h"
+#include "skbuff_debug.h"
 
 static DEFINE_SPINLOCK(ptype_lock);
 struct list_head ptype_base[PTYPE_HASH_SIZE] __read_mostly;

@@ -72,6 +72,7 @@ M:	Casey Chen <kexinc@codeaurora.org>
 S:	Maintained
 F:	net/core/skbuff_recycle.*
 F:	net/core/skbuff_notifier.*
+F:	net/core/skbuff_debug.*
 
 3C59X NETWORK DRIVER
 M:	Steffen Klassert <klassert@kernel.org>
