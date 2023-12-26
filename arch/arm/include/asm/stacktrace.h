@@ -3,6 +3,7 @@
 #define __ASM_STACKTRACE_H
 
 #include <asm/ptrace.h>
+#include <asm/current.h>
 #include <linux/llist.h>
 
 struct stackframe {
