@@ -2893,6 +2893,8 @@ struct cfg80211_auth_request {
  * struct cfg80211_assoc_link - per-link information for MLO association
  * @bss: the BSS pointer, see also &struct cfg80211_assoc_request::bss;
  *	if this is %NULL for a link, that link is not requested
+ * @bssid: AP BSSID
+ * @freq: frequency of the link
  * @elems: extra elements for the per-STA profile for this link
  * @elems_len: length of the elements
  * @disabled: If set this link should be included during association etc. but it
@@ -2900,6 +2902,8 @@ struct cfg80211_auth_request {
  */
 struct cfg80211_assoc_link {
 	struct cfg80211_bss *bss;
+	const u8 *bssid;
+	unsigned int freq;
 	const u8 *elems;
 	size_t elems_len;
 	bool disabled;
@@ -3167,6 +3171,11 @@ struct cfg80211_bss_selection {
  * @edmg: define the EDMG channels.
  *	This may specify multiple channels and bonding options for the driver
  *	to choose from, based on BSS configuration.
+ * @links: per-link information for MLO connections
+ * @link_id: >= 0 for MLO connections, where links are given, and indicates
+ *	the link on which the connection is being done
+ * @ap_mld_addr: AP MLD address in case of MLO association request,
+ *	valid iff @link_id >= 0
  */
 struct cfg80211_connect_params {
 	struct ieee80211_channel *channel;
@@ -3201,6 +3210,9 @@ struct cfg80211_connect_params {
 	size_t fils_erp_rrk_len;
 	bool want_1x;
 	struct ieee80211_edmg edmg;
+	struct cfg80211_assoc_link links[IEEE80211_MLD_MAX_NUM_LINKS];
+	const u8 *ap_mld_addr;
+	s8 link_id;
 };
 
 /**

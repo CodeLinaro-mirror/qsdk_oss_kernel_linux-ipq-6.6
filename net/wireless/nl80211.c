@@ -11839,6 +11839,13 @@ static int nl80211_connect(struct sk_buff *skb, struct genl_info *info)
 	struct cfg80211_cached_keys *connkeys = NULL;
 	u32 freq = 0;
 	int err;
+	struct nlattr **attrs = NULL;
+	unsigned int attrsize;
+	struct nlattr *link;
+	int rem = 0;
+	const u8 *ap_addr, *ssid;
+	unsigned int link_id;
+	int ssid_len;
 
 	memset(&connect, 0, sizeof(connect));
 
@@ -12058,6 +12065,105 @@ static int nl80211_connect(struct sk_buff *skb, struct genl_info *info)
 
 	if (nla_get_flag(info->attrs[NL80211_ATTR_MLO_SUPPORT]))
 		connect.flags |= CONNECT_REQ_MLO_SUPPORT;
+	connect.link_id = nl80211_link_id_or_invalid(info->attrs);
+
+	if (info->attrs[NL80211_ATTR_MLO_LINKS]) {
+		attrsize = NUM_NL80211_ATTR * sizeof(*attrs);
+		if (connect.link_id < 0)
+			return -EINVAL;
+
+		if (!(rdev->wiphy.flags & WIPHY_FLAG_SUPPORTS_MLO))
+			return -EINVAL;
+
+		if (info->attrs[NL80211_ATTR_MAC] ||
+				info->attrs[NL80211_ATTR_WIPHY_FREQ] ||
+				!info->attrs[NL80211_ATTR_MLD_ADDR])
+			return -EINVAL;
+
+		connect.ap_mld_addr = nla_data(info->attrs[NL80211_ATTR_MLD_ADDR]);
+		ap_addr = connect.ap_mld_addr;
+
+		attrs = kzalloc(attrsize, GFP_KERNEL);
+		if (!attrs)
+			return -ENOMEM;
+
+		nla_for_each_nested(link,
+				info->attrs[NL80211_ATTR_MLO_LINKS],
+				rem) {
+			memset(attrs, 0, attrsize);
+
+			nla_parse_nested(attrs, NL80211_ATTR_MAX,
+					link, NULL, NULL);
+
+			if (!attrs[NL80211_ATTR_MLO_LINK_ID]) {
+				err = -EINVAL;
+				goto free;
+			}
+
+			link_id = nla_get_u8(attrs[NL80211_ATTR_MLO_LINK_ID]);
+			/* cannot use the same link ID again */
+			if (connect.links[link_id].bss) {
+				err = -EINVAL;
+				goto free;
+			}
+
+			connect.links[link_id].freq =
+				nla_get_u32(attrs[NL80211_ATTR_WIPHY_FREQ]);
+			connect.links[link_id].bssid =
+				nla_data(attrs[NL80211_ATTR_MAC]);
+			connect.links[link_id].bss =
+				nl80211_assoc_bss(rdev, ssid, ssid_len, attrs);
+
+			if (IS_ERR(connect.links[link_id].bss)) {
+				err = PTR_ERR(connect.links[link_id].bss);
+				connect.links[link_id].bss = NULL;
+				goto free;
+			}
+
+			if (attrs[NL80211_ATTR_IE]) {
+				connect.links[link_id].elems =
+					nla_data(attrs[NL80211_ATTR_IE]);
+				connect.links[link_id].elems_len =
+					nla_len(attrs[NL80211_ATTR_IE]);
+
+				if (cfg80211_find_elem(WLAN_EID_FRAGMENT,
+							connect.links[link_id].elems,
+							connect.links[link_id].elems_len)) {
+					GENL_SET_ERR_MSG(info,
+							"cannot deal with fragmentation");
+					err = -EINVAL;
+					goto free;
+				}
+
+				if (cfg80211_find_ext_elem(WLAN_EID_EXT_NON_INHERITANCE,
+							connect.links[link_id].elems,
+							connect.links[link_id].elems_len)) {
+					GENL_SET_ERR_MSG(info,
+							"cannot deal with non-inheritance");
+					err = -EINVAL;
+					goto free;
+				}
+			}
+		}
+
+		if (!connect.links[connect.link_id].bss) {
+			err = -EINVAL;
+			goto free;
+		}
+
+		if (connect.links[connect.link_id].elems_len) {
+			GENL_SET_ERR_MSG(info,
+					"cannot have per-link elems on assoc link");
+			err = -EINVAL;
+			goto free;
+		}
+
+		kfree(attrs);
+		attrs = NULL;
+	} else {
+		if (connect.link_id >= 0)
+			return -EINVAL;
+	}
 
 	wdev_lock(dev->ieee80211_ptr);
 
@@ -12076,6 +12182,10 @@ static int nl80211_connect(struct sk_buff *skb, struct genl_info *info)
 	}
 
 	wdev_unlock(dev->ieee80211_ptr);
+free:
+	for (link_id = 0; link_id < ARRAY_SIZE(connect.links); link_id++)
+		cfg80211_put_bss(&rdev->wiphy, connect.links[link_id].bss);
+	kfree(attrs);
 
 	return err;
 }
