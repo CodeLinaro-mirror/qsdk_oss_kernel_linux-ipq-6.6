@@ -20,6 +20,7 @@ nf_conntrack-$(CONFIG_DEBUG_INFO_BTF_MODULES) += nf_conntrack_bpf.o
 else ifeq ($(CONFIG_NF_CONNTRACK),y)
 nf_conntrack-$(CONFIG_DEBUG_INFO_BTF) += nf_conntrack_bpf.o
 endif
+nf_conntrack-$(CONFIG_NF_CONNTRACK_DSCPREMARK_EXT) += nf_conntrack_dscpremark_ext.o
 
 obj-$(CONFIG_NETFILTER) = netfilter.o
 obj-$(CONFIG_NETFILTER_BPF_LINK) += nf_bpf_link.o
