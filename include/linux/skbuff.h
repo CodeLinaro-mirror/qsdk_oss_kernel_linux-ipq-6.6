@@ -993,6 +993,12 @@ struct sk_buff {
 	__u8			fast_xmit:1;
 	__u8			fast_forwarded:1;
 	/* 1 or 3 bit hole */
+	/* Flag to check if skb is allocated from recycler */
+	__u8			is_from_recycler:1;
+	/* Flag for fast recycle in fast xmit path */
+	__u8			fast_recycled:1;
+	/* Flag for recycle in PPE DS */
+	__u8			recycled_for_ds:1;
 
 #if defined(CONFIG_NET_SCHED) || defined(CONFIG_NET_XGRESS)
 	__u16			tc_index;	/* traffic control index */
@@ -1258,6 +1264,8 @@ static inline void consume_skb(struct sk_buff *skb)
 }
 #endif
 
+void consume_skb_list_fast(struct sk_buff_head *skb_list);
+void check_skb_fast_recyclable(struct sk_buff *skb);
 void __consume_stateless_skb(struct sk_buff *skb);
 void  __kfree_skb(struct sk_buff *skb);
 extern struct kmem_cache *skbuff_cache;
@@ -1383,6 +1391,12 @@ static inline int skb_pad(struct sk_buff *skb, int pad)
 	return __skb_pad(skb, pad, true);
 }
 #define dev_kfree_skb(a)	consume_skb(a)
+#define dev_kfree_skb_list_fast(a)	consume_skb_list_fast(a)
+#if defined(SKB_FAST_RECYCLABLE_DEBUG_ENABLE) && defined(CONFIG_SKB_RECYCLER)
+#define dev_check_skb_fast_recyclable(a)       check_skb_fast_recyclable(a)
+#else
+#define dev_check_skb_fast_recyclable(a)
+#endif
 
 int skb_append_pagefrags(struct sk_buff *skb, struct page *page,
 			 int offset, size_t size, size_t max_frags);

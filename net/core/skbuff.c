@@ -89,6 +89,12 @@
 #include "sock_destructor.h"
 
 struct kmem_cache *skbuff_cache __ro_after_init;
+
+#if defined(CONFIG_SKB_FIXED_SIZE_2K) && !defined(__LP64__)
+struct kmem_cache *skb_data_cache;
+#define SKB_DATA_CACHE_SIZE	2176
+#endif
+
 static struct kmem_cache *skbuff_fclone_cache __ro_after_init;
 #ifdef CONFIG_SKB_EXTENSIONS
 static struct kmem_cache *skbuff_ext_cache __ro_after_init;
@@ -579,7 +585,14 @@ static void *kmalloc_reserve(unsigned int *size, gfp_t flags, int node,
 	 * Try a regular allocation, when that fails and we're not entitled
 	 * to the reserves, fail.
 	 */
-	obj = kmalloc_node_track_caller(obj_size,
+#if defined(CONFIG_SKB_FIXED_SIZE_2K) && !defined(__LP64__)
+	if (size > SZ_2K && size <= SKB_DATA_CACHE_SIZE)
+		obj = kmem_cache_alloc_node(skb_data_cache,
+						flags | __GFP_NOMEMALLOC | __GFP_NOWARN,
+						node);
+	else
+#endif
+		obj = kmalloc_node_track_caller(obj_size,
 					flags | __GFP_NOMEMALLOC | __GFP_NOWARN,
 					node);
 	if (obj || !(gfp_pfmemalloc_allowed(flags)))
@@ -587,7 +600,12 @@ static void *kmalloc_reserve(unsigned int *size, gfp_t flags, int node,
 
 	/* Try again but now we are using pfmemalloc reserves */
 	ret_pfmemalloc = true;
-	obj = kmalloc_node_track_caller(obj_size, flags, node);
+#if defined(CONFIG_SKB_FIXED_SIZE_2K) && !defined(__LP64__)
+	if (size > SZ_2K && size <= SKB_DATA_CACHE_SIZE)
+		obj = kmem_cache_alloc_node(skb_data_cache, flags, node);
+	else
+#endif
+		obj = kmalloc_node_track_caller(obj_size, flags, node);
 
 out:
 	if (pfmemalloc)
@@ -1301,6 +1319,44 @@ void consume_skb(struct sk_buff *skb)
 }
 EXPORT_SYMBOL(consume_skb);
 #endif
+
+/**
+ *	consume_skb_list_fast - free a list of skbs
+ *	@skb_list: head of the buffer list
+ *
+ *	Add the list of given SKBs to CPU list. Assumption is that these buffers
+ *	have been allocated originally from the skb recycler and have been transmitted
+ *	through a controlled fast xmit path, thus removing the need for additional checks
+ *	before recycling the buffers back to pool
+ */
+void consume_skb_list_fast(struct sk_buff_head *skb_list)
+{
+	struct sk_buff *skb = NULL;
+
+	if (likely(skb_recycler_consume_list_fast(skb_list))) {
+		return;
+	}
+
+	while ((skb = skb_dequeue(skb_list)) != NULL) {
+		/*
+		 * Check if release head state is needed
+		 */
+		skb_release_head_state(skb);
+
+		trace_consume_skb(skb, __builtin_return_address(0));
+
+		/*
+		 * We're not recycling so now we need to do the rest of what we would
+		 * have done in __kfree_skb (above and beyond the skb_release_head_state
+		 * that we already did).
+		 */
+		if (likely(skb->head))
+			skb_release_data(skb, SKB_CONSUMED, false);
+
+		kfree_skbmem(skb);
+	}
+}
+EXPORT_SYMBOL(consume_skb_list_fast);
 
 /**
  *	__consume_stateless_skb - free an skbuff, assuming it is stateless
@@ -4851,6 +4907,13 @@ static void skb_extensions_init(void) {}
 
 void __init skb_init(void)
 {
+#if defined(CONFIG_SKB_FIXED_SIZE_2K) && !defined(__LP64__)
+	skb_data_cache = kmem_cache_create_usercopy("skb_data_cache",
+						SKB_DATA_CACHE_SIZE,
+						0, 0, 0, SKB_DATA_CACHE_SIZE,
+						NULL);
+#endif
+
 	skbuff_cache = kmem_cache_create_usercopy("skbuff_head_cache",
 					      sizeof(struct sk_buff),
 					      0,
