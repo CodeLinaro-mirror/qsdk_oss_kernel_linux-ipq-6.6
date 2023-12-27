@@ -31,6 +31,7 @@ struct gre_protocol {
 
 int gre_add_protocol(const struct gre_protocol *proto, u8 version);
 int gre_del_protocol(const struct gre_protocol *proto, u8 version);
+bool gre_tunnel_is_fallback_dev(struct net_device *dev);
 
 struct net_device *gretap_fb_dev_create(struct net *net, const char *name,
 				       u8 name_assign_type);
@@ -43,10 +44,22 @@ static inline bool netif_is_gretap(const struct net_device *dev)
 	       !strcmp(dev->rtnl_link_ops->kind, "gretap");
 }
 
+static inline bool netif_is_gre(const struct net_device *dev)
+{
+	return dev->rtnl_link_ops &&
+	       !strcmp(dev->rtnl_link_ops->kind, "gre");
+}
+
 static inline bool netif_is_ip6gretap(const struct net_device *dev)
 {
 	return dev->rtnl_link_ops &&
 	       !strcmp(dev->rtnl_link_ops->kind, "ip6gretap");
+}
+
+static inline bool netif_is_ip6gre(const struct net_device *dev)
+{
+	return dev->rtnl_link_ops &&
+	       !strcmp(dev->rtnl_link_ops->kind, "ip6gre");
 }
 
 static inline int gre_calc_hlen(__be16 o_flags)

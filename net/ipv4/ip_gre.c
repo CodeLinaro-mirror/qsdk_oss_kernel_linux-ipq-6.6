@@ -454,6 +454,26 @@ drop:
 	return 0;
 }
 
+bool gre_tunnel_is_fallback_dev(struct net_device *dev)
+{
+	struct net *net;
+	struct ip_tunnel_net *itn;
+	struct net_device *fb_tunnel_dev;
+
+	net = dev_net(dev);
+	if (!net)
+		return false;
+
+	itn  = net_generic(net, gre_tap_net_id);
+	if (!itn)
+		return false;
+
+	fb_tunnel_dev = itn->fb_tunnel_dev;
+
+	return (fb_tunnel_dev == dev);
+}
+EXPORT_SYMBOL(gre_tunnel_is_fallback_dev);
+
 static void __gre_xmit(struct sk_buff *skb, struct net_device *dev,
 		       const struct iphdr *tnl_params,
 		       __be16 proto)
