@@ -2228,7 +2228,6 @@ struct net_device {
 	unsigned char		nested_level;
 #endif
 
-
 	/* Protocol-specific pointers */
 
 	struct in_device __rcu	*ip_ptr;
