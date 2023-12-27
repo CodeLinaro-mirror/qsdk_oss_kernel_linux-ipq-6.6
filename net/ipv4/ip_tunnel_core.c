@@ -61,7 +61,7 @@ void iptunnel_xmit(struct sock *sk, struct rtable *rt, struct sk_buff *skb,
 	int skb_iif;
 
 	/* Save input interface index */
-        skb_iif = skb->skb_iif;
+	skb_iif = skb->skb_iif;
 
 	skb_scrub_packet(skb, xnet);
 
