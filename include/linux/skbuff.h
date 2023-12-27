@@ -272,6 +272,14 @@
 			 SKB_DATA_ALIGN(sizeof(struct sk_buff)) +	\
 			 SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
 
+#define SKB_SAWF_VALID_TAG		0xAA
+#define SKB_SAWF_TAG_SHIFT		24
+#define SKB_SAWF_SERVICE_CLASS_SHIFT	16
+#define SKB_SAWF_SERVICE_CLASS_MASK	0xff
+
+#define SKB_GET_SAWF_TAG(x) ((x) >> SKB_SAWF_TAG_SHIFT)
+#define SKB_GET_SAWF_SERVICE_CLASS(x) (((x) >> SKB_SAWF_SERVICE_CLASS_SHIFT) & SKB_SAWF_SERVICE_CLASS_MASK)
+
 struct ahash_request;
 struct net_device;
 struct scatterlist;
