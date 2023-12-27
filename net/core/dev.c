@@ -533,7 +533,6 @@ static inline void netdev_set_addr_lockdep_class(struct net_device *dev)
  *
  *******************************************************************************/
 
-
 /*
  *	Add a protocol ID to the list. Now that the input handler is
  *	smarter we can dispense with all the messy stuff that used to be
@@ -634,7 +633,6 @@ void dev_remove_pack(struct packet_type *pt)
 	synchronize_net();
 }
 EXPORT_SYMBOL(dev_remove_pack);
-
 
 /*******************************************************************************
  *
@@ -1612,7 +1610,6 @@ void dev_close(struct net_device *dev)
 	}
 }
 EXPORT_SYMBOL(dev_close);
-
 
 /**
  *	dev_disable_lro - disable Large Receive Offload on a device
@@ -3201,7 +3198,6 @@ void dev_kfree_skb_any_reason(struct sk_buff *skb, enum skb_drop_reason reason)
 		kfree_skb_reason(skb, reason);
 }
 EXPORT_SYMBOL(dev_kfree_skb_any_reason);
-
 
 /**
  * netif_device_detach - mark device as removed
@@ -5548,12 +5544,6 @@ another_round:
 		}
 	}
 
-	if (eth_type_vlan(skb->protocol)) {
-		skb = skb_vlan_untag(skb);
-		if (unlikely(!skb))
-			goto out;
-	}
-
 	if (likely(!fast_tc_filter)) {
 		fast_recv = rcu_dereference(athrs_fast_nat_recv);
 		if (fast_recv) {
@@ -5562,6 +5552,12 @@ another_round:
 				goto out;
 			}
 		}
+	}
+
+	if (eth_type_vlan(skb->protocol)) {
+		skb = skb_vlan_untag(skb);
+		if (unlikely(!skb))
+			goto out;
 	}
 
 	if (skb_skip_tc_classify(skb))
@@ -8606,7 +8602,6 @@ void *netdev_lower_dev_get_private(struct net_device *dev,
 }
 EXPORT_SYMBOL(netdev_lower_dev_get_private);
 
-
 /**
  * netdev_lower_state_changed - Dispatch event about lower device state change
  * @lower_dev: device
@@ -10519,7 +10514,6 @@ int init_dummy_netdev(struct net_device *dev)
 	return 0;
 }
 EXPORT_SYMBOL_GPL(init_dummy_netdev);
-
 
 /**
  *	register_netdev	- register a network device
