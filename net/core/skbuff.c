@@ -541,6 +541,8 @@ static struct sk_buff *__napi_build_skb(void *data, unsigned int frag_size)
 	if (unlikely(!skb))
 		return NULL;
 
+	skbuff_debugobj_init_and_activate(skb);
+
 	memset(skb, 0, offsetof(struct sk_buff, tail));
 	__build_skb_around(skb, data, frag_size);
 
