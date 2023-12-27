@@ -93,6 +93,32 @@ static int lookup_chan_dst(u16 call_id, __be32 d_addr)
 	return i < MAX_CALLID;
 }
 
+/* Search a pptp session based on local call id, local and remote ip address */
+static int lookup_session_src(struct pptp_opt *opt, u16 call_id, __be32 daddr, __be32 saddr)
+{
+	struct pppox_sock *sock;
+	int i = 1;
+
+	rcu_read_lock();
+	for_each_set_bit_from(i, callid_bitmap, MAX_CALLID) {
+		sock = rcu_dereference(callid_sock[i]);
+		if (!sock)
+			continue;
+
+		if (sock->proto.pptp.src_addr.call_id == call_id &&
+		    sock->proto.pptp.dst_addr.sin_addr.s_addr == daddr &&
+		    sock->proto.pptp.src_addr.sin_addr.s_addr == saddr) {
+			sock_hold(sk_pppox(sock));
+			memcpy(opt, &sock->proto.pptp, sizeof(struct pptp_opt));
+			sock_put(sk_pppox(sock));
+			rcu_read_unlock();
+			return 0;
+		}
+	}
+	rcu_read_unlock();
+	return -EINVAL;
+}
+
 /* Search a pptp session based on peer call id and peer ip address */
 static int lookup_session_dst(struct pptp_opt *opt, u16 call_id, __be32 d_addr)
 {
@@ -209,7 +235,6 @@ static int pptp_xmit(struct ppp_channel *chan, struct sk_buff *skb)
 	unsigned char *data;
 	__u32 seq_recv;
 
-
 	struct rtable *rt;
 	struct net_device *tdev;
 	struct net_device *pptp_dev;
@@ -312,14 +337,18 @@ static int pptp_xmit(struct ppp_channel *chan, struct sk_buff *skb)
 
 	pptp_ifindex = ppp_dev_index(chan);
 
-	/* set incoming interface as the ppp interface */
-	if (skb->skb_iif)
-		skb->skb_iif = pptp_ifindex;
-
 	/* If the PPTP GRE seq number offload module is not enabled yet
 	 * then sends all PPTP GRE packets through linux network stack
 	 */
 	if (!opt->pptp_offload_mode) {
+		/* set incoming interface as the ppp interface */
+		pptp_dev = dev_get_by_index(&init_net, pptp_ifindex);
+		if (pptp_dev) {
+			skb->dev = pptp_dev;
+			skb->skb_iif = pptp_ifindex;
+			dev_put(pptp_dev);
+		}
+
 		ip_local_out(net, skb->sk, skb);
 		return 1;
 	}
@@ -730,6 +759,20 @@ int pptp_session_find(struct pptp_opt *opt, __be16 peer_call_id,
 	return lookup_session_dst(opt, ntohs(peer_call_id), peer_ip_addr);
 }
 EXPORT_SYMBOL(pptp_session_find);
+
+/* pptp_session_find_by_src_callid()
+ *	Search and return a PPTP session info based on src callid and IP
+ *	address. The function accepts the parameters in network byte order.
+ */
+int pptp_session_find_by_src_callid(struct pptp_opt *opt, __be16 src_call_id,
+		      __be32 daddr, __be32 saddr)
+{
+	if (!opt)
+		return -EINVAL;
+
+	return lookup_session_src(opt, ntohs(src_call_id), daddr, saddr);
+}
+EXPORT_SYMBOL(pptp_session_find_by_src_callid);
 
  /* Function to change the offload mode true/false for a PPTP session */
 static int pptp_set_offload_mode(bool accel_mode,

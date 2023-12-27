@@ -41,6 +41,8 @@
 #include <net/netfilter/nf_conntrack_timeout.h>
 #include <linux/netfilter/nf_conntrack_proto_gre.h>
 #include <linux/netfilter/nf_conntrack_pptp.h>
+#include <linux/ip.h>
+#include <linux/if_pppox.h>
 
 static const unsigned int gre_timeouts[GRE_CT_MAX] = {
 	[GRE_CT_UNREPLIED]	= 30*HZ,
@@ -66,15 +68,17 @@ static inline int gre_key_cmpfn(const struct nf_ct_gre_keymap *km,
 }
 
 /* look up the source key for a given tuple */
-static __be16 gre_keymap_lookup(struct net *net, struct nf_conntrack_tuple *t)
+static __be16 gre_keymap_lookup(struct net *net, struct nf_conntrack_tuple *t, bool *found)
 {
 	struct nf_gre_net *net_gre = gre_pernet(net);
 	struct nf_ct_gre_keymap *km;
 	__be16 key = 0;
+	*found = false;
 
 	list_for_each_entry_rcu(km, &net_gre->keymap_list, list) {
 		if (gre_key_cmpfn(km, t)) {
 			key = km->tuple.src.u.gre.key;
+			*found = true;
 			break;
 		}
 	}
@@ -156,6 +160,12 @@ bool gre_pkt_to_tuple(const struct sk_buff *skb, unsigned int dataoff,
 	__be16 srckey;
 	const struct gre_base_hdr *grehdr;
 	struct gre_base_hdr _grehdr;
+#if IS_ENABLED(CONFIG_PPTP)
+	struct pptp_opt opt;
+	struct iphdr *v4_hdr;
+	int ret;
+#endif
+	bool found;
 
 	/* first only delinearize old RFC1701 GRE header */
 	grehdr = skb_header_pointer(skb, dataoff, sizeof(_grehdr), &_grehdr);
@@ -177,10 +187,54 @@ bool gre_pkt_to_tuple(const struct sk_buff *skb, unsigned int dataoff,
 	}
 
 	tuple->dst.u.gre.key = pgrehdr->call_id;
-	srckey = gre_keymap_lookup(net, tuple);
+	srckey = gre_keymap_lookup(net, tuple, &found);
 	tuple->src.u.gre.key = srckey;
 
+#if !IS_ENABLED(CONFIG_PPTP)
 	return true;
+#else
+
+	/* Return if src key is found */
+	if (found) {
+		pr_debug("key map entry found (srckey=0x%x dstkey=0x%x)\n", ntohs(srckey),
+			 ntohs(tuple->dst.u.gre.key));
+		return true;
+	}
+
+	/* Key map was not found. Return for IPv6 packet */
+	v4_hdr = ip_hdr(skb);
+	if (v4_hdr->version != IPVERSION) {
+		pr_debug("PPTP IP version is %d\n", v4_hdr->version);
+		return true;
+	}
+
+	/* Lookup the call-id based on dest callID. This is needed for packet originated from the system */
+	ret = pptp_session_find(&opt, pgrehdr->call_id, v4_hdr->daddr);
+	if (!ret) {
+		tuple->src.u.gre.key = htons(opt.src_addr.call_id);
+		pr_debug("PPTP session found by dest callid sip=0x%x srckey=0x%x dip=0x%x destkey=0x%x\n",
+			 ntohl(opt.src_addr.sin_addr.s_addr), opt.src_addr.call_id,
+			 ntohl(opt.dst_addr.sin_addr.s_addr), opt.dst_addr.call_id);
+		return true;
+	}
+
+	/* Lookup the call-id based on source callID. This is needed for packets received */
+	ret =  pptp_session_find_by_src_callid(&opt, pgrehdr->call_id, v4_hdr->saddr, v4_hdr->daddr);
+	if (!ret) {
+		tuple->src.u.gre.key = htons(opt.dst_addr.call_id);
+		pr_debug("PPTP session found by src callid sip=0x%x srckey=0x%x dip=0x%x destkey=0x%x\n",
+				ntohl(opt.dst_addr.sin_addr.s_addr), opt.dst_addr.call_id,
+				ntohl(opt.src_addr.sin_addr.s_addr), opt.src_addr.call_id);
+		return true;
+	}
+
+	/* Do not create conntrack entry */
+	pr_debug("Could not find PPTP session (sip=0x%x srckey=0x%x dip=0x%x dstkey=0x%x)\n",
+				ntohl(v4_hdr->saddr), ntohs(srckey),
+				ntohl(v4_hdr->daddr), ntohs(tuple->dst.u.gre.key));
+	return false;
+#endif
+
 }
 
 #ifdef CONFIG_NF_CONNTRACK_PROCFS
