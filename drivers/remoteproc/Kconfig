@@ -254,6 +254,15 @@ config QCOM_Q6V5_MPD
 	  for the Hexagon based MultiPD model remote processors on e.g. IPQ5018.
 	  This is trustZone wireless subsystem.
 
+config QCOM_NON_SECURE_PIL
+	tristate "Qualcomm Non secure Peripheral Image Loader"
+	depends on OF && ARCH_QCOM
+	depends on QCOM_Q6V5_MPD
+	help
+	  Say y here to support the Qualcomm Non Secure Peripheral Image Loader
+	  for the Hexagon based MultiPD model remote processors on emulation
+	  platforms.
+
 config QCOM_Q6V5_WCSS
 	tristate "Qualcomm Hexagon based WCSS Peripheral Image Loader"
 	depends on OF && ARCH_QCOM
