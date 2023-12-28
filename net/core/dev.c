@@ -10798,6 +10798,13 @@ int register_netdevice(struct net_device *dev)
 	 */
 	dev->mpls_features |= NETIF_F_SG;
 
+	/*
+	 * Disable default qdisc on the netdevice if required.
+	 */
+#ifdef CONFIG_DEFAULT_QDISC_DISABLE
+	dev->priv_flags |= IFF_NO_QUEUE;
+#endif
+
 	ret = call_netdevice_notifiers(NETDEV_POST_INIT, dev);
 	ret = notifier_to_errno(ret);
 	if (ret)
