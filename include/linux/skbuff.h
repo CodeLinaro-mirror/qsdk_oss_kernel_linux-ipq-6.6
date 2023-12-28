@@ -1007,6 +1007,8 @@ struct sk_buff {
 	__u8			fast_recycled:1;
 	/* Flag for recycle in PPE DS */
 	__u8			recycled_for_ds:1;
+	__u8			fast_qdisc:1;
+	/* Packets processed in dev_fast_xmit_qdisc() path */
 
 #if defined(CONFIG_NET_SCHED) || defined(CONFIG_NET_XGRESS)
 	__u16			tc_index;	/* traffic control index */

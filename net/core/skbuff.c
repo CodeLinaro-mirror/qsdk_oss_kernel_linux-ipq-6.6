@@ -861,6 +861,7 @@ struct sk_buff *__netdev_alloc_skb_no_skb_reset(struct net_device *dev,
 		*/
 		skb->truesize = SKB_TRUESIZE(SKB_DATA_ALIGN(len + NET_SKB_PAD));
 		skb->fast_recycled = 0;
+		skb->fast_qdisc = 0;
 		return skb;
 	}
 
