@@ -290,6 +290,9 @@ extern int qti_scm_tz_log(void *ker_buf, u32 buf_len);
 extern int qti_scm_hvc_log(void *ker_buf, u32 buf_len);
 extern int qti_qfprom_show_authenticate(void);
 extern int qti_scm_get_smmustate(void);
+extern int qti_scm_get_ecdsa_blob(u32 svc_id, u32 cmd_id, dma_addr_t nonce_buf,
+		u32 nonce_buf_len, dma_addr_t ecdsa_buf, u32 ecdsa_buf_len,
+		u32 *ecdsa_consumed_len);
 
 extern bool qcom_scm_sec_auth_available(unsigned int scm_cmd_id);
 extern int qcom_scm_get_ipq5332_fuse_list(struct fuse_payload *fuse, size_t size);
