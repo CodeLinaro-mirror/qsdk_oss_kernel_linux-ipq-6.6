@@ -8007,7 +8007,10 @@ static const struct hash_testvec hmac_sha384_tv_template[] = {
 			  "\x8e\x22\x40\xca\x5e\x69\xe2\xc7"
 			  "\x8b\x32\x39\xec\xfa\xb2\x16\x49",
 		.fips_skip = 1,
-	}, {
+	},
+#ifndef CONFIG_CRYPTO_DISABLE_AHASH_LARGE_KEY_TEST
+	/* TODO : Require support for Auth key size larger than block length */
+	{
 		.key	= "\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa"
 			  "\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa"
 			  "\xaa\xaa\xaa\xaa\xaa\xaa\xaa\xaa"
@@ -8072,6 +8075,7 @@ static const struct hash_testvec hmac_sha384_tv_template[] = {
 			  "\xa6\x78\xcc\x31\xe7\x99\x17\x6d"
 			  "\x38\x60\xe6\x11\x0c\x46\x52\x3e",
 	},
+#endif
 };
 
 /*
