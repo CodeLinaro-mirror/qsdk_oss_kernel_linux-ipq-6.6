@@ -21,6 +21,10 @@
 #include "../thermal_hwmon.h"
 #include "tsens.h"
 
+#define MAX_TEMP	204000 /* milliCelcius */
+#define MIN_TEMP	0 /* milliCelcius */
+#define MAX_SENSOR	16
+
 /**
  * struct tsens_irq_data - IRQ status and temperature violations
  * @up_viol:        upper threshold violated
@@ -52,6 +56,14 @@ struct tsens_irq_data {
 	u32 crit_thresh;
 	u32 crit_irq_mask;
 	u32 crit_irq_clear;
+};
+
+/* Trips: from very hot to very cold */
+enum tsens_trip_type {
+	TSENS_TRIP_STAGE3 = 0, /* Critical high */
+	TSENS_TRIP_STAGE2,     /* Configurable high */
+	TSENS_TRIP_STAGE1,     /* Configurable low */
+	TSENS_TRIP_NUM,
 };
 
 char *qfprom_read(struct device *dev, const char *cname)
@@ -685,7 +697,110 @@ static irqreturn_t tsens_combined_irq_thread(int irq, void *data)
 	return tsens_irq_thread(irq, data);
 }
 
-static int tsens_set_trips(struct thermal_zone_device *tz, int low, int high)
+static int __maybe_unused tsens_set_trip_activate(void *data, int trip,
+					enum thermal_trip_activation_mode mode)
+{
+	struct thermal_zone_device *tz = (struct thermal_zone_device *)data;
+	struct tsens_sensor *s = tz->devdata;
+	struct tsens_priv *priv = s->priv;
+	u32 hw_id = s->hw_id;
+	enum tsens_trip_type trip_type = trip;
+	unsigned int reg_val;
+
+	if (tsens_version(priv) < VER_0_1) {
+		/* Pre v0.1 IP had a single register for each type of interrupt
+		 * and thresholds
+		 */
+		hw_id = 0;
+	}
+
+	if ((hw_id < 0) || (hw_id > (MAX_SENSOR - 1)))
+		return -EINVAL;
+
+	switch(trip_type) {
+	case TSENS_TRIP_STAGE3:
+		regmap_field_read(priv->rf[CRIT_INT_MASK_0 + hw_id], &reg_val);
+		if (mode == THERMAL_TRIP_ACTIVATION_DISABLED)
+			reg_val = 1;
+		else
+			reg_val = 0;
+		regmap_field_write(priv->rf[CRIT_INT_MASK_0 + hw_id], reg_val);
+		break;
+	case TSENS_TRIP_STAGE2:
+		regmap_field_read(priv->rf[UP_INT_MASK_0 + hw_id], &reg_val);
+		if (mode == THERMAL_TRIP_ACTIVATION_DISABLED)
+			reg_val = 1;
+		else
+			reg_val = 0;
+		regmap_field_write(priv->rf[UP_INT_MASK_0 + hw_id], reg_val);
+		break;
+	case TSENS_TRIP_STAGE1:
+		regmap_field_read(priv->rf[LOW_INT_MASK_0 + hw_id], &reg_val);
+		if (mode == THERMAL_TRIP_ACTIVATION_DISABLED)
+			reg_val = 1;
+		else
+			reg_val = 0;
+		regmap_field_write(priv->rf[LOW_INT_MASK_0 + hw_id], reg_val);
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int __maybe_unused tsens_set_trip_temp(struct thermal_zone_device *tz, int trip, int temperature)
+{
+	struct tsens_sensor *s = tz->devdata;
+	struct tsens_priv *priv = s->priv;
+	enum tsens_trip_type trip_type = trip;
+	u32 th_cri, th_hi, th_lo;
+	u32 hw_id = s->hw_id;
+	int temp_hw; /* temp value in hardware unit */
+
+	if (tsens_version(priv) < VER_0_1) {
+		/* Pre v0.1 IP had a single register for each type of interrupt
+		 * and thresholds
+		 */
+		hw_id = 0;
+	}
+
+	if ((temperature < MIN_TEMP) || (temperature > MAX_TEMP))
+		return -EINVAL;
+
+	if ((hw_id < 0) || (hw_id > (MAX_SENSOR - 1)))
+		return -EINVAL;
+
+	regmap_field_read(priv->rf[UP_THRESH_0 + hw_id], &th_hi);
+	regmap_field_read(priv->rf[LOW_THRESH_0 + hw_id], &th_lo);
+	regmap_field_read(priv->rf[CRIT_THRESH_0 + hw_id], &th_cri);
+
+	temp_hw = tsens_mC_to_hw(s, temperature);
+
+	switch(trip_type) {
+	case TSENS_TRIP_STAGE3:
+		if (temp_hw < th_hi)
+			return -EINVAL;
+		regmap_field_write(priv->rf[CRIT_THRESH_0 + hw_id], temp_hw);
+		break;
+	case TSENS_TRIP_STAGE2:
+		if ((temp_hw <= th_lo) || (temp_hw >= th_cri))
+			return -EINVAL;
+		regmap_field_write(priv->rf[UP_THRESH_0 + hw_id], temp_hw);
+		break;
+	case TSENS_TRIP_STAGE1:
+		if (temp_hw >= th_hi)
+			return -EINVAL;
+		regmap_field_write(priv->rf[LOW_THRESH_0 + hw_id], temp_hw);
+		break;
+	default:
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int __maybe_unused tsens_set_trips(struct thermal_zone_device *tz, int low, int high)
 {
 	struct tsens_sensor *s = thermal_zone_device_priv(tz);
 	struct tsens_priv *priv = s->priv;
@@ -986,6 +1101,7 @@ int __init init_common(struct tsens_priv *priv)
 		ret = PTR_ERR(priv->rf[SENSOR_EN]);
 		goto err_put_device;
 	}
+
 	priv->rf[INT_EN] = devm_regmap_field_alloc(dev, priv->tm_map,
 						   priv->fields[INT_EN]);
 	if (IS_ERR(priv->rf[INT_EN])) {
@@ -1149,7 +1265,12 @@ MODULE_DEVICE_TABLE(of, tsens_table);
 
 static const struct thermal_zone_device_ops tsens_of_ops = {
 	.get_temp = tsens_get_temp,
+#ifdef CONFIG_CPU_THERMAL
 	.set_trips = tsens_set_trips,
+#else
+	.set_trip_temp = tsens_set_trip_temp,
+	.set_trip_activate = tsens_set_trip_activate,
+#endif
 };
 
 static int tsens_register_irq(struct tsens_priv *priv, char *irqname,

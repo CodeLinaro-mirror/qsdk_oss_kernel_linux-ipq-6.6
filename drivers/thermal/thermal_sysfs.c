@@ -103,16 +103,50 @@ trip_point_type_show(struct device *dev, struct device_attribute *attr,
 
 	switch (trip.type) {
 	case THERMAL_TRIP_CRITICAL:
-		return sprintf(buf, "critical\n");
+		return scnprintf(buf, PAGE_SIZE, "critical\n");
 	case THERMAL_TRIP_HOT:
-		return sprintf(buf, "hot\n");
+		return scnprintf(buf, PAGE_SIZE, "hot\n");
 	case THERMAL_TRIP_PASSIVE:
-		return sprintf(buf, "passive\n");
+		return scnprintf(buf, PAGE_SIZE, "passive\n");
 	case THERMAL_TRIP_ACTIVE:
-		return sprintf(buf, "active\n");
+		return scnprintf(buf, PAGE_SIZE, "active\n");
+	case THERMAL_TRIP_CONFIGURABLE_HI:
+		return scnprintf(buf, PAGE_SIZE, "configurable_hi\n");
+	case THERMAL_TRIP_CONFIGURABLE_LOW:
+		return scnprintf(buf, PAGE_SIZE, "configurable_low\n");
 	default:
-		return sprintf(buf, "unknown\n");
+		return scnprintf(buf, PAGE_SIZE, "unknown\n");
 	}
+}
+
+static ssize_t
+trip_point_type_activate(struct device *dev, struct device_attribute *attr,
+						const char *buf, size_t count)
+{
+	struct thermal_zone_device *tz = to_thermal_zone(dev);
+	int trip, ret;
+	char *enabled = "enabled";
+	char *disabled = "disabled";
+
+	if (!tz->ops->set_trip_activate)
+		return -EPERM;
+
+	if (!sscanf(attr->attr.name, "trip_point_%d_type", &trip))
+		return -EINVAL;
+
+	if (!strncmp(buf, enabled, strlen(enabled)))
+		ret = tz->ops->set_trip_activate(tz, trip,
+				THERMAL_TRIP_ACTIVATION_ENABLED);
+	else if (!strncmp(buf, disabled, strlen(disabled)))
+		ret = tz->ops->set_trip_activate(tz, trip,
+				THERMAL_TRIP_ACTIVATION_DISABLED);
+	else
+		ret = -EINVAL;
+
+	if (ret)
+		return ret;
+
+	return count;
 }
 
 static ssize_t
@@ -479,6 +513,11 @@ static int create_trip_attrs(struct thermal_zone_device *tz, int mask)
 						tz->trip_type_attrs[indx].name;
 		tz->trip_type_attrs[indx].attr.attr.mode = S_IRUGO;
 		tz->trip_type_attrs[indx].attr.show = trip_point_type_show;
+		if (IS_ENABLED(CONFIG_THERMAL_WRITABLE_TRIPS)) {
+			tz->trip_type_attrs[indx].attr.store
+							= trip_point_type_activate;
+			tz->trip_type_attrs[indx].attr.attr.mode |= S_IWUSR;
+		}
 		attrs[indx] = &tz->trip_type_attrs[indx].attr.attr;
 
 		/* create trip temp attribute */
