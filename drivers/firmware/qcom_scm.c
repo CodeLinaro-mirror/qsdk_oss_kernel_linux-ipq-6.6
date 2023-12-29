@@ -18,6 +18,7 @@
 #include <linux/of_address.h>
 #include <linux/of_irq.h>
 #include <linux/of_platform.h>
+#include <linux/spinlock.h>
 #include <linux/clk.h>
 #include <linux/reset-controller.h>
 #include <linux/arm-smccc.h>
@@ -43,6 +44,8 @@ struct qcom_scm {
 	u64 dload_mode_addr;
 	u32 hvc_log_cmd_id;
 	u32 smmu_state_cmd_id;
+	/* Atomic context only */
+	spinlock_t lock;
 };
 
 struct qcom_scm_current_perm_info {
@@ -458,6 +461,28 @@ int qcom_scm_set_remote_state(u32 state, u32 id)
 	return ret ? : res.result[0];
 }
 EXPORT_SYMBOL_GPL(qcom_scm_set_remote_state);
+
+int qcom_scm_io_rmw(phys_addr_t addr, unsigned int mask, unsigned int val)
+{
+	unsigned int old, new;
+	int ret;
+
+	if (!__scm)
+		return -EINVAL;
+
+	spin_lock(&__scm->lock);
+	ret = qcom_scm_io_readl(addr, &old);
+	if (ret)
+		goto unlock;
+
+	new = (old & ~mask) | (val & mask);
+
+	ret = qcom_scm_io_writel(addr, new);
+unlock:
+	spin_unlock(&__scm->lock);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(qcom_scm_io_rmw);
 
 static int __qcom_scm_set_dload_mode(struct device *dev, bool enable)
 {
@@ -2590,6 +2615,7 @@ static int qcom_scm_probe(struct platform_device *pdev)
 		scm->smmu_state_cmd_id = QTI_SCM_SMMUSTATE_CMD;
 
 	mutex_init(&scm->scm_bw_lock);
+	spin_lock_init(&scm->lock);
 
 	scm->path = devm_of_icc_get(&pdev->dev, NULL);
 	if (IS_ERR(scm->path))
