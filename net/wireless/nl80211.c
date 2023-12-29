@@ -16277,6 +16277,7 @@ static int nl80211_add_link(struct sk_buff *skb, struct genl_info *info)
 
 	switch (wdev->iftype) {
 	case NL80211_IFTYPE_AP:
+	case NL80211_IFTYPE_STATION:
 		break;
 	default:
 		return -EINVAL;
