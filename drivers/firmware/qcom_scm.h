@@ -174,6 +174,15 @@ extern int __qti_scm_tz_hvc_log(struct device *dev, u32 svc_id, u32 cmd_id,
 #define QCOM_SCM_QCE_ENC_DEC_CMD	0xB
 #define QCOM_SCM_QCE_UNLOCK_CMD		0x4
 #define QCOM_SCM_SECCRYPT_CLRKEY_CMD	0xC
+
+/*
+ * QCOM_SCM_QWES_SVC - commands related to Qwes feature
+ */
+#define QCOM_SCM_QWES_SVC_ID				0x1E
+#define QCOM_SCM_QWES_INIT_ATTEST			0x01
+#define QCOM_SCM_QWES_ATTEST_REPORT			0x02
+#define QCOM_SCM_QWES_DEVICE_PROVISION			0x03
+
 extern int __qti_sec_crypt(struct device *dev, void *confBuf, int size);
 extern int __qti_seccrypt_clearkey(struct device *dev);
 extern int __qti_set_qcekey_sec(struct device *dev, void *confBuf, int size);
@@ -213,6 +222,15 @@ extern int __qti_scm_aes(struct device *dev, uint32_t req_addr,
 extern int __qti_scm_aes_clear_key_handle(struct device *dev, uint32_t key_handle, u32 cmd_id);
 extern int __qcom_remove_xpu_scm_call_available(struct device *dev, u32 svc_id,
 						u32 cmd_id);
+extern int __qti_scm_get_device_attestation_ephimeral_key(struct device *dev,
+			void *key_buf, u32 key_buf_len, u32 *key_len);
+extern int __qti_scm_get_device_attestation_response(struct device *dev,
+			void *req_buf, u32 req_buf_len,	void *extclaim_buf,
+			u32 extclaim_buf_len, void *resp_buf,
+			u32 resp_buf_len, u32 *attest_resp_len);
+extern int __qti_scm_get_device_provision_response(struct device *dev,
+			void *provreq_buf, u32 provreq_buf_len, void *provresp_buf,
+			u32 provresp_buf_len, u32 *prov_resp_size);
 
 /* common error codes */
 #define QCOM_SCM_V2_EBUSY	-12
