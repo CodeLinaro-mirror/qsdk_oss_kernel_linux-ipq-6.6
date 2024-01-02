@@ -833,4 +833,12 @@ void mhi_dump_errdbg_reg(struct mhi_controller *mhi_cntrl);
  * @mhi_cntrl: MHI controller
  */
 void mhi_debug_reg_dump(struct mhi_controller *mhi_cntrl);
+
+/**
+ * mhi_scan_rddm_cookie - Look for supplied cookie value in the BHI debug
+ * registers set by device to indicate rddm readiness for debugging purposes.
+ * @mhi_cntrl: MHI controller
+ * @cookie: cookie/pattern value to match
+ */
+bool mhi_scan_rddm_cookie(struct mhi_controller *mhi_cntrl, u32 cookie);
 #endif /* _MHI_H_ */
