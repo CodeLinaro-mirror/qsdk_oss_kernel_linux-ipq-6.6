@@ -790,12 +790,13 @@ struct rpm_regulator_data {
 	u32 id;
 	const struct regulator_desc *desc;
 	const char *supply;
+	int boot_uV; //To store the bootup voltage set by bootloaders
 };
 
 static const struct rpm_regulator_data rpm_mp5496_regulators[] = {
-	{ "s1", QCOM_SMD_RPM_SMPA, 1, &mp5496_smps, "s1" },
-	{ "s2", QCOM_SMD_RPM_SMPA, 2, &mp5496_smps, "s2" },
-	{ "l2", QCOM_SMD_RPM_LDOA, 2, &mp5496_ldoa2, "l2" },
+	{ "s1", QCOM_SMD_RPM_SMPA, 1, &mp5496_smps, "s1", 875000 },
+	{ "s2", QCOM_SMD_RPM_SMPA, 2, &mp5496_smps, "s2", 875000 },
+	{ "l2", QCOM_SMD_RPM_LDOA, 2, &mp5496_ldoa2, "l2", 2950000 },
 	{}
 };
 
@@ -1377,6 +1378,8 @@ static int rpm_regulator_init_vreg(struct qcom_rpm_reg *vreg, struct device *dev
 	vreg->rpm	= rpm;
 	vreg->type	= rpm_data->type;
 	vreg->id	= rpm_data->id;
+	if (rpm_data->boot_uV)
+		vreg->uV = rpm_data->boot_uV;
 
 	memcpy(&vreg->desc, rpm_data->desc, sizeof(vreg->desc));
 	vreg->desc.name = rpm_data->name;
