@@ -40,6 +40,7 @@ obj-$(CONFIG_SND_SOC_SDM845) += snd-soc-sdm845.o
 obj-$(CONFIG_SND_SOC_SM8250) += snd-soc-sm8250.o
 obj-$(CONFIG_SND_SOC_QCOM_COMMON) += snd-soc-qcom-common.o
 obj-$(CONFIG_SND_SOC_QCOM_SDW) += snd-soc-qcom-sdw.o
+obj-$(CONFIG_SND_SOC_IPQ) += ipq/
 
 #DSP lib
 obj-$(CONFIG_SND_SOC_QDSP6) += qdsp6/
