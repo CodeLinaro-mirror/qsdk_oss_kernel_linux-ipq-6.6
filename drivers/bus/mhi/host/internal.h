@@ -15,12 +15,19 @@ extern struct bus_type mhi_bus_type;
 #define MHI_SOC_RESET_REQ_OFFSET			0xb0
 #define MHI_SOC_RESET_REQ				BIT(0)
 
-#define QCN9224_DEVICE_ID				(0x1109)
+#define QCN9224_FAMILY_NUM				(0x4)
+#define QCN9224_DEVICE_NUM				(0x1A)
 #define SOC_HW_VERSION_OFFS				0x224
 #define SOC_HW_VERSION_FAM_NUM_BMSK			GENMASK(31, 28)
 #define SOC_HW_VERSION_DEV_NUM_BMSK			GENMASK(27, 16)
 #define SOC_HW_VERSION_MAJOR_VER_BMSK			GENMASK(15, 8)
 #define SOC_HW_VERSION_MINOR_VER_BMSK			GENMASK(7, 0)
+#define QCN9224_SOC_HW_VERSION_MAJOR_VER_BMSK		GENMASK(11, 8)
+#define QCN9224_SOC_HW_VERSION_MINOR_VER_BMSK		GENMASK(7, 4)
+
+#define IS_QCN9224_DEV(mhi_cntrl) \
+	((mhi_cntrl->family_number == QCN9224_FAMILY_NUM && \
+	  mhi_cntrl->device_number == QCN9224_DEVICE_NUM) ? true : false)
 
 struct mhi_ctxt {
 	struct mhi_event_ctxt *er_ctxt;
