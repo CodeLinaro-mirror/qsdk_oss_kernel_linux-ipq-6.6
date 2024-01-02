@@ -4062,4 +4062,8 @@ static inline void accept_memory(phys_addr_t start, phys_addr_t end)
 
 #endif
 
+#ifdef CONFIG_DEBUG_MEM_USAGE
+extern int debug_mem_usage_enabled;
+#endif
+
 #endif /* _LINUX_MM_H */

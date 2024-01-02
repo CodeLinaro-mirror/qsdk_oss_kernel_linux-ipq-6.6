@@ -16,6 +16,21 @@
 
 struct device;
 
+struct dma_pool {		/* the pool */
+	struct list_head page_list;
+	spinlock_t lock;
+	struct dma_block *next_block;
+	size_t nr_blocks;
+	size_t nr_active;
+	size_t nr_pages;
+	struct device *dev;
+	unsigned int size;
+	unsigned int allocation;
+	unsigned int boundary;
+	char name[32];
+	struct list_head pools;
+};
+
 #ifdef CONFIG_HAS_DMA
 
 struct dma_pool *dma_pool_create(const char *name, struct device *dev, 
