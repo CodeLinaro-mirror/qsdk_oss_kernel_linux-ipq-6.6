@@ -443,4 +443,5 @@ void mhi_unmap_single_no_bb(struct mhi_controller *mhi_cntrl,
 void mhi_unmap_single_use_bb(struct mhi_controller *mhi_cntrl,
 			     struct mhi_buf_info *buf_info);
 
+void mhi_dump_errdbg_reg(struct mhi_controller *mhi_cntrl);
 #endif /* _MHI_INT_H */
