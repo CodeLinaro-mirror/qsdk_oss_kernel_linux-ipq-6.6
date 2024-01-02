@@ -67,5 +67,7 @@ bam_prep_ce(struct bam_cmd_element *bam_ce, u32 addr,
 	    enum bam_command_type cmd, u32 data)
 {
 	bam_prep_ce_le32(bam_ce, addr, cmd, cpu_to_le32(data));
+	/* For read operation, mask field is reserved */
+	bam_ce->mask = 0x0;
 }
 #endif
