@@ -459,7 +459,7 @@ irqreturn_t mhi_irq_handler(int irq_number, void *dev)
 
 	/* Only proceed if event ring has pending events */
 	if (ev_ring->rp == dev_rp)
-		return IRQ_HANDLED;
+		return IRQ_NONE;
 
 	/* For client managed event ring, notify pending data */
 	if (mhi_event->cl_manage) {
