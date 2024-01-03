@@ -122,6 +122,8 @@
 /* RATEADAPT_VAL = 256 / ((342M / 240M) - 1) */
 #define AGGR_NOC_PCIE_1LANE_RATEADAPT_VAL	0x200
 
+#define SYSTEM_NOC_PCIE_RATEADAPT_BYPASS	0x1
+
 /* PARF_MHI_CLOCK_RESET_CTRL register fields */
 #define AHB_CLK_EN				BIT(0)
 #define MSTR_AXI_CLK_EN				BIT(1)
@@ -261,6 +263,7 @@ struct qcom_pcie {
 	void __iomem *mhi;
 	resource_size_t parf_size;
 	void __iomem *aggr_noc;
+	void __iomem *system_noc;
 	union qcom_pcie_resources res;
 	struct phy *phy;
 	struct gpio_desc *reset;
@@ -270,6 +273,7 @@ struct qcom_pcie {
 	bool suspended;
 	uint32_t axi_wr_addr_halt;
 	uint32_t domain;
+	uint32_t num_lanes;
 };
 
 #define to_qcom_pcie(x)		dev_get_drvdata((x)->dev)
@@ -1167,6 +1171,11 @@ static int qcom_pcie_post_init(struct qcom_pcie *pcie)
 	if (pcie->aggr_noc != NULL && !IS_ERR(pcie->aggr_noc))
 		writel(AGGR_NOC_PCIE_1LANE_RATEADAPT_VAL, pcie->aggr_noc);
 
+	if (pcie->system_noc != NULL && !IS_ERR(pcie->system_noc)) {
+		if (pcie->num_lanes == 2)
+			writel(SYSTEM_NOC_PCIE_RATEADAPT_BYPASS, pcie->system_noc);
+	}
+
 	dw_pcie_dbi_ro_wr_en(pci);
 
 	writel(PCIE_CAP_SLOT_VAL, pci->dbi_base + offset + PCI_EXP_SLTCAP);
@@ -1628,6 +1637,7 @@ static int qcom_pcie_probe(struct platform_device *pdev)
 	struct resource *res;
 	struct dw_pcie *pci;
 	int ret;
+	uint32_t num_lanes = 0;
 
 	pcie_cfg = of_device_get_match_data(dev);
 	if (!pcie_cfg || !pcie_cfg->ops) {
@@ -1687,10 +1697,23 @@ static int qcom_pcie_probe(struct platform_device *pdev)
 		}
 	}
 
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "system_noc");
+	if (res != NULL) {
+		pcie->system_noc = devm_ioremap_resource(dev, res);
+		if (IS_ERR(pcie->system_noc)) {
+			ret = PTR_ERR(pcie->system_noc);
+			goto err_pm_runtime_put;
+		}
+	}
+
 	of_property_read_u32(pdev->dev.of_node, "axi-halt-val",
 				&pcie->axi_wr_addr_halt);
 
 	of_property_read_u32(pdev->dev.of_node, "linux,pci-domain",&pcie->domain);
+
+	of_property_read_u32(pdev->dev.of_node, "num-lanes",
+				&num_lanes);
+	pcie->num_lanes = num_lanes;
 
 	/* MHI region is optional */
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "mhi");
