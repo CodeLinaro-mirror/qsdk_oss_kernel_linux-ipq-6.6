@@ -241,7 +241,7 @@ static inline bool ____kasan_slab_free(struct kmem_cache *cache, void *object,
 bool __kasan_slab_free(struct kmem_cache *cache, void *object,
 				unsigned long ip, bool init)
 {
-	return ____kasan_slab_free(cache, object, ip, true, init);
+	return ____kasan_slab_free(cache, object, ip, false, init);
 }
 
 static inline bool ____kasan_kfree_large(void *ptr, unsigned long ip)
