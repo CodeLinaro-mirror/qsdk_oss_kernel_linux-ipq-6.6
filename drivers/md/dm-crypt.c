@@ -2432,7 +2432,7 @@ static int crypt_select_inline_crypt_mode(struct dm_target *ti, char *cipher,
 	}
 
 	if (ivmode == NULL || (strcmp(ivmode, "plain64") == 0)) {
-		cc->iv_size = 8;
+		cc->iv_size = 4;
 	} else {
 		ti->error = "Invalid IV mode for inline_crypt";
 		return -EINVAL;
