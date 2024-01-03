@@ -106,6 +106,7 @@ void bio_crypt_set_ctx(struct bio *bio, const struct blk_crypto_key *key,
 
 	bio->bi_crypt_context = bc;
 }
+EXPORT_SYMBOL_GPL(bio_crypt_set_ctx);
 
 void __bio_crypt_free_ctx(struct bio *bio)
 {
@@ -375,6 +376,7 @@ bool blk_crypto_config_supported(struct block_device *bdev,
 	return IS_ENABLED(CONFIG_BLK_INLINE_ENCRYPTION_FALLBACK) ||
 	       blk_crypto_config_supported_natively(bdev, cfg);
 }
+EXPORT_SYMBOL_GPL(blk_crypto_init_key);
 
 /**
  * blk_crypto_start_using_key() - Start using a blk_crypto_key on a device
@@ -398,6 +400,7 @@ int blk_crypto_start_using_key(struct block_device *bdev,
 		return 0;
 	return blk_crypto_fallback_start_using_mode(key->crypto_cfg.crypto_mode);
 }
+EXPORT_SYMBOL_GPL(blk_crypto_start_using_key);
 
 /**
  * blk_crypto_evict_key() - Evict a blk_crypto_key from a block_device

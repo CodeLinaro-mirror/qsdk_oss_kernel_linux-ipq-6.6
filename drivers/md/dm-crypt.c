@@ -40,6 +40,7 @@
 #include <keys/user-type.h>
 #include <keys/encrypted-type.h>
 #include <keys/trusted-type.h>
+#include <linux/blk-crypto.h>
 
 #include <linux/device-mapper.h>
 
@@ -137,7 +138,7 @@ struct iv_elephant_private {
 enum flags { DM_CRYPT_SUSPENDED, DM_CRYPT_KEY_VALID,
 	     DM_CRYPT_SAME_CPU, DM_CRYPT_NO_OFFLOAD,
 	     DM_CRYPT_NO_READ_WORKQUEUE, DM_CRYPT_NO_WRITE_WORKQUEUE,
-	     DM_CRYPT_WRITE_INLINE };
+	     DM_CRYPT_WRITE_INLINE, DM_CRYPT_INLINE_ENCRYPTION };
 
 enum cipher_flags {
 	CRYPT_MODE_INTEGRITY_AEAD,	/* Use authenticated mode for cipher */
@@ -223,6 +224,11 @@ struct crypt_config {
 	struct bio_set bs;
 	struct mutex bio_alloc_lock;
 
+#ifdef CONFIG_BLK_INLINE_ENCRYPTION
+	enum blk_crypto_mode_num crypto_mode;
+	enum blk_crypto_key_type key_type;
+	struct blk_crypto_key *blk_key;
+#endif
 	u8 *authenc_key; /* space for keys in authenc() format (if used) */
 	u8 key[];
 };
@@ -2413,10 +2419,102 @@ static void crypt_copy_authenckey(char *p, const void *key,
 	memcpy(p, key, enckeylen);
 }
 
+#ifdef CONFIG_BLK_INLINE_ENCRYPTION
+static int crypt_select_inline_crypt_mode(struct dm_target *ti, char *cipher,
+					  char *ivmode)
+{
+	struct crypt_config *cc = ti->private;
+
+	if (strcmp(cipher, "xts(aes)") == 0) {
+		cc->crypto_mode = BLK_ENCRYPTION_MODE_AES_256_XTS;
+		cc->key_type = BLK_CRYPTO_KEY_TYPE_STANDARD;
+	} else if (strcmp(cipher, "xts(paes)") == 0) {
+		cc->crypto_mode = BLK_ENCRYPTION_MODE_AES_256_XTS;
+		cc->key_type = BLK_CRYPTO_KEY_TYPE_HW_WRAPPED;
+	} else {
+		ti->error = "Invalid cipher for inline_crypt";
+		return -EINVAL;
+	}
+
+	if (ivmode == NULL || (strcmp(ivmode, "plain64") == 0)) {
+		cc->iv_size = 8;
+	} else {
+		ti->error = "Invalid IV mode for inline_crypt";
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
+static int crypt_prepare_inline_crypt_key(struct crypt_config *cc)
+{
+	int ret;
+
+	cc->blk_key = kzalloc(sizeof(*cc->blk_key), GFP_KERNEL);
+	if (!cc->blk_key)
+		return -ENOMEM;
+
+	ret = blk_crypto_init_key(cc->blk_key, cc->key, cc->key_size,
+				  cc->key_type, cc->crypto_mode, cc->iv_size,
+				  cc->sector_size);
+	if (ret) {
+		DMERR("Failed to init inline encryption key");
+		goto bad_key;
+	}
+
+	ret = blk_crypto_start_using_key(cc->blk_key,
+					 bdev_get_queue(cc->dev->bdev));
+	if (ret) {
+		DMERR("Failed to use inline encryption key");
+		goto bad_key;
+	}
+
+	return 0;
+bad_key:
+	kfree_sensitive(cc->blk_key);
+	cc->blk_key = NULL;
+	return ret;
+}
+
+static void crypt_destroy_inline_crypt_key(struct crypt_config *cc)
+{
+	if (cc->blk_key) {
+		blk_crypto_evict_key(bdev_get_queue(cc->dev->bdev),
+				     cc->blk_key);
+		kfree_sensitive(cc->blk_key);
+		cc->blk_key = NULL;
+	}
+}
+
+static void crypt_inline_encrypt_submit(struct dm_target *ti, struct bio *bio)
+{
+	struct crypt_config *cc = ti->private;
+	u64 dun[BLK_CRYPTO_DUN_ARRAY_SIZE];
+
+	bio_set_dev(bio, cc->dev->bdev);
+	if (bio_sectors(bio)) {
+		memset(dun, 0, BLK_CRYPTO_MAX_IV_SIZE);
+		bio->bi_iter.bi_sector = cc->start +
+			dm_target_offset(ti, bio->bi_iter.bi_sector);
+		dun[0] = le64_to_cpu(bio->bi_iter.bi_sector + cc->iv_offset);
+		bio_crypt_set_ctx(bio, cc->blk_key, dun, GFP_KERNEL);
+	}
+
+	submit_bio_noacct(bio);
+}
+#endif
+
 static int crypt_setkey(struct crypt_config *cc)
 {
 	unsigned int subkey_size;
 	int err = 0, i, r;
+
+#ifdef CONFIG_BLK_INLINE_ENCRYPTION
+	if (test_bit(DM_CRYPT_INLINE_ENCRYPTION, &cc->flags)) {
+		crypt_destroy_inline_crypt_key(cc);
+		return crypt_prepare_inline_crypt_key(cc);
+	}
+#endif
 
 	/* Ignore extra keys (which are used for IV etc) */
 	subkey_size = crypt_subkey_size(cc);
@@ -2678,6 +2776,15 @@ static int crypt_wipe_key(struct crypt_config *cc)
 
 	kfree_sensitive(cc->key_string);
 	cc->key_string = NULL;
+
+#ifdef CONFIG_BLK_INLINE_ENCRYPTION
+	if (test_bit(DM_CRYPT_INLINE_ENCRYPTION, &cc->flags)) {
+		crypt_destroy_inline_crypt_key(cc);
+		memset(&cc->key, 0, cc->key_size * sizeof(u8));
+		return 0;
+	}
+#endif
+
 	r = crypt_setkey(cc);
 	memset(&cc->key, 0, cc->key_size * sizeof(u8));
 
@@ -2742,6 +2849,10 @@ static void crypt_dtr(struct dm_target *ti)
 		destroy_workqueue(cc->io_queue);
 	if (cc->crypt_queue)
 		destroy_workqueue(cc->crypt_queue);
+
+#ifdef CONFIG_BLK_INLINE_ENCRYPTION
+	crypt_destroy_inline_crypt_key(cc);
+#endif
 
 	crypt_free_tfms(cc);
 
@@ -2918,6 +3029,11 @@ static int crypt_ctr_cipher_new(struct dm_target *ti, char *cipher_in, char *key
 	/* The rest is crypto API spec */
 	cipher_api = tmp;
 
+#ifdef CONFIG_BLK_INLINE_ENCRYPTION
+	if (test_bit(DM_CRYPT_INLINE_ENCRYPTION, &cc->flags))
+		return crypt_select_inline_crypt_mode(ti, cipher_api, *ivmode);
+#endif
+
 	/* Alloc AEAD, can be used only in new format. */
 	if (crypt_integrity_aead(cc)) {
 		ret = crypt_ctr_auth_cipher(cc, cipher_api);
@@ -3043,6 +3159,11 @@ static int crypt_ctr_cipher_old(struct dm_target *ti, char *cipher_in, char *key
 		goto bad_mem;
 	}
 
+#ifdef CONFIG_BLK_INLINE_ENCRYPTION
+	if (test_bit(DM_CRYPT_INLINE_ENCRYPTION, &cc->flags))
+		return crypt_select_inline_crypt_mode(ti, cipher_api, *ivmode);
+#endif
+
 	/* Allocate cipher */
 	ret = crypt_alloc_tfms(cc, cipher_api);
 	if (ret < 0) {
@@ -3078,9 +3199,11 @@ static int crypt_ctr_cipher(struct dm_target *ti, char *cipher_in, char *key)
 		return ret;
 
 	/* Initialize IV */
-	ret = crypt_ctr_ivmode(ti, ivmode);
-	if (ret < 0)
-		return ret;
+	if (!test_bit(DM_CRYPT_INLINE_ENCRYPTION, &cc->flags)) {
+		ret = crypt_ctr_ivmode(ti, ivmode);
+		if (ret < 0)
+			return ret;
+	}
 
 	/* Initialize and set key */
 	ret = crypt_set_key(cc, key);
@@ -3153,6 +3276,10 @@ static int crypt_ctr_optional(struct dm_target *ti, unsigned int argc, char **ar
 			set_bit(DM_CRYPT_NO_READ_WORKQUEUE, &cc->flags);
 		else if (!strcasecmp(opt_string, "no_write_workqueue"))
 			set_bit(DM_CRYPT_NO_WRITE_WORKQUEUE, &cc->flags);
+#ifdef CONFIG_BLK_INLINE_ENCRYPTION
+		else if (!strcasecmp(opt_string, "inline_crypt"))
+			set_bit(DM_CRYPT_INLINE_ENCRYPTION, &cc->flags);
+#endif
 		else if (sscanf(opt_string, "integrity:%u:", &val) == 1) {
 			if (val == 0 || val > MAX_TAG_SIZE) {
 				ti->error = "Invalid integrity arguments";
@@ -3260,9 +3387,35 @@ static int crypt_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 			goto bad;
 	}
 
+	ret = -EINVAL;
+	if ((sscanf(argv[2], "%llu%c", &tmpll, &dummy) != 1) ||
+	    (tmpll & ((cc->sector_size >> SECTOR_SHIFT) - 1))) {
+		ti->error = "Invalid iv_offset sector";
+		goto bad;
+	}
+	cc->iv_offset = tmpll;
+
+	ret = dm_get_device(ti, argv[3], dm_table_get_mode(ti->table),
+			    &cc->dev);
+	if (ret) {
+		ti->error = "Device lookup failed";
+		goto bad;
+	}
+
+	ret = -EINVAL;
+	if (sscanf(argv[4], "%llu%c", &tmpll, &dummy) != 1 ||
+	    tmpll != (sector_t)tmpll) {
+		ti->error = "Invalid device sector";
+		goto bad;
+	}
+	cc->start = tmpll;
+
 	ret = crypt_ctr_cipher(ti, argv[0], argv[1]);
 	if (ret < 0)
 		goto bad;
+
+	if (test_bit(DM_CRYPT_INLINE_ENCRYPTION, &cc->flags))
+		return 0;
 
 	if (crypt_integrity_aead(cc)) {
 		cc->dmreq_start = sizeof(struct aead_request);
@@ -3318,27 +3471,6 @@ static int crypt_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 	}
 
 	mutex_init(&cc->bio_alloc_lock);
-
-	ret = -EINVAL;
-	if ((sscanf(argv[2], "%llu%c", &tmpll, &dummy) != 1) ||
-	    (tmpll & ((cc->sector_size >> SECTOR_SHIFT) - 1))) {
-		ti->error = "Invalid iv_offset sector";
-		goto bad;
-	}
-	cc->iv_offset = tmpll;
-
-	ret = dm_get_device(ti, argv[3], dm_table_get_mode(ti->table), &cc->dev);
-	if (ret) {
-		ti->error = "Device lookup failed";
-		goto bad;
-	}
-
-	ret = -EINVAL;
-	if (sscanf(argv[4], "%llu%c", &tmpll, &dummy) != 1 || tmpll != (sector_t)tmpll) {
-		ti->error = "Invalid device sector";
-		goto bad;
-	}
-	cc->start = tmpll;
 
 	if (bdev_is_zoned(cc->dev->bdev)) {
 		/*
@@ -3462,6 +3594,13 @@ static int crypt_map(struct dm_target *ti, struct bio *bio)
 	if (unlikely(bio->bi_iter.bi_size & (cc->sector_size - 1)))
 		return DM_MAPIO_KILL;
 
+#ifdef CONFIG_BLK_INLINE_ENCRYPTION
+	if (test_bit(DM_CRYPT_INLINE_ENCRYPTION, &cc->flags)) {
+		crypt_inline_encrypt_submit(ti, bio);
+		return DM_MAPIO_SUBMITTED;
+	}
+#endif
+
 	io = dm_per_bio_data(bio, cc->per_bio_data_size);
 	crypt_io_init(io, cc, bio, dm_target_offset(ti, bio->bi_iter.bi_sector));
 
@@ -3535,6 +3674,10 @@ static void crypt_status(struct dm_target *ti, status_type_t type,
 		num_feature_args += test_bit(DM_CRYPT_NO_OFFLOAD, &cc->flags);
 		num_feature_args += test_bit(DM_CRYPT_NO_READ_WORKQUEUE, &cc->flags);
 		num_feature_args += test_bit(DM_CRYPT_NO_WRITE_WORKQUEUE, &cc->flags);
+#ifdef CONFIG_BLK_INLINE_ENCRYPTION
+		num_feature_args +=
+			test_bit(DM_CRYPT_INLINE_ENCRYPTION, &cc->flags);
+#endif
 		num_feature_args += cc->sector_size != (1 << SECTOR_SHIFT);
 		num_feature_args += test_bit(CRYPT_IV_LARGE_SECTORS, &cc->cipher_flags);
 		if (cc->on_disk_tag_size)
@@ -3551,6 +3694,10 @@ static void crypt_status(struct dm_target *ti, status_type_t type,
 				DMEMIT(" no_read_workqueue");
 			if (test_bit(DM_CRYPT_NO_WRITE_WORKQUEUE, &cc->flags))
 				DMEMIT(" no_write_workqueue");
+#ifdef CONFIG_BLK_INLINE_ENCRYPTION
+			if (test_bit(DM_CRYPT_INLINE_ENCRYPTION, &cc->flags))
+				DMEMIT(" inline_crypt");
+#endif
 			if (cc->on_disk_tag_size)
 				DMEMIT(" integrity:%u:%s", cc->on_disk_tag_size, cc->cipher_auth);
 			if (cc->sector_size != (1 << SECTOR_SHIFT))
@@ -3570,6 +3717,11 @@ static void crypt_status(struct dm_target *ti, status_type_t type,
 		       'y' : 'n');
 		DMEMIT(",no_write_workqueue=%c", test_bit(DM_CRYPT_NO_WRITE_WORKQUEUE, &cc->flags) ?
 		       'y' : 'n');
+#ifdef CONFIG_BLK_INLINE_ENCRYPTION
+		DMEMIT(",inline_crypt=%c",
+		       test_bit(DM_CRYPT_INLINE_ENCRYPTION, &cc->flags) ?
+		       'y' : 'n');
+#endif
 		DMEMIT(",iv_large_sectors=%c", test_bit(CRYPT_IV_LARGE_SECTORS, &cc->cipher_flags) ?
 		       'y' : 'n');
 
