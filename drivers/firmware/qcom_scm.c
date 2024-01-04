@@ -2868,6 +2868,30 @@ int __qti_scm_aes_clear_key_handle(struct device *dev, uint32_t key_handle, u32 
 	return ret ? : res.result[0];
 }
 
+int qcom_scm_sdi_disable(struct device *dev)
+{
+	int ret;
+	struct qcom_scm_res res;
+	ret = qcom_scm_clk_enable();
+	if (ret)
+		return ret;
+
+	struct qcom_scm_desc desc = {
+		.svc = QCOM_SCM_SVC_BOOT,
+		.cmd = SCM_CMD_TZ_CONFIG_HW_FOR_RAM_DUMP_ID,
+		.args[0] = 1ull, /* Disable wdog debug */
+		.args[1] = 0ull, /* SDI Enable */
+		.arginfo = QCOM_SCM_ARGS(2, QCOM_SCM_VAL, QCOM_SCM_VAL),
+		.owner = ARM_SMCCC_OWNER_SIP,
+	};
+
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+
+	qcom_scm_clk_disable();
+	return ret ? : res.result[0];
+}
+EXPORT_SYMBOL_GPL(qcom_scm_sdi_disable);
+
 static int qcom_scm_probe(struct platform_device *pdev)
 {
 	struct qcom_scm *scm;
@@ -2950,6 +2974,7 @@ static int qcom_scm_probe(struct platform_device *pdev)
 		qcom_scm_set_cpu_regsave();
 	}
 	else {
+		qcom_scm_sdi_disable(__scm->dev);
 		qcom_scm_set_abnormal_magic(true);
 	}
 

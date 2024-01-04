@@ -98,6 +98,8 @@ extern int __qti_scm_tz_hvc_log(struct device *dev, u32 svc_id, u32 cmd_id,
 #define QCOM_SCM_GET_TZ_LOG_ENCRYPTED	0xc
 #define QCOM_SCM_ABNORMAL_MAGIC		0x40
 
+#define SCM_CMD_TZ_CONFIG_HW_FOR_RAM_DUMP_ID	0x9
+
 #define QCOM_SCM_SVC_PIL		0x02
 #define QCOM_SCM_PIL_PAS_INIT_IMAGE	0x01
 #define QCOM_SCM_PAS_INIT_IMAGE_V2_CMD  0x1a
