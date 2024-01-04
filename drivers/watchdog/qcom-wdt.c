@@ -10,6 +10,7 @@
 #include <linux/module.h>
 #include <linux/of.h>
 #include <linux/platform_device.h>
+#include <linux/sched/clock.h>
 #include <linux/watchdog.h>
 
 enum wdt_reg {
@@ -64,8 +65,15 @@ struct qcom_wdt *to_qcom_wdt(struct watchdog_device *wdd)
 static irqreturn_t qcom_wdt_isr(int irq, void *arg)
 {
 	struct watchdog_device *wdd = arg;
+	unsigned long nanosec_rem;
+	unsigned long long t = sched_clock();
 
 	watchdog_notify_pretimeout(wdd);
+
+	nanosec_rem = do_div(t, 1000000000);
+	pr_info("Watchdog bark! Now = %lu.%06lu\n", (unsigned long) t,
+							nanosec_rem / 1000);
+	pr_info("Waiting for Reboot\n");
 
 	return IRQ_HANDLED;
 }
