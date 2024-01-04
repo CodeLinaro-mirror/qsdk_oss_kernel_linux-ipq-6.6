@@ -301,7 +301,7 @@ TRACE_EVENT(foo_bar,
 		__string(	str,	string			)
 		__bitmask(	cpus,	num_possible_cpus()	)
 		__cpumask(	cpum				)
-		__vstring(	vstr,	fmt,	va		)
+		__dynamic_array(char,   vstr,	512		)
 	),
 
 	TP_fast_assign(
