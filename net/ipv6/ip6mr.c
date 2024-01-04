@@ -1754,7 +1754,9 @@ static int ip6mr_mfc_add(struct net *net, struct mr_table *mrt,
 
 static void mroute_clean_tables(struct mr_table *mrt, int flags)
 {
+	struct mfc6_cache *cache;
 	struct mr_mfc *c, *tmp;
+	struct in6_addr mc_origin, mc_group;
 	LIST_HEAD(list);
 	int i;
 
@@ -1776,13 +1778,18 @@ static void mroute_clean_tables(struct mr_table *mrt, int flags)
 			if (((c->mfc_flags & MFC_STATIC) && !(flags & MRT6_FLUSH_MFC_STATIC)) ||
 			    (!(c->mfc_flags & MFC_STATIC) && !(flags & MRT6_FLUSH_MFC)))
 				continue;
+			cache = (struct mfc6_cache *)c;
+			memcpy(&mc_origin, &cache->mf6c_origin, sizeof(struct in6_addr));
+			memcpy(&mc_group, &cache->mf6c_mcastgrp, sizeof(struct in6_addr));
 			rhltable_remove(&mrt->mfc_hash, &c->mnode, ip6mr_rht_params);
 			list_del_rcu(&c->list);
 			call_ip6mr_mfc_entry_notifiers(read_pnet(&mrt->net),
 						       FIB_EVENT_ENTRY_DEL,
-						       (struct mfc6_cache *)c, mrt->id);
-			mr6_netlink_event(mrt, (struct mfc6_cache *)c, RTM_DELROUTE);
+						       cache, mrt->id);
+			mr6_netlink_event(mrt, cache, RTM_DELROUTE);
 			mr_cache_put(c);
+			/* Inform offload modules of the delete event */
+			ip6mr_sync_entry_delete(&mc_origin, &mc_group);
 		}
 	}
 
