@@ -19087,6 +19087,10 @@ static void nl80211_frame_tx_status(struct wireless_dev *wdev,
 			       status->ack_tstamp, NL80211_ATTR_PAD)))
 		goto nla_put_failure;
 
+	if ((status->link_id > 0) &&
+	    nla_put_u8(msg, NL80211_ATTR_MLO_LINK_ID, status->link_id))
+		goto nla_put_failure;
+
 	genlmsg_end(msg, hdr);
 
 	genlmsg_multicast_netns(&nl80211_fam, wiphy_net(&rdev->wiphy), msg, 0,
