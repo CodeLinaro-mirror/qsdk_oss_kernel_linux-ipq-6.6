@@ -8263,6 +8263,7 @@ static inline bool cfg80211_rx_mgmt(struct wireless_dev *wdev, int freq,
  * @buf: Management frame (header + body)
  * @len: length of the frame data
  * @ack: Whether frame was acknowledged
+ * @link_id: mlo link id
  */
 struct cfg80211_tx_status {
 	u64 cookie;
@@ -8271,6 +8272,7 @@ struct cfg80211_tx_status {
 	const u8 *buf;
 	size_t len;
 	bool ack;
+	int link_id;
 };
 
 /**
@@ -8301,13 +8303,15 @@ void cfg80211_mgmt_tx_status_ext(struct wireless_dev *wdev,
  */
 static inline void cfg80211_mgmt_tx_status(struct wireless_dev *wdev,
 					   u64 cookie, const u8 *buf,
-					   size_t len, bool ack, gfp_t gfp)
+					   size_t len, bool ack, int link_id,
+					   gfp_t gfp)
 {
 	struct cfg80211_tx_status status = {
 		.cookie = cookie,
 		.buf = buf,
 		.len = len,
-		.ack = ack
+		.ack = ack,
+		.link_id = link_id
 	};
 
 	cfg80211_mgmt_tx_status_ext(wdev, &status, gfp);
