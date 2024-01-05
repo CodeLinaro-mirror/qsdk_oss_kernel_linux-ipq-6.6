@@ -477,7 +477,8 @@ static struct latched_seq clear_seq = {
 #define LOG_BUF_LEN_MAX (u32)(1 << 31)
 static char __log_buf[__LOG_BUF_LEN] __aligned(LOG_ALIGN);
 static char *log_buf = __log_buf;
-static u32 log_buf_len = __LOG_BUF_LEN;
+u32 log_buf_len = __LOG_BUF_LEN;
+EXPORT_SYMBOL(log_buf_len);
 
 /*
  * Define the average message size. This only affects the number of
@@ -2338,6 +2339,14 @@ EXPORT_SYMBOL(_printk);
 
 static bool pr_flush(int timeout_ms, bool reset_on_progress);
 static bool __pr_flush(struct console *con, int timeout_ms, bool reset_on_progress);
+
+#ifdef CONFIG_QCA_MINIDUMP
+void minidump_get_log_buf_info(uint64_t *plog_buf, uint64_t *plog_buf_len)
+{
+	*plog_buf = (uint64_t)(uintptr_t)log_buf;
+	*plog_buf_len = (uint64_t)__pa(&log_buf_len);
+}
+#endif /* CONFIG_QCA_MINIDUMP */
 
 #else /* CONFIG_PRINTK */
 

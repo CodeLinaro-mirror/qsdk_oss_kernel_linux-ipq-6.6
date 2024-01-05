@@ -486,3 +486,11 @@ void free_initrd_mem(unsigned long start, unsigned long end)
 	free_reserved_area((void *)start, (void *)end, -1, "initrd");
 }
 #endif
+
+#ifdef CONFIG_QCA_MINIDUMP
+void minidump_get_pgd_info(uint64_t *pt_start, uint64_t *pt_len)
+{
+    *pt_start = (uintptr_t)swapper_pg_dir;
+    *pt_len = SZ_16K;
+}
+#endif /* CONFIG_QCA_MINIDUMP */
