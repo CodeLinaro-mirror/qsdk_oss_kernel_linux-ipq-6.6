@@ -339,6 +339,12 @@ config IPQ_REG_UPDATE
 	help
 	 Generic driver to configure required registers
 
+config QCOM_SOC_NETSTANDBY
+	bool "Qualcomm Technologies, Inc. SoC network standby driver"
+	depends on ARCH_QCOM
+	help
+	  SoC network standby driver for ErP support
+
 config QTI_TZ_LOG
 	tristate "Trust Zone (TZ) Log Driver"
 	depends on DEBUG_FS
