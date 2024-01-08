@@ -21,13 +21,16 @@
 #include "internal.h"
 
 #define PCIE_PCIE_LOCAL_REG_PCIE_LOCAL_RSV1     0x3168
+#define PCIE_SOC_PCIE_REG_PCIE_SCRATCH_0	0x4040
 #define PCIE_REMAP_BAR_CTRL_OFFSET              0x310C
+#define PCIE_SCRATCH_0_WINDOW_VAL		0x4000003C
 #define MAX_UNWINDOWED_ADDRESS                  0x80000
 #define WINDOW_ENABLE_BIT                       0x40000000
 #define WINDOW_SHIFT                            19
 #define WINDOW_VALUE_MASK                       0x3F
 #define WINDOW_START                            MAX_UNWINDOWED_ADDRESS
 #define WINDOW_RANGE_MASK                       0x7FFFF
+#define PCIE_REG_FOR_BOOT_ARGS			PCIE_SOC_PCIE_REG_PCIE_SCRATCH_0
 
 #define NONCE_SIZE                              34
 
@@ -642,6 +645,88 @@ static void mhi_download_fw_license(struct mhi_controller *mhi_cntrl)
 	return;
 }
 
+static int mhi_update_scratch_reg(struct mhi_controller *mhi_cntrl, u32 val)
+{
+	struct device *dev = &mhi_cntrl->mhi_dev->dev;
+	u32 rd_val;
+
+	/* Program Window register to update boot args pointer */
+	mhi_read_reg(mhi_cntrl, mhi_cntrl->regs, PCIE_REMAP_BAR_CTRL_OFFSET,
+			&rd_val);
+
+	rd_val = rd_val & ~(0x3f);
+
+	mhi_write_reg(mhi_cntrl, mhi_cntrl->regs, PCIE_REMAP_BAR_CTRL_OFFSET,
+				PCIE_SCRATCH_0_WINDOW_VAL | rd_val);
+
+	mhi_write_reg(mhi_cntrl, mhi_cntrl->regs + MAX_UNWINDOWED_ADDRESS,
+			PCIE_REG_FOR_BOOT_ARGS, val);
+
+	mhi_read_reg(mhi_cntrl, mhi_cntrl->regs + MAX_UNWINDOWED_ADDRESS,
+			PCIE_REG_FOR_BOOT_ARGS,	&rd_val);
+
+	if (rd_val != val) {
+		dev_err(dev, "Write to PCIE_REG_FOR_BOOT_ARGS register failed\n");
+		return -EFAULT;
+	}
+
+	return 0;
+}
+
+static int mhi_handle_boot_args(struct mhi_controller *mhi_cntrl)
+{
+	struct device *dev = &mhi_cntrl->mhi_dev->dev;
+	int i, cnt, ret;
+	u32 val;
+
+	if (!mhi_cntrl->cntrl_dev->of_node)
+		return -EINVAL;
+
+	cnt = of_property_count_u32_elems(mhi_cntrl->cntrl_dev->of_node,
+					  "boot-args");
+	if (cnt < 0) {
+		dev_err(dev, "boot-args not defined in DTS. ret:%d\n", cnt);
+		mhi_update_scratch_reg(mhi_cntrl, 0);
+		return 0;
+	}
+
+	mhi_cntrl->bootargs_buf = mhi_fw_alloc_coherent(mhi_cntrl, PAGE_SIZE,
+			&mhi_cntrl->bootargs_dma, GFP_KERNEL);
+
+	if (!mhi_cntrl->bootargs_buf) {
+		mhi_update_scratch_reg(mhi_cntrl, 0);
+		return -ENOMEM;
+	}
+
+	for (i = 0; i < cnt; i++) {
+		ret = of_property_read_u32_index(mhi_cntrl->cntrl_dev->of_node,
+							"boot-args", i, &val);
+		if (ret) {
+			dev_err(dev, "failed to read boot args\n");
+			mhi_fw_free_coherent(mhi_cntrl, PAGE_SIZE,
+				mhi_cntrl->bootargs_buf, mhi_cntrl->bootargs_dma);
+			mhi_cntrl->bootargs_buf = NULL;
+			mhi_update_scratch_reg(mhi_cntrl, 0);
+			return ret;
+		}
+		mhi_cntrl->bootargs_buf[i] = (u8)val;
+	}
+
+	ret = mhi_update_scratch_reg(mhi_cntrl, lower_32_bits(mhi_cntrl->bootargs_dma));
+
+	dev_dbg(dev, "boot-args address copied to PCIE_REG_FOR_BOOT_ARGS\n");
+
+	return ret;
+}
+
+void mhi_free_boot_args(struct mhi_controller *mhi_cntrl)
+{
+	if (mhi_cntrl->bootargs_buf != NULL) {
+		mhi_fw_free_coherent(mhi_cntrl, PAGE_SIZE, mhi_cntrl->bootargs_buf, mhi_cntrl->bootargs_dma);
+		mhi_cntrl->bootargs_buf = NULL;
+	}
+}
+
 void mhi_fw_load_handler(struct mhi_controller *mhi_cntrl)
 {
 	const struct firmware *firmware = NULL;
@@ -800,6 +885,12 @@ int mhi_download_amss_image(struct mhi_controller *mhi_cntrl)
 
 	if (!image_info)
 		return -EIO;
+
+	ret = mhi_handle_boot_args(mhi_cntrl);
+	if(ret) {
+		dev_err(dev, "Failed to handle the boot-args, ret: %d\n",ret);
+		return ret;
+	}
 
 	if (IS_QCN9224_DEV(mhi_cntrl)) {
 		/* Download the License */
