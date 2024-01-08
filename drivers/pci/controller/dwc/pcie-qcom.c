@@ -1877,7 +1877,7 @@ static void qcom_ipq_switch_lane(struct pci_dev *dev)
 	np = devp->of_node;
 
 	/* Switching PCIE Nodes 2/3 to single lane if force_to_single_lane property is defined in dts */
-	if ((of_property_read_bool(np, "force_to_single_lane")) && (pcie->domain == 3 || pcie->domain == 4)) {
+	if ((of_property_read_bool(np, "force_to_single_lane")) && (pcie->domain == 2 || pcie->domain == 3)) {
 
 		dev_info(devp,"Forcing PCIE to single lane\n");
 
