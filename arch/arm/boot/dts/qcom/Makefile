@@ -35,7 +35,8 @@ dtb-$(CONFIG_ARCH_QCOM) += \
 	ipq9574-rdp449.dtb \
 	ipq9574-rdp453.dtb \
 	ipq9574-rdp454.dtb \
-	ipq9574-rdp455.dtb \
+	ipq9574-rdp455-c11.dtb \
+	ipq9574-rdp455-c12.dtb \
 	ipq9574-rdp456.dtb \
 	ipq9574-rdp457.dtb \
 	ipq9574-rdp458.dtb \
