@@ -19,6 +19,12 @@
 #include "blk-crypto-internal.h"
 
 const struct blk_crypto_mode blk_crypto_modes[] = {
+	[BLK_ENCRYPTION_MODE_AES_128_XTS] = {
+		.name = "AES-128-XTS",
+		.cipher_str = "xts(aes)",
+		.keysize = 32,
+		.ivsize = 16,
+	},
 	[BLK_ENCRYPTION_MODE_AES_256_XTS] = {
 		.name = "AES-256-XTS",
 		.cipher_str = "xts(aes)",
@@ -40,6 +46,18 @@ const struct blk_crypto_mode blk_crypto_modes[] = {
 	[BLK_ENCRYPTION_MODE_SM4_XTS] = {
 		.name = "SM4-XTS",
 		.cipher_str = "xts(sm4)",
+		.keysize = 32,
+		.ivsize = 16,
+	},
+	[BLK_ENCRYPTION_MODE_AES_128_CBC] = {
+		.name = "AES-128-CBC",
+		.cipher_str = "cbc(aes)",
+		.keysize = 16,
+		.ivsize = 16,
+	},
+	[BLK_ENCRYPTION_MODE_AES_256_CBC] = {
+		.name = "AES-256-CBC",
+		.cipher_str = "cbc(aes)",
 		.keysize = 32,
 		.ivsize = 16,
 	},
