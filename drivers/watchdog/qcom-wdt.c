@@ -8,7 +8,9 @@
 #include <linux/io.h>
 #include <linux/kernel.h>
 #include <linux/module.h>
+#include <linux/notifier.h>
 #include <linux/of.h>
+#include <linux/panic_notifier.h>
 #include <linux/platform_device.h>
 #include <linux/sched/clock.h>
 #include <linux/watchdog.h>
@@ -50,6 +52,8 @@ struct qcom_wdt {
 	unsigned long		rate;
 	void __iomem		*base;
 	const u32		*layout;
+	bool			in_panic;
+	struct notifier_block	panic_blk;
 };
 
 static void __iomem *wdt_addr(struct qcom_wdt *wdt, enum wdt_reg reg)
@@ -128,6 +132,12 @@ static int qcom_wdt_restart(struct watchdog_device *wdd, unsigned long action,
 	struct qcom_wdt *wdt = to_qcom_wdt(wdd);
 	u32 timeout;
 
+#ifdef CONFIG_QCOM_FORCE_WDOG_BITE_ON_PANIC
+	if (!wdt->in_panic)
+		return 0;
+
+	dev_info(wdd->parent, "Triggering watchdog bite ...\n");
+
 	/*
 	 * Trigger watchdog bite:
 	 *    Setup BITE_TIME to be 128ms, and enable WDT.
@@ -146,6 +156,7 @@ static int qcom_wdt_restart(struct watchdog_device *wdd, unsigned long action,
 	wmb();
 
 	mdelay(150);
+#endif
 	return 0;
 }
 
@@ -194,6 +205,18 @@ static const struct qcom_wdt_match_data match_data_kpss = {
 	.pretimeout = true,
 	.max_tick_count = 0xFFFFFU,
 };
+
+#ifdef CONFIG_QCOM_FORCE_WDOG_BITE_ON_PANIC
+static int qcom_wdt_panic_handler(struct notifier_block *nb,
+				  unsigned long action, void *data)
+{
+	struct qcom_wdt *wdt = container_of(nb, struct qcom_wdt, panic_blk);
+
+	wdt->in_panic = true;
+
+	return NOTIFY_DONE;
+}
+#endif
 
 static int qcom_wdt_probe(struct platform_device *pdev)
 {
@@ -296,6 +319,17 @@ static int qcom_wdt_probe(struct platform_device *pdev)
 		qcom_wdt_start(&wdt->wdd);
 		set_bit(WDOG_HW_RUNNING, &wdt->wdd.status);
 	}
+
+#ifdef CONFIG_QCOM_FORCE_WDOG_BITE_ON_PANIC
+	wdt->panic_blk.notifier_call = qcom_wdt_panic_handler;
+	ret = atomic_notifier_chain_register(&panic_notifier_list, &wdt->panic_blk);
+	if (ret) {
+		dev_err(dev, "failed to register the panic notifier, ret is %d\n", ret);
+		return ret;
+	}
+
+	watchdog_set_restart_priority(&wdt->wdd, 255);
+#endif
 
 	ret = devm_watchdog_register_device(dev, &wdt->wdd);
 	if (ret)

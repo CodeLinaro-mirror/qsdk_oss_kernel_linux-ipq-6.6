@@ -817,6 +817,13 @@ config QCOM_WDT
 	  To compile this driver as a module, choose M here: the
 	  module will be called qcom_wdt.
 
+config QCOM_FORCE_WDOG_BITE_ON_PANIC
+       bool "QCOM force watchdog bite on panic"
+       depends on QCOM_WDT
+       help
+         This forces a watchdog bite when the device restarts due to a kernel
+         panic.
+
 config MESON_GXBB_WATCHDOG
 	tristate "Amlogic Meson GXBB SoCs watchdog support"
 	depends on ARCH_MESON || COMPILE_TEST
