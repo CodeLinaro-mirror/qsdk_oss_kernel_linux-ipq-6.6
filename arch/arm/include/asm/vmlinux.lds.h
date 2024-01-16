@@ -108,7 +108,7 @@
 	. = ALIGN(8);							\
 	.ARM.unwind_idx : {						\
 		__start_unwind_idx = .;					\
-		KEEP((*(.ARM.exidx*))					\
+		KEEP(*(.ARM.exidx*))					\
 		__stop_unwind_idx = .;					\
 	}								\
 	.ARM.unwind_tab : {						\
