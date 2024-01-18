@@ -24,6 +24,7 @@
 #include <linux/coresight.h>
 #include <linux/amba/bus.h>
 #include <linux/of_reserved_mem.h>
+#include <linux/panic_notifier.h>
 
 #include "coresight-priv.h"
 #include "coresight-tmc.h"
@@ -522,6 +523,12 @@ static int tmc_probe(struct amba_device *adev, const struct amba_id *id)
 		idr_init(&drvdata->idr);
 		mutex_init(&drvdata->idr_mutex);
 		dev_list = &etr_devs;
+		drvdata->panic_blk.notifier_call = tmc_etr_panic_handler;
+		ret = atomic_notifier_chain_register(&panic_notifier_list, &drvdata->panic_blk);
+		if (ret) {
+			dev_err(dev, "failed to register the panic notifier, ret is %d\n", ret);
+			goto out;
+		}
 		break;
 	case TMC_CONFIG_TYPE_ETF:
 		desc.type = CORESIGHT_DEV_TYPE_LINKSINK;

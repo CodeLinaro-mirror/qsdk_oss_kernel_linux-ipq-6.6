@@ -1878,3 +1878,43 @@ int tmc_read_unprepare_etr(struct tmc_drvdata *drvdata)
 
 	return 0;
 }
+
+int tmc_etr_panic_handler(struct notifier_block *nb,
+				  unsigned long action, void *data)
+{
+	struct tmc_drvdata *drvdata = container_of(nb, struct tmc_drvdata, panic_blk);
+	unsigned long flags;
+	uint32_t val[4];
+	uint32_t phy_offset;
+	void __iomem *etr_rsvd_waddr;
+
+	if (drvdata->mode == CS_MODE_DISABLED)
+		return NOTIFY_DONE;
+
+	spin_lock_irqsave(&drvdata->spinlock, flags);
+	if (drvdata->reading)
+		goto out0;
+
+	tmc_etr_disable_hw(drvdata);
+
+	val[0] = 0xdeadbeef;
+	val[1] = readl_relaxed(drvdata->base + TMC_STS);
+	val[2] = readl_relaxed(drvdata->base + TMC_RRP);
+	val[3] = readl_relaxed(drvdata->base + TMC_RWP);
+
+	phy_offset = ((dma_addr_t)val[2] - drvdata->etr_rsvd_paddr) & 0xffffffff;
+	etr_rsvd_waddr = drvdata->etr_rsvd_vaddr + phy_offset;
+
+	memcpy_toio(etr_rsvd_waddr, &val[0], sizeof(val));
+
+	dev_info(&drvdata->csdev->dev, "RRP: 0x%x RWP: 0x%x STS: 0x%x\n",
+					val[2], val[3], val[1]);
+
+	dev_info(&drvdata->csdev->dev, "TMC aborted\n");
+out0:
+	spin_unlock_irqrestore(&drvdata->spinlock, flags);
+
+	drvdata->csdev->enable = false;
+
+	return NOTIFY_DONE;
+}
