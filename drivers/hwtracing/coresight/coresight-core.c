@@ -20,7 +20,6 @@
 #include <linux/property.h>
 #include <linux/delay.h>
 #include <linux/pm_runtime.h>
-#include <linux/panic_notifier.h>
 
 #include "coresight-etm-perf.h"
 #include "coresight-priv.h"
@@ -856,23 +855,6 @@ out:
 
 	return 0;
 }
-
-static int coresight_panic_handler(struct notifier_block *this,
-			unsigned long event, void *ptr)
-{
-	struct coresight_device *curr_sink = coresight_get_enabled_sink(false);
-
-	if (curr_sink && curr_sink->enable && sink_ops(curr_sink)->abort) {
-		sink_ops(curr_sink)->abort(curr_sink);
-		curr_sink->enable = false;
-	}
-
-	return NOTIFY_DONE;
-}
-
-static struct notifier_block panic_nb = {
-	.notifier_call = coresight_panic_handler,
-};
 
 struct list_head *coresight_build_path(struct coresight_device *source,
 				       struct coresight_device *sink)
@@ -1834,11 +1816,6 @@ static int __init coresight_init(void)
 	int ret;
 
 	ret = bus_register(&coresight_bustype);
-	if (ret)
-		return ret;
-
-	ret = atomic_notifier_chain_register(&panic_notifier_list,
-					     &panic_nb);
 	if (ret)
 		return ret;
 
