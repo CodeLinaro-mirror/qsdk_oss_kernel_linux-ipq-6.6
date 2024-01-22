@@ -276,6 +276,7 @@ struct cqhci_host {
 	union cqhci_crypto_capabilities crypto_capabilities;
 	union cqhci_crypto_cap_entry *crypto_cap_array;
 	u32 crypto_cfg_register;
+	bool use_hwkey;
 #endif
 };
 

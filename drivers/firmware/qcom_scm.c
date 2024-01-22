@@ -309,6 +309,28 @@ static bool __qcom_scm_is_call_available(struct device *dev, u32 svc_id,
 	return ret ? false : !!res.result[0];
 }
 
+int qcom_config_sec_ice(void *buf, int size)
+{
+	int ret;
+	dma_addr_t conf_phys;
+	struct qcom_scm_res res;
+	struct qcom_scm_desc desc = {
+		.svc = QCOM_SVC_ICE,
+		.cmd = QCOM_SCM_ICE_CMD,
+		.arginfo = QCOM_SCM_ARGS(2),
+		.owner = ARM_SMCCC_OWNER_SIP,
+	};
+
+	conf_phys = dma_map_single(__scm->dev, buf, size, DMA_TO_DEVICE);
+
+	desc.args[0] = (u64)conf_phys;
+	desc.args[1] = size;
+
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+	return ret ? false : !!res.result[0];
+}
+EXPORT_SYMBOL(qcom_config_sec_ice);
+
 static int qcom_scm_set_boot_addr(void *entry, const u8 *cpu_bits)
 {
 	int cpu;
@@ -1326,6 +1348,19 @@ bool qcom_scm_ice_available(void)
 					     QCOM_SCM_ES_CONFIG_SET_ICE_KEY);
 }
 EXPORT_SYMBOL_GPL(qcom_scm_ice_available);
+
+/**
+ * qcom_scm_ice_hwkey_available() - Is the ICE HW key programming
+ *                                  interface available?
+ *
+ * Return: true if the SCM calls wrapped by qcom_config_sec_ice() are available.
+ */
+bool qcom_scm_ice_hwkey_available(void)
+{
+	return __qcom_scm_is_call_available(__scm->dev, QCOM_SVC_ICE,
+					    QCOM_SCM_ICE_CMD);
+}
+EXPORT_SYMBOL(qcom_scm_ice_hwkey_available);
 
 /**
  * qcom_scm_ice_invalidate_key() - Invalidate an inline encryption key

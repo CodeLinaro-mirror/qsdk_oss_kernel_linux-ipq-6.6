@@ -138,7 +138,8 @@ struct iv_elephant_private {
 enum flags { DM_CRYPT_SUSPENDED, DM_CRYPT_KEY_VALID,
 	     DM_CRYPT_SAME_CPU, DM_CRYPT_NO_OFFLOAD,
 	     DM_CRYPT_NO_READ_WORKQUEUE, DM_CRYPT_NO_WRITE_WORKQUEUE,
-	     DM_CRYPT_WRITE_INLINE, DM_CRYPT_INLINE_ENCRYPTION };
+	     DM_CRYPT_WRITE_INLINE, DM_CRYPT_INLINE_ENCRYPTION,
+	     DM_CRYPT_INLINE_ENCRYPTION_USE_HWKEY };
 
 enum cipher_flags {
 	CRYPT_MODE_INTEGRITY_AEAD,	/* Use authenticated mode for cipher */
@@ -2462,6 +2463,9 @@ static int crypt_prepare_inline_crypt_key(struct crypt_config *cc)
 		goto bad_key;
 	}
 
+	if (test_bit(DM_CRYPT_INLINE_ENCRYPTION_USE_HWKEY, &cc->flags))
+		cc->blk_key->use_hwkey = true;
+
 	ret = blk_crypto_start_using_key(cc->dev->bdev, cc->blk_key);
 	if (ret) {
 		DMERR("Failed to use inline encryption key");
@@ -3277,6 +3281,8 @@ static int crypt_ctr_optional(struct dm_target *ti, unsigned int argc, char **ar
 #ifdef CONFIG_BLK_INLINE_ENCRYPTION
 		else if (!strcasecmp(opt_string, "inline_crypt"))
 			set_bit(DM_CRYPT_INLINE_ENCRYPTION, &cc->flags);
+		else if (!strcasecmp(opt_string, "hwkey"))
+			set_bit(DM_CRYPT_INLINE_ENCRYPTION_USE_HWKEY, &cc->flags);
 #endif
 		else if (sscanf(opt_string, "integrity:%u:", &val) == 1) {
 			if (val == 0 || val > MAX_TAG_SIZE) {

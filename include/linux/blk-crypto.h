@@ -52,6 +52,7 @@ struct blk_crypto_key {
 	struct blk_crypto_config crypto_cfg;
 	unsigned int data_unit_size_bits;
 	unsigned int size;
+	bool use_hwkey;
 	u8 raw[BLK_CRYPTO_MAX_KEY_SIZE];
 };
 

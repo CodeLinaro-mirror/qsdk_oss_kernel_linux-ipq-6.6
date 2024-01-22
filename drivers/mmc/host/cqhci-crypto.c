@@ -86,6 +86,7 @@ static int cqhci_crypto_keyslot_program(struct blk_crypto_profile *profile,
 	union cqhci_crypto_cfg_entry cfg = {};
 	int err;
 
+	cq_host->use_hwkey = key->use_hwkey;
 	BUILD_BUG_ON(CQHCI_CRYPTO_KEY_SIZE_INVALID != 0);
 	for (i = 0; i < cq_host->crypto_capabilities.num_crypto_cap; i++) {
 		if (ccap_array[i].algorithm_id == alg->alg &&

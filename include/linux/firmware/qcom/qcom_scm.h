@@ -165,8 +165,10 @@ enum qcom_scm_sec_dev_id {
 enum qcom_scm_ice_cipher {
 	QCOM_SCM_ICE_CIPHER_AES_128_XTS = 0,
 	QCOM_SCM_ICE_CIPHER_AES_128_CBC = 1,
+	QCOM_SCM_ICE_CIPHER_AES_128_ECB = 2,
 	QCOM_SCM_ICE_CIPHER_AES_256_XTS = 3,
 	QCOM_SCM_ICE_CIPHER_AES_256_CBC = 4,
+	QCOM_SCM_ICE_CIPHER_AES_256_ECB = 5,
 };
 
 #define QCOM_SCM_PERM_READ       0x4
@@ -263,7 +265,9 @@ extern int qcom_scm_ocmem_unlock(enum qcom_scm_ocmem_client id, u32 offset,
 				 u32 size);
 
 extern bool qcom_scm_ice_available(void);
+extern bool qcom_scm_ice_hwkey_available(void);
 extern int qcom_scm_ice_invalidate_key(u32 index);
+extern int qcom_config_sec_ice(void *buf, int size);
 extern int qcom_scm_ice_set_key(u32 index, const u8 *key, u32 key_size,
 				enum qcom_scm_ice_cipher cipher,
 				u32 data_unit_size);

@@ -1882,7 +1882,8 @@ static int sdhci_msm_program_key(struct cqhci_host *cq_host,
 					    cap.algorithm_id,
 					    cap.key_size,
 					    cfg->crypto_key,
-					    cfg->data_unit_size, slot);
+					    cfg->data_unit_size, slot,
+					    cq_host->use_hwkey);
 	else
 		return qcom_ice_evict_key(msm_host->ice, slot);
 }
