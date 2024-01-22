@@ -61,6 +61,18 @@ const struct blk_crypto_mode blk_crypto_modes[] = {
 		.keysize = 32,
 		.ivsize = 16,
 	},
+	[BLK_ENCRYPTION_MODE_AES_128_ECB] = {
+		.name = "AES-128-ECB",
+		.cipher_str = "ecb(aes)",
+		.keysize = 16,
+		.ivsize = 16,
+	},
+	[BLK_ENCRYPTION_MODE_AES_256_ECB] = {
+		.name = "AES-256-ECB",
+		.cipher_str = "ecb(aes)",
+		.keysize = 32,
+		.ivsize = 16,
+	},
 };
 
 /*
