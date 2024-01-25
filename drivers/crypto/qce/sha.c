@@ -47,17 +47,6 @@ static void qce_ahash_done(void *data)
 	int error;
 	u32 status;
 
-	error = qce_check_status(qce, &status);
-	if (error < 0)
-		dev_dbg(qce->dev, "ahash operation error (%x)\n", status);
-
-	if (qce->qce_cmd_desc_enable)
-		qce_unlock_reg_dma(qce);
-
-	error = qce_dma_terminate_all(&qce->dma);
-	if (error)
-		dev_dbg(qce->dev, "ahash dma termination error (%d)\n", error);
-
 	dma_unmap_sg(qce->dev, req->src, rctx->src_nents, DMA_TO_DEVICE);
 	dma_unmap_sg(qce->dev, &rctx->result_sg, 1, DMA_FROM_DEVICE);
 
@@ -85,6 +74,14 @@ static void qce_ahash_done(void *data)
 	req->nbytes = rctx->nbytes_orig;
 	rctx->last_blk = false;
 	rctx->first_blk = false;
+
+	error = qce_dma_terminate_all(&qce->dma);
+	if (error)
+		dev_dbg(qce->dev, "ahash dma termination error (%d)\n", error);
+
+	error = qce_check_status(qce, &status);
+	if (error < 0)
+		dev_dbg(qce->dev, "ahash operation error (%x)\n", status);
 
 	qce->async_req_done(tmpl->qce, error);
 }

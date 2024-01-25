@@ -145,6 +145,9 @@ extern int __qti_scm_tz_hvc_log(struct device *dev, u32 svc_id, u32 cmd_id,
 #define QCOM_SCM_ES_INVALIDATE_ICE_KEY	0x03
 #define QCOM_SCM_ES_CONFIG_SET_ICE_KEY	0x04
 
+#define QCOM_SVC_ICE		23
+#define QCOM_SCM_ICE_CMD	0x1
+
 #define QCOM_SCM_SVC_HDCP		0x11
 #define QCOM_SCM_HDCP_INVOKE		0x01
 

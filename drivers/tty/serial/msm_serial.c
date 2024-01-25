@@ -1126,6 +1126,8 @@ static int msm_set_baud_rate(struct uart_port *port, unsigned int baud,
 	struct msm_port *msm_port = to_msm_port(port);
 	const struct msm_baud_map *entry;
 	unsigned long flags, rate;
+	struct device *dev = msm_port->uart.dev;
+	u32 tx_watermark = 10;
 
 	flags = *saved_flags;
 	spin_unlock_irqrestore(&port->lock, flags);
@@ -1159,7 +1161,8 @@ static int msm_set_baud_rate(struct uart_port *port, unsigned int baud,
 	msm_write(port, watermark, MSM_UART_RFWR);
 
 	/* set TX watermark */
-	msm_write(port, 10, MSM_UART_TFWR);
+	of_property_read_u32(dev->of_node, "tx-watermark", &tx_watermark);
+	msm_write(port, tx_watermark, MSM_UART_TFWR);
 
 	msm_write(port, MSM_UART_CR_CMD_PROTECTION_EN, MSM_UART_CR);
 	msm_reset(port);

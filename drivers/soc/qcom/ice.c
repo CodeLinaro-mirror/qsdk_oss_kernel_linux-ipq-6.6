@@ -14,6 +14,7 @@
 #include <linux/of.h>
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
+#include <linux/slab.h>
 
 #include <linux/firmware/qcom/qcom_scm.h>
 
@@ -164,6 +165,49 @@ int qcom_ice_suspend(struct qcom_ice *ice)
 }
 EXPORT_SYMBOL_GPL(qcom_ice_suspend);
 
+static int sdhci_msm_ice_set_hwkey_config(struct qcom_ice *ice,
+				          enum qcom_scm_ice_cipher cipher)
+{
+	struct device *dev = ice->dev;
+	struct ice_config_sec *ice_settings = NULL;
+	int ret;
+
+	ice_settings = kmalloc(sizeof(struct ice_config_sec), GFP_KERNEL);
+	if (!ice)
+		return -ENOMEM;
+
+	switch (cipher) {
+	case QCOM_SCM_ICE_CIPHER_AES_128_XTS:
+		ice_settings->algo_mode = ICE_CRYPTO_ALGO_MODE_HW_AES_XTS;
+		ice_settings->key_size = ICE_CRYPTO_KEY_SIZE_HW_128;
+		ice_settings->key_mode = ICE_CRYPTO_USE_KEY0_HW_KEY;
+		break;
+	case QCOM_SCM_ICE_CIPHER_AES_256_XTS:
+		ice_settings->algo_mode = ICE_CRYPTO_ALGO_MODE_HW_AES_XTS;
+		ice_settings->key_size = ICE_CRYPTO_KEY_SIZE_HW_256;
+		ice_settings->key_mode = ICE_CRYPTO_USE_KEY0_HW_KEY;
+		break;
+	case QCOM_SCM_ICE_CIPHER_AES_128_ECB:
+		ice_settings->algo_mode = ICE_CRYPTO_ALGO_MODE_HW_AES_ECB;
+		ice_settings->key_size = ICE_CRYPTO_KEY_SIZE_HW_128;
+		ice_settings->key_mode = ICE_CRYPTO_USE_KEY0_HW_KEY;
+		break;
+	case QCOM_SCM_ICE_CIPHER_AES_256_ECB:
+		ice_settings->algo_mode = ICE_CRYPTO_ALGO_MODE_HW_AES_ECB;
+		ice_settings->key_size = ICE_CRYPTO_KEY_SIZE_HW_256;
+		ice_settings->key_mode = ICE_CRYPTO_USE_KEY0_HW_KEY;
+		break;
+	default:
+		dev_err_ratelimited(dev, "Unhandled cipher for HW Key support;"
+					"cipher_id=%d\n", cipher);
+		kfree(ice);
+		return -EINVAL;
+	}
+	ret = qcom_config_sec_ice(ice_settings, sizeof(struct ice_config_sec));
+	kfree(ice_settings);
+	return ret;
+}
+
 static int qcom_ice_get_algo_mode(struct qcom_ice *ice, u8 algorithm_id,
 				  u8 key_size, enum qcom_scm_ice_cipher *cipher,
 				  u32 *key_len)
@@ -212,7 +256,7 @@ static int qcom_ice_get_algo_mode(struct qcom_ice *ice, u8 algorithm_id,
 int qcom_ice_program_key(struct qcom_ice *ice,
 			 u8 algorithm_id, u8 key_size,
 			 const u8 crypto_key[], u8 data_unit_size,
-			 int slot)
+			 int slot, bool use_hwkey)
 {
 	struct device *dev = ice->dev;
 	enum qcom_scm_ice_cipher cipher;
@@ -229,6 +273,9 @@ int qcom_ice_program_key(struct qcom_ice *ice,
 			algorithm_id, key_size);
 		return -EINVAL;
 	}
+
+	if (use_hwkey)
+		return sdhci_msm_ice_set_hwkey_config(ice, cipher);
 
 	memcpy(key.bytes, crypto_key, key_len);
 
@@ -261,6 +308,11 @@ static struct qcom_ice *qcom_ice_create(struct device *dev,
 
 	if (!qcom_scm_ice_available()) {
 		dev_warn(dev, "ICE SCM interface not found\n");
+		return NULL;
+	}
+
+	if (!qcom_scm_ice_hwkey_available()) {
+		dev_warn(dev, "ICE HW Key SCM interface not found\n");
 		return NULL;
 	}
 

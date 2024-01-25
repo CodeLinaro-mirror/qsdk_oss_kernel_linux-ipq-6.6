@@ -42,17 +42,6 @@ static void qce_aead_done(void *data)
 	dir_src = diff_dst ? DMA_TO_DEVICE : DMA_BIDIRECTIONAL;
 	dir_dst = diff_dst ? DMA_FROM_DEVICE : DMA_BIDIRECTIONAL;
 
-	error = qce_check_status(qce, &status);
-	if (error < 0 && (error != -EBADMSG))
-		dev_err(qce->dev, "aead operation error (%x)\n", status);
-
-	if (qce->qce_cmd_desc_enable)
-		qce_unlock_reg_dma(qce);
-
-	error = qce_dma_terminate_all(&qce->dma);
-	if (error)
-		dev_dbg(qce->dev, "aead dma termination error (%d)\n",
-			error);
 	if (diff_dst)
 		dma_unmap_sg(qce->dev, rctx->src_sg, rctx->src_nents, dir_src);
 
@@ -102,6 +91,15 @@ static void qce_aead_done(void *data)
 			error = -EBADMSG;
 		}
 	}
+
+	error = qce_dma_terminate_all(&qce->dma);
+	if (error)
+		dev_dbg(qce->dev, "aead dma termination error (%d)\n",
+			error);
+
+	error = qce_check_status(qce, &status);
+	if (error < 0 && (error != -EBADMSG))
+		dev_err(qce->dev, "aead operation error (%x)\n", status);
 
 	qce->async_req_done(qce, error);
 }
