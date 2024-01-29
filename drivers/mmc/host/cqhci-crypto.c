@@ -32,6 +32,14 @@ static const struct cqhci_crypto_alg_entry {
 		.alg = CQHCI_CRYPTO_ALG_BITLOCKER_AES_CBC,
 		.key_size = CQHCI_CRYPTO_KEY_SIZE_256,
 	},
+	[BLK_ENCRYPTION_MODE_AES_128_ECB] = {
+		.alg = CQHCI_CRYPTO_ALG_AES_ECB,
+		.key_size = CQHCI_CRYPTO_KEY_SIZE_128,
+	},
+	[BLK_ENCRYPTION_MODE_AES_256_ECB] = {
+		.alg = CQHCI_CRYPTO_ALG_AES_ECB,
+		.key_size = CQHCI_CRYPTO_KEY_SIZE_256,
+	},
 };
 
 static inline struct cqhci_host *
