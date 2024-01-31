@@ -1751,6 +1751,7 @@ static int qcom_pcie_probe(struct platform_device *pdev)
 	}
 
 	/* get the parf size which is needed for pcie_parf_read() */
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "parf");
 	if (res)
 		pcie->parf_size = resource_size(res);
 

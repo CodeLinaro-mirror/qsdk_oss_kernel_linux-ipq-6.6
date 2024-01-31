@@ -2433,6 +2433,10 @@ static int crypt_select_inline_crypt_mode(struct dm_target *ti, char *cipher,
 		cc->crypto_mode = BLK_ENCRYPTION_MODE_AES_128_CBC;
 	} else if (strcmp(cipher, "cbc(aes256)") == 0) {
 		cc->crypto_mode = BLK_ENCRYPTION_MODE_AES_256_CBC;
+	} else if (strcmp(cipher, "ecb(aes256)") == 0) {
+		cc->crypto_mode = BLK_ENCRYPTION_MODE_AES_256_ECB;
+	} else if (strcmp(cipher, "ecb(aes128)") == 0) {
+		cc->crypto_mode = BLK_ENCRYPTION_MODE_AES_128_ECB;
 	} else {
 		ti->error = "Invalid cipher for inline_crypt";
 		return -EINVAL;

@@ -14,6 +14,7 @@
 #include <linux/of.h>
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
+#include <linux/slab.h>
 
 #include <linux/firmware/qcom/qcom_scm.h>
 
@@ -209,7 +210,7 @@ static int sdhci_msm_ice_set_hwkey_config(struct qcom_ice *ice,
 
 static int qcom_ice_get_algo_mode(struct qcom_ice *ice, u8 algorithm_id,
 				  u8 key_size, enum qcom_scm_ice_cipher *cipher,
-				  u32 *key_len)
+				  u32 *key_len, bool use_hwkey)
 {
 	struct device *dev = ice->dev;
 
@@ -242,6 +243,22 @@ static int qcom_ice_get_algo_mode(struct qcom_ice *ice, u8 algorithm_id,
 			*key_len = AES_128_CBC_KEY_SIZE;
 		}
 		break;
+	case QCOM_ICE_CRYPTO_ALG_AES_ECB:
+		/* ECB mode only supports for HW key slot */
+		if (!use_hwkey) {
+			dev_err_ratelimited(dev, "Unhandled crypto capability; "
+					"algorithm_id=%d, key_size=%d\n",
+					algorithm_id, key_size);
+			return -EINVAL;
+		}
+		if (key_size == QCOM_ICE_CRYPTO_KEY_SIZE_256) {
+			*cipher = QCOM_SCM_ICE_CIPHER_AES_128_ECB;
+			*key_len = AES_256_CBC_KEY_SIZE;
+		} else {
+			*cipher = QCOM_SCM_ICE_CIPHER_AES_256_ECB;
+			*key_len = AES_128_CBC_KEY_SIZE;
+		}
+		break;
 	default:
 		dev_err_ratelimited(dev, "Unhandled crypto capability; algorithm_id=%d, key_size=%d\n",
 				    algorithm_id, key_size);
@@ -267,7 +284,8 @@ int qcom_ice_program_key(struct qcom_ice *ice,
 	int err;
 	u32 key_len;
 
-	if (qcom_ice_get_algo_mode(ice, algorithm_id, key_size, &cipher, &key_len)) {
+	if (qcom_ice_get_algo_mode(ice, algorithm_id, key_size, &cipher,
+				   &key_len, use_hwkey)) {
 		dev_err(dev, "Unhandled crypto capability; algorithm_id=%d, key_size=%d\n",
 			algorithm_id, key_size);
 		return -EINVAL;
