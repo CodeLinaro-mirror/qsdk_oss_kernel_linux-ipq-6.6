@@ -3269,6 +3269,9 @@ static inline void *netdev_alloc_frag_align(unsigned int fragsz,
 struct sk_buff *__netdev_alloc_skb(struct net_device *dev, unsigned int length,
 				   gfp_t gfp_mask);
 
+struct sk_buff *__netdev_alloc_skb_fast(struct net_device *dev, unsigned int length,
+				   gfp_t gfp_mask);
+
 struct sk_buff *__netdev_alloc_skb_no_skb_reset(struct net_device *dev, unsigned int length,
 				   gfp_t gfp_mask);
 
@@ -3289,6 +3292,23 @@ static inline struct sk_buff *netdev_alloc_skb(struct net_device *dev,
 					       unsigned int length)
 {
 	return __netdev_alloc_skb(dev, length, GFP_ATOMIC);
+}
+
+/**
+ *	netdev_alloc_skb_fast - allocate an skbuff for rx on a specific device
+ *	@dev: network device to receive on
+ *	@length: length to allocate
+ *
+ *      This API is same as netdev_alloc_skb except for the fact that it retains
+ *      the recycler fast flags.
+ *
+ *	%NULL is returned if there is no free memory. Although this function
+ *	allocates memory it can be called from an interrupt.
+ */
+static inline struct sk_buff *netdev_alloc_skb_fast(struct net_device *dev,
+						    unsigned int length)
+{
+	return __netdev_alloc_skb_fast(dev, length, GFP_ATOMIC);
 }
 
 /* legacy helper around __netdev_alloc_skb() */
