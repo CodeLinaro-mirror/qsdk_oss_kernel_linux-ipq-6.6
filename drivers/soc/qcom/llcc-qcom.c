@@ -932,6 +932,7 @@ static struct regmap *qcom_llcc_init_mmio(struct platform_device *pdev, u8 index
 					  const char *name)
 {
 	void __iomem *base;
+	struct resource *res;
 	struct regmap_config llcc_regmap_config = {
 		.reg_bits = 32,
 		.reg_stride = 4,
@@ -939,7 +940,13 @@ static struct regmap *qcom_llcc_init_mmio(struct platform_device *pdev, u8 index
 		.fast_io = true,
 	};
 
-	base = devm_platform_ioremap_resource(pdev, index);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, index);
+
+	if (IS_ERR(res))
+		return ERR_CAST(res);
+
+	base = devm_ioremap(&pdev->dev, res->start,resource_size(res));
+
 	if (IS_ERR(base))
 		return ERR_CAST(base);
 
