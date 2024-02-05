@@ -71,9 +71,15 @@ static const struct flash_info macronix_nor_parts[] = {
 	{ "mx25r3235f",  INFO(0xc22816, 0, 64 * 1024,  64)
 		NO_SFDP_FLAGS(SECT_4K | SPI_NOR_DUAL_READ |
 			      SPI_NOR_QUAD_READ) },
+#ifdef CONFIG_IPQ_FLASH_16M_PROFILE
+	{ "mx25u12832f", INFO(0xc22538, 0, 4 * 1024, 4096)
+		NO_SFDP_FLAGS(SECT_4K | SPI_NOR_DUAL_READ |
+			      SPI_NOR_QUAD_READ) },
+#else
 	{ "mx25u12835f", INFO(0xc22538, 0, 64 * 1024, 256)
 		NO_SFDP_FLAGS(SECT_4K | SPI_NOR_DUAL_READ |
 			      SPI_NOR_QUAD_READ) },
+#endif
 	{ "mx25l25635e", INFO(0xc22019, 0, 64 * 1024, 512)
 		NO_SFDP_FLAGS(SPI_NOR_DUAL_READ | SPI_NOR_QUAD_READ)
 		.fixups = &mx25l25635_fixups },
