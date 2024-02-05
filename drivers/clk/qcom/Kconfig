@@ -222,6 +222,12 @@ config IPQ_NSSCC_9574
         help
           Support for NSS clock controller on ipq9574 devices.
 
+config IPQ_NSSCC_DEVSOC
+        tristate "DEVSOC NSS Clock Controller"
+        depends on IPQ_GCC_DEVSOC
+        help
+          Support for NSS clock controller on devsoc devices.
+
 config MSM_GCC_8660
 	tristate "MSM8660 Global Clock Controller"
 	depends on ARM || COMPILE_TEST

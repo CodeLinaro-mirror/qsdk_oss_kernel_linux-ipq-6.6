@@ -46,7 +46,7 @@
 #define LLCC_TRP_STATUSn(n)           (4 + n * SZ_4K)
 #define LLCC_TRP_ATTR0_CFGn(n)        (0x21000 + SZ_8 * n)
 #define LLCC_TRP_ATTR1_CFGn(n)        (0x21004 + SZ_8 * n)
-#define LLCC_TRP_ATTR2_CFGn(n)        (0x21100 + SZ_8 * n)
+#define LLCC_TRP_ATTR2_CFGn(n)        (0x21100 + SZ_4 * n)
 
 #define LLCC_TRP_SCID_DIS_CAP_ALLOC   0x21f00
 #define LLCC_TRP_PCB_ACT              0x21f04
@@ -356,6 +356,13 @@ static const struct llcc_slice_config sm8550_data[] =  {
 	{LLCC_VIDVSP,   28,  256, 4, 1, 0xFFFFFF, 0x0,   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
 };
 
+static const struct llcc_slice_config devsoc_data[] =  {
+	/* SCID 1 - Descriptors (PPE, CUMAC) */
+	{LLCC_CPUSS,     1,  768, 1, 0,  0xFFFF, 0x0,  0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, },
+	/* SCID 2 - SKB, SKB data (PPE, CUMAC, APSS Core 0,1,2) */
+	{LLCC_VIDSC0,    2,  256, 2, 1,  0xF000, 0x0,  0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, },
+};
+
 static const struct llcc_edac_reg_offset llcc_v1_edac_reg_offset = {
 	.trp_ecc_error_status0 = 0x20344,
 	.trp_ecc_error_status1 = 0x20348,
@@ -514,6 +521,14 @@ static const struct qcom_llcc_config sm8450_cfg = {
 static const struct qcom_llcc_config sm8550_cfg = {
 	.sct_data       = sm8550_data,
 	.size           = ARRAY_SIZE(sm8550_data),
+	.need_llcc_cfg	= true,
+	.reg_offset	= llcc_v2_1_reg_offset,
+	.edac_reg_offset = &llcc_v2_1_edac_reg_offset,
+};
+
+static const struct qcom_llcc_config devsoc_cfg = {
+	.sct_data       = devsoc_data,
+	.size           = ARRAY_SIZE(devsoc_data),
 	.need_llcc_cfg	= true,
 	.reg_offset	= llcc_v2_1_reg_offset,
 	.edac_reg_offset = &llcc_v2_1_edac_reg_offset,
@@ -785,15 +800,15 @@ static int _qcom_llcc_cfg_program(const struct llcc_slice_config *config,
 		u32 disable_cap_alloc, retain_pc;
 
 		disable_cap_alloc = config->dis_cap_alloc << config->slice_id;
-		ret = regmap_write(drv_data->bcast_regmap,
-				LLCC_TRP_SCID_DIS_CAP_ALLOC, disable_cap_alloc);
+		ret = regmap_update_bits(drv_data->bcast_regmap, LLCC_TRP_SCID_DIS_CAP_ALLOC,
+					 BIT(config->slice_id), disable_cap_alloc);
 		if (ret)
 			return ret;
 
 		if (drv_data->version < LLCC_VERSION_4_1_0_0) {
 			retain_pc = config->retain_on_pc << config->slice_id;
-			ret = regmap_write(drv_data->bcast_regmap,
-					LLCC_TRP_PCB_ACT, retain_pc);
+			ret = regmap_update_bits(drv_data->bcast_regmap, LLCC_TRP_PCB_ACT,
+						 BIT(config->slice_id), retain_pc);
 			if (ret)
 				return ret;
 		}
@@ -917,6 +932,7 @@ static struct regmap *qcom_llcc_init_mmio(struct platform_device *pdev, u8 index
 					  const char *name)
 {
 	void __iomem *base;
+	struct resource *res;
 	struct regmap_config llcc_regmap_config = {
 		.reg_bits = 32,
 		.reg_stride = 4,
@@ -924,7 +940,13 @@ static struct regmap *qcom_llcc_init_mmio(struct platform_device *pdev, u8 index
 		.fast_io = true,
 	};
 
-	base = devm_platform_ioremap_resource(pdev, index);
+	res = platform_get_resource(pdev, IORESOURCE_MEM, index);
+
+	if (IS_ERR(res))
+		return ERR_CAST(res);
+
+	base = devm_ioremap(&pdev->dev, res->start,resource_size(res));
+
 	if (IS_ERR(base))
 		return ERR_CAST(base);
 
@@ -1053,6 +1075,7 @@ err:
 }
 
 static const struct of_device_id qcom_llcc_of_match[] = {
+	{ .compatible = "qcom,devsoc-llcc", .data = &devsoc_cfg },
 	{ .compatible = "qcom,sc7180-llcc", .data = &sc7180_cfg },
 	{ .compatible = "qcom,sc7280-llcc", .data = &sc7280_cfg },
 	{ .compatible = "qcom,sc8180x-llcc", .data = &sc8180x_cfg },
