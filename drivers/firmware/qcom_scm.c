@@ -293,7 +293,11 @@ static bool __qcom_scm_is_call_available(struct device *dev, u32 svc_id,
 	switch (__get_convention()) {
 	case SMC_CONVENTION_ARM_32:
 	case SMC_CONVENTION_ARM_64:
-		desc.args[0] = SCM_SMC_FNID(svc_id, cmd_id) |
+		if (cmd_id == QCOM_SCM_IS_TZ_LOG_ENCRYPTED)
+			desc.args[0] = SCM_SMC_FNID(svc_id, cmd_id) |
+				(ARM_SMCCC_OWNER_TRUSTED_OS << ARM_SMCCC_OWNER_SHIFT);
+		else
+			desc.args[0] = SCM_SMC_FNID(svc_id, cmd_id) |
 				(ARM_SMCCC_OWNER_SIP << ARM_SMCCC_OWNER_SHIFT);
 		break;
 	case SMC_CONVENTION_LEGACY:
