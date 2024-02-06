@@ -1884,8 +1884,10 @@ static int sdhci_msm_program_key(struct cqhci_host *cq_host,
 					    cfg->crypto_key,
 					    cfg->data_unit_size, slot,
 					    cq_host->use_hwkey);
-	else
+	else if (!cq_host->use_hwkey)
 		return qcom_ice_evict_key(msm_host->ice, slot);
+	else
+		return 0;
 }
 
 #else /* CONFIG_MMC_CRYPTO */

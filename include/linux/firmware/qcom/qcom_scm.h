@@ -17,11 +17,18 @@
 #define QCOM_SCM_CPU_PWR_DOWN_L2_OFF	0x1
 #define QCOM_SCM_HDCP_MAX_REQ_CNT	5
 
+#define QTI_SCM_DERIVE_KEY		0xA
+#define QTI_SCM_DERIVE_KEY_PARAM_ID	0xD
+
 #define QTI_TZ_DIAG_LOG_ENCR_ID		0x0
 #define QTI_TZ_QSEE_LOG_ENCR_ID		0x1
 #define QTI_TZ_LOG_NO_UPDATE		-6
 #define QTI_SCM_SVC_FUSE		0x8
 #define QTI_TRYBIT			BIT(12)
+
+#define MAX_MSM_ICE_KEY_LUT_SIZE	32
+#define DATA_COTEXT_LEN			128
+#define SALT_COTEXT_LEN			12
 
 #define QCOM_BREAK_Q6			0x1
 
@@ -219,6 +226,9 @@ extern int qcom_scm_set_cold_boot_addr(void *entry);
 extern int qcom_scm_set_warm_boot_addr(void *entry);
 extern void qcom_scm_cpu_power_down(u32 flags);
 extern int qcom_scm_set_remote_state(u32 state, u32 id);
+extern int qcom_scm_derive_and_share_key(uint32_t key_len, uint8_t *sw_context,
+				u32 sw_context_len, uint8_t *derived_key,
+				u32 derived_key_len);
 
 struct qcom_scm_pas_metadata {
 	void *ptr;
@@ -271,6 +281,8 @@ extern int qcom_config_sec_ice(void *buf, int size);
 extern int qcom_scm_ice_set_key(u32 index, const u8 *key, u32 key_size,
 				enum qcom_scm_ice_cipher cipher,
 				u32 data_unit_size);
+extern int qcom_context_ice_sec(u32 type, u8 key_size, u8 algo_mode,
+				u8 *data_ctxt, u32 data_ctxt_len, u8 *salt_ctxt, u32 salt_ctxt_len);
 
 extern bool qcom_scm_hdcp_available(void);
 extern int qcom_scm_hdcp_req(struct qcom_scm_hdcp_req *req, u32 req_cnt,
