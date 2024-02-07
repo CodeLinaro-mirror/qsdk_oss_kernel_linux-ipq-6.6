@@ -367,4 +367,6 @@ config QTI_LICENSE_MANAGER
 	  running to communicate the license termination mode and license
 	  files to the attached PCIe device.
 
+source "drivers/soc/qcom/tmelcom/Kconfig"
+
 endmenu
