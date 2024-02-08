@@ -1087,6 +1087,10 @@ static int spi_geni_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+#ifdef CONFIG_QCOM_GENI_SE_FW_LOAD
+	geni_se_fw_load(&mas->se, QUPV3_SE_SPI);
+#endif /* CONFIG_QCOM_GENI_SE_FW_LOAD */
+
 	spi->bus_num = -1;
 	spi->dev.of_node = dev->of_node;
 	spi->mode_bits = SPI_CPOL | SPI_CPHA | SPI_LOOP | SPI_CS_HIGH;
