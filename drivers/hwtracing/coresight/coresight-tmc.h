@@ -215,6 +215,7 @@ struct tmc_drvdata {
 	void __iomem		*etr_rsvd_vaddr;
 	dma_addr_t		etr_rsvd_paddr;
 	u32			rsvd_size;
+	struct notifier_block	panic_blk;
 };
 
 struct etr_buf_operations {
@@ -276,6 +277,8 @@ ssize_t tmc_etb_get_sysfs_trace(struct tmc_drvdata *drvdata,
 /* ETR functions */
 int tmc_read_prepare_etr(struct tmc_drvdata *drvdata);
 int tmc_read_unprepare_etr(struct tmc_drvdata *drvdata);
+int tmc_etr_panic_handler(struct notifier_block *nb,
+			  unsigned long action, void *data);
 void tmc_etr_disable_hw(struct tmc_drvdata *drvdata);
 extern const struct coresight_ops tmc_etr_cs_ops;
 ssize_t tmc_etr_get_sysfs_trace(struct tmc_drvdata *drvdata,
