@@ -8,6 +8,11 @@
 
 #include "clk-alpha-pll.h"
 
+#if !defined(CONFIG_CPU_FREQ) && defined(CONFIG_IPQ_FLASH_16M_PROFILE)
+#define NOMINAL_FREQ	1100000000
+#define TURBO_FREQ	1500000000
+#endif
+
 /*
  * Even though APSS PLL type is of existing one (like Huayra), its offsets
  * are different from the one mentioned in the clk-alpha-pll.c, since the
@@ -168,6 +173,11 @@ static int apss_ipq_pll_probe(struct platform_device *pdev)
 	struct regmap *regmap;
 	void __iomem *base;
 	int ret;
+#if !defined(CONFIG_CPU_FREQ) && defined(CONFIG_IPQ_FLASH_16M_PROFILE)
+	struct clk* cpu_clk;
+	unsigned long rate;
+	struct device_node *np = of_cpu_device_node_get(0);
+#endif
 
 	base = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(base))
@@ -190,8 +200,29 @@ static int apss_ipq_pll_probe(struct platform_device *pdev)
 	if (ret)
 		return ret;
 
-	return devm_of_clk_add_hw_provider(dev, of_clk_hw_simple_get,
+	ret = devm_of_clk_add_hw_provider(dev, of_clk_hw_simple_get,
 					   &data->pll->clkr.hw);
+	if (ret)
+		return ret;
+
+#if !defined(CONFIG_CPU_FREQ) && defined(CONFIG_IPQ_FLASH_16M_PROFILE)
+	cpu_clk = of_clk_get_by_name(np, "cpu");
+	if (IS_ERR(cpu_clk)) {
+		ret = PTR_ERR(cpu_clk);
+		dev_err(&pdev->dev, "failed to get cpu-clk, %d", ret);
+		return ret;
+	}
+
+	if (cpu_is_ipq5312() || cpu_is_ipq5302())
+		rate = NOMINAL_FREQ;
+	else
+		rate = TURBO_FREQ;
+
+	ret = clk_set_rate(cpu_clk, rate);
+	if (ret)
+		dev_err(&pdev->dev, "failed to set rate for cpu-clk, %d", ret);
+#endif
+	return ret;
 }
 
 static const struct of_device_id apss_ipq_pll_match_table[] = {

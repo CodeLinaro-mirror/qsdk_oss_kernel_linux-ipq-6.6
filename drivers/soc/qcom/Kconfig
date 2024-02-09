@@ -51,6 +51,13 @@ config QCOM_GENI_SE
 	  driver is also used to manage the common aspects of multiple Serial
 	  Engines present in the QUP.
 
+
+config QCOM_GENI_SE_FW_LOAD
+	bool "Qualcomm GENI Serial Engine Firmware Loader Support"
+	depends on ARCH_QCOM || COMPILE_TEST
+	help
+	  Say Y here to enable support to load GENI SE FW
+
 config QCOM_GSBI
 	tristate "QCOM General Serial Bus Interface"
 	depends on ARCH_QCOM || COMPILE_TEST
