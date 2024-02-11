@@ -1827,7 +1827,8 @@ ieee80211_rx_h_sta_process(struct ieee80211_rx_data *rx)
 			if (!test_and_set_sta_flag(sta, WLAN_STA_4ADDR_EVENT))
 				cfg80211_rx_unexpected_4addr_frame(
 					rx->sdata->dev, sta->sta.addr,
-					GFP_ATOMIC);
+					GFP_ATOMIC,
+					rx->link_id);
 			return RX_DROP_M_UNEXPECTED_4ADDR_FRAME;
 		}
 		/*
@@ -3140,7 +3141,7 @@ ieee80211_rx_h_data(struct ieee80211_rx_data *rx)
 		if (rx->sta &&
 		    !test_and_set_sta_flag(rx->sta, WLAN_STA_4ADDR_EVENT))
 			cfg80211_rx_unexpected_4addr_frame(
-				rx->sdata->dev, rx->sta->sta.addr, GFP_ATOMIC);
+				rx->sdata->dev, rx->sta->sta.addr, GFP_ATOMIC, rx->link_id);
 		return RX_DROP_MONITOR;
 	}
 

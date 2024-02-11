@@ -2174,14 +2174,53 @@ static int ieee80211_change_station(struct wiphy *wiphy,
 		vlansdata = IEEE80211_DEV_TO_SUB_IF(params->vlan);
 
 		if (params->vlan->ieee80211_ptr->use_4addr) {
+			struct ieee80211_sub_if_data *master;
+			struct wireless_dev *wdev;
+
 			if (vlansdata->u.vlan.sta) {
 				err = -EBUSY;
 				goto out_err;
 			}
 
+			wdev = &vlansdata->wdev;
+			master = container_of(vlansdata->bss,
+					      struct ieee80211_sub_if_data, u.ap);
+
 			rcu_assign_pointer(vlansdata->u.vlan.sta, sta);
 			__ieee80211_check_fast_rx_iface(vlansdata);
 			drv_sta_set_4addr(local, sta->sdata, &sta->sta, true);
+			if (sta->sta.valid_links) {
+				int link_id;
+
+				for_each_set_bit(link_id,
+						 &master->vif.valid_links,
+						 IEEE80211_MLD_MAX_NUM_LINKS) {
+					if (!(sta->sta.valid_links & BIT(link_id))) {
+						rcu_assign_pointer(
+								vlansdata->vif.link_conf[link_id],
+								NULL);
+						rcu_assign_pointer(
+								vlansdata->link[link_id],
+								NULL);
+						memset(wdev->links[link_id].addr,
+								0, ETH_ALEN);
+						vlansdata->vif.valid_links &=
+							~BIT(link_id);
+						wdev->valid_links &= ~BIT(link_id);
+					} else {
+						rcu_assign_pointer(
+								vlansdata->vif.link_conf[link_id],
+								master->vif.link_conf[link_id]);
+						rcu_assign_pointer(vlansdata->link[link_id],
+								master->link[link_id]);
+						memcpy(wdev->links[link_id].addr,
+								vlansdata->vif.link_conf[link_id]->bssid,
+								ETH_ALEN);
+						vlansdata->vif.valid_links |= BIT(link_id);
+						wdev->valid_links |= BIT(link_id);
+					}
+				}
+			}
 		}
 
 		if (sta->sdata->vif.type == NL80211_IFTYPE_AP_VLAN &&
