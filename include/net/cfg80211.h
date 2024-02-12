@@ -703,7 +703,6 @@ static inline void wiphy_read_of_freq_limits(struct wiphy *wiphy)
  *	MU-MIMO packets going to the specified station; %NULL if not changed
  * @radio_iface: Radio iface name
  * @mld_macaddr: MLO address to use for this virtual interface.
- * @mld_iface_name: MLO interface name to use for this virtual interface.
  */
 struct vif_params {
 	u32 flags;
@@ -713,7 +712,6 @@ struct vif_params {
 	const u8 *vht_mumimo_follow_addr;
 	char *radio_iface;
 	u8 mld_macaddr[ETH_ALEN];
-	char *mld_iface_name;
 };
 
 /**
@@ -8511,11 +8509,14 @@ void cfg80211_pmksa_candidate_notify(struct net_device *dev, int index,
 bool cfg80211_rx_spurious_frame(struct net_device *dev,
 				const u8 *addr, gfp_t gfp);
 
+#define CFG80211_UNEXP_4ADDR_MLO
+
 /**
  * cfg80211_rx_unexpected_4addr_frame - inform about unexpected WDS frame
  * @dev: The device the frame matched to
  * @addr: the transmitter address
  * @gfp: context flags
+ * @link_id: link id
  *
  * This function is used in AP mode (only!) to inform userspace that
  * an associated station sent a 4addr frame but that wasn't expected.
@@ -8525,7 +8526,8 @@ bool cfg80211_rx_spurious_frame(struct net_device *dev,
  * for a reason other than not having a subscription.)
  */
 bool cfg80211_rx_unexpected_4addr_frame(struct net_device *dev,
-					const u8 *addr, gfp_t gfp);
+					const u8 *addr, gfp_t gfp,
+					const int link_id);
 
 /**
  * cfg80211_probe_status - notify userspace about probe status

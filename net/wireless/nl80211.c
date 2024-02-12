@@ -819,7 +819,6 @@ static const struct nla_policy nl80211_policy[NUM_NL80211_ATTR] = {
 	[NL80211_ATTR_EMA_RNR_ELEMS] = { .type = NLA_NESTED },
 	[NL80211_ATTR_MLO_LINK_DISABLED] = { .type = NLA_FLAG },
 	[NL80211_ATTR_RADIO_IFACE] = { .type = NLA_BINARY, .len = IFNAMSIZ-1 },
-	[NL80211_ATTR_MLD_IFACE_NAME] = { .type = NLA_BINARY, .len = IFNAMSIZ-1 },
 };
 
 /* policy for the key attributes */
@@ -4294,14 +4293,6 @@ static int _nl80211_new_interface(struct sk_buff *skb, struct genl_info *info)
 			if (!is_valid_ether_addr(params.mld_macaddr))
 				return -EADDRNOTAVAIL;
 		} else
-			return -ENOTSUPP;
-	}
-
-	if (info->attrs[NL80211_ATTR_MLD_IFACE_NAME]) {
-		if (rdev->wiphy.flags & WIPHY_FLAG_SUPPORTS_MLO)
-			params.mld_iface_name =
-				nla_data(info->attrs[NL80211_ATTR_MLD_IFACE_NAME]);
-		else
 			return -ENOTSUPP;
 	}
 
@@ -18915,7 +18906,8 @@ void cfg80211_conn_failed(struct net_device *dev, const u8 *mac_addr,
 EXPORT_SYMBOL(cfg80211_conn_failed);
 
 static bool __nl80211_unexpected_frame(struct net_device *dev, u8 cmd,
-				       const u8 *addr, gfp_t gfp)
+				       const u8 *addr, gfp_t gfp,
+				       const int link_id)
 {
 	struct wireless_dev *wdev = dev->ieee80211_ptr;
 	struct cfg80211_registered_device *rdev = wiphy_to_rdev(wdev->wiphy);
@@ -18941,6 +18933,9 @@ static bool __nl80211_unexpected_frame(struct net_device *dev, u8 cmd,
 	    nla_put(msg, NL80211_ATTR_MAC, ETH_ALEN, addr))
 		goto nla_put_failure;
 
+	if (link_id != -1)
+		nla_put_u8(msg, NL80211_ATTR_MLO_LINK_ID, link_id);
+
 	genlmsg_end(msg, hdr);
 	genlmsg_unicast(wiphy_net(&rdev->wiphy), msg, nlportid);
 	return true;
@@ -18964,14 +18959,15 @@ bool cfg80211_rx_spurious_frame(struct net_device *dev,
 		return false;
 	}
 	ret = __nl80211_unexpected_frame(dev, NL80211_CMD_UNEXPECTED_FRAME,
-					 addr, gfp);
+					 addr, gfp, -1);
 	trace_cfg80211_return_bool(ret);
 	return ret;
 }
 EXPORT_SYMBOL(cfg80211_rx_spurious_frame);
 
 bool cfg80211_rx_unexpected_4addr_frame(struct net_device *dev,
-					const u8 *addr, gfp_t gfp)
+					const u8 *addr, gfp_t gfp,
+					const int link_id)
 {
 	struct wireless_dev *wdev = dev->ieee80211_ptr;
 	bool ret;
@@ -18986,7 +18982,7 @@ bool cfg80211_rx_unexpected_4addr_frame(struct net_device *dev,
 	}
 	ret = __nl80211_unexpected_frame(dev,
 					 NL80211_CMD_UNEXPECTED_4ADDR_FRAME,
-					 addr, gfp);
+					 addr, gfp, link_id);
 	trace_cfg80211_return_bool(ret);
 	return ret;
 }
