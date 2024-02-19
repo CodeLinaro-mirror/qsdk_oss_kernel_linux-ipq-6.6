@@ -25,6 +25,8 @@
 #include <linux/amba/bus.h>
 #include <linux/of_reserved_mem.h>
 #include <linux/panic_notifier.h>
+#include <linux/remoteproc/qcom_rproc.h>
+#include <linux/remoteproc.h>
 
 #include "coresight-priv.h"
 #include "coresight-tmc.h"
@@ -457,6 +459,18 @@ static void tmc_get_reserved_region(struct device *dev)
 	}
 }
 
+static bool is_rproc_device_available(void)
+{
+	struct device_node *node;
+
+	node = of_find_node_by_name(NULL, "remoteproc");
+	if (!of_device_is_available(node))
+		return false;
+
+	of_node_put(node);
+	return true;
+}
+
 static int tmc_probe(struct amba_device *adev, const struct amba_id *id)
 {
 	int ret = 0;
@@ -468,6 +482,9 @@ static int tmc_probe(struct amba_device *adev, const struct amba_id *id)
 	struct resource *res = &adev->res;
 	struct coresight_desc desc = { 0 };
 	struct coresight_dev_list *dev_list = NULL;
+	struct rproc *rproc;
+	u32 rproc_node;
+	void *notifier;
 
 	ret = -ENOMEM;
 	drvdata = devm_kzalloc(dev, sizeof(*drvdata), GFP_KERNEL);
@@ -529,6 +546,20 @@ static int tmc_probe(struct amba_device *adev, const struct amba_id *id)
 			dev_err(dev, "failed to register the panic notifier, ret is %d\n", ret);
 			goto out;
 		}
+
+		if (!is_rproc_device_available())
+			goto skip_ssr;
+
+		if (of_property_read_u32(dev->of_node, "qcom,rproc",
+					 &rproc_node))
+			return -ENODEV;
+		rproc = rproc_get_by_phandle(rproc_node);
+		if (!rproc)
+			return -EPROBE_DEFER;
+
+		drvdata->ssr_blk.notifier_call = tmc_etr_ssr_handler;
+		notifier = qcom_register_ssr_atomic_notifier(rproc->name, &drvdata->ssr_blk);
+skip_ssr:
 		break;
 	case TMC_CONFIG_TYPE_ETF:
 		desc.type = CORESIGHT_DEV_TYPE_LINKSINK;

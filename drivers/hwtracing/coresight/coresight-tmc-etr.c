@@ -14,6 +14,7 @@
 #include <linux/slab.h>
 #include <linux/types.h>
 #include <linux/vmalloc.h>
+#include <linux/remoteproc/qcom_rproc.h>
 #include "coresight-catu.h"
 #include "coresight-etm-perf.h"
 #include "coresight-priv.h"
@@ -1881,10 +1882,7 @@ int tmc_read_unprepare_etr(struct tmc_drvdata *drvdata)
 	return 0;
 }
 
-int tmc_etr_panic_handler(struct notifier_block *nb,
-				  unsigned long action, void *data)
-{
-	struct tmc_drvdata *drvdata = container_of(nb, struct tmc_drvdata, panic_blk);
+static int tmc_etr_abort(struct tmc_drvdata *drvdata) {
 	unsigned long flags;
 	uint32_t val[4];
 	uint32_t phy_offset;
@@ -1898,6 +1896,7 @@ int tmc_etr_panic_handler(struct notifier_block *nb,
 		goto out0;
 
 	tmc_etr_disable_hw(drvdata);
+	drvdata->mode = CS_MODE_DISABLED;
 
 	val[0] = 0xdeadbeef;
 	val[1] = readl_relaxed(drvdata->base + TMC_STS);
@@ -1919,4 +1918,18 @@ out0:
 	drvdata->csdev->enable = false;
 
 	return NOTIFY_DONE;
+}
+
+int tmc_etr_ssr_handler(struct notifier_block *nb,
+				  unsigned long action, void *data)
+{
+	struct tmc_drvdata *drvdata = container_of(nb, struct tmc_drvdata, ssr_blk);
+	return tmc_etr_abort(drvdata);
+}
+
+int tmc_etr_panic_handler(struct notifier_block *nb,
+				  unsigned long action, void *data)
+{
+	struct tmc_drvdata *drvdata = container_of(nb, struct tmc_drvdata, panic_blk);
+	return tmc_etr_abort(drvdata);
 }
