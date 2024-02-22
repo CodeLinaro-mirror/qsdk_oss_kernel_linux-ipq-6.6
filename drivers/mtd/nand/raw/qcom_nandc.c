@@ -323,7 +323,7 @@ static const u32 qspi_training_block_64[] = {
 struct nand_flash_dev qspinand_flash_ids_2k[] = {
 	{"MX35UF4GE4AD-Z4I SPI NAND 1G 1.8V",
 			{ .id = {0xc2, 0xb7} },
-		SZ_2K, SZ_256, SZ_128K, 0, 2, 128, NAND_ECC_INFO(8, SZ_512), 0},
+		SZ_2K, SZ_256, SZ_128K, 0, 2, 128, NAND_ECC_INFO(8, SZ_512)},
 	{NULL}
 };
 

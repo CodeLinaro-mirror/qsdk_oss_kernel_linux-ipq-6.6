@@ -1055,7 +1055,7 @@ static long ctrl_cdev_ioctl(struct file *file, unsigned int cmd,
 	/* Detach an MTD device command */
 	case UBI_IOCFDET:
 		force = 1;
-		/* fallthrough */
+		fallthrough;
 
 	case UBI_IOCDET:
 	{
