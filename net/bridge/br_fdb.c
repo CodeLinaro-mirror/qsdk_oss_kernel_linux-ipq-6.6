@@ -357,6 +357,10 @@ static void fdb_delete(struct net_bridge *br, struct net_bridge_fdb_entry *f,
 {
 	trace_fdb_delete(br, f);
 
+	if (f->dst && f->dst->mac_lrn_limit) {
+		f->dst->mac_lrn_cnt--;
+	}
+
 	if (test_bit(BR_FDB_STATIC, &f->flags))
 		fdb_del_hw_addr(br, f->key.addr.addr);
 
@@ -425,6 +429,12 @@ static struct net_bridge_fdb_entry *fdb_create(struct net_bridge *br,
 	struct net_bridge_fdb_entry *fdb;
 	int err;
 
+	/* Do not learn if MAC learn limit is reached for the given source */
+	if (source && source->mac_lrn_limit
+		&& (source->mac_lrn_cnt >= source->mac_lrn_limit)) {
+		return NULL;
+	}
+
 	fdb = kmem_cache_alloc(br_fdb_cache, GFP_ATOMIC);
 	if (!fdb)
 		return NULL;
@@ -442,6 +452,10 @@ static struct net_bridge_fdb_entry *fdb_create(struct net_bridge *br,
 	}
 
 	hlist_add_head_rcu(&fdb->fdb_node, &br->fdb_list);
+
+	if (source && fdb && source->mac_lrn_limit) {
+		source->mac_lrn_cnt++;
+	}
 
 	return fdb;
 }
@@ -916,6 +930,7 @@ void br_fdb_update(struct net_bridge *br, struct net_bridge_port *source,
 		   const unsigned char *addr, u16 vid, unsigned long flags)
 {
 	struct net_bridge_fdb_entry *fdb;
+	struct net_bridge_port *dst_orig;
 	struct br_fdb_event fdb_event;
 
 	/* some users want to always flood. */
@@ -946,8 +961,18 @@ void br_fdb_update(struct net_bridge *br, struct net_bridge_port *source,
 				fdb_event.br = br;
 				fdb_event.orig_dev = fdb->dst->dev;
 				fdb_event.dev = source->dev;
+				dst_orig = fdb->dst;
 				WRITE_ONCE(fdb->dst, source);
 				fdb_modified = true;
+
+				/* Updated the number of learned entries for both new and old source */
+				if (dst_orig && dst_orig->mac_lrn_limit) {
+					dst_orig->mac_lrn_cnt--;
+				}
+
+				if (source && source->mac_lrn_limit) {
+					source->mac_lrn_cnt++;
+				}
 
 				/* Take over HW learned entry */
 				if (unlikely(test_bit(BR_FDB_ADDED_BY_EXT_LEARN,
