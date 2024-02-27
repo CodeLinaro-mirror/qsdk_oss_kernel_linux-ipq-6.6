@@ -62,12 +62,12 @@ static void qce_skcipher_done(void *data)
 			dma_unmap_sg(qce->dev,
 				qce_bam_txn->qce_reg_read_sgl,
 				qce_bam_txn->qce_read_sgl_cnt,
-				DMA_DEV_TO_MEM);
+				dir_dst);
 		if (qce_bam_txn->qce_write_sgl_cnt)
 			dma_unmap_sg(qce->dev,
 				qce_bam_txn->qce_reg_write_sgl,
 				qce_bam_txn->qce_write_sgl_cnt,
-				DMA_MEM_TO_DEV);
+				dir_src);
 	}
 
 	memcpy(rctx->iv, result_buf->encr_cntr_iv, rctx->ivsize);
