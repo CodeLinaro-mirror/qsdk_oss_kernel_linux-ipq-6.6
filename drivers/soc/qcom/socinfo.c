@@ -799,6 +799,9 @@ static int qcom_socinfo_probe(struct platform_device *pdev)
 	pr_info("OEM_ID: %s, PROD_ID: %s\n", qs->attr.oem_id,
 						qs->attr.prod_id);
 
+	pr_info("CPU: %s, SoC Version: %s\n", qs->attr.machine,
+						qs->attr.revision);
+
 	socinfo_debugfs_init(qs, info, item_size);
 
 	/* Feed the soc specific unique data into entropy pool */
