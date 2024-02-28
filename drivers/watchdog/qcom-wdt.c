@@ -129,10 +129,11 @@ static int qcom_wdt_set_pretimeout(struct watchdog_device *wdd,
 static int qcom_wdt_restart(struct watchdog_device *wdd, unsigned long action,
 			    void *data)
 {
+
+#ifdef CONFIG_QCOM_FORCE_WDOG_BITE_ON_PANIC
 	struct qcom_wdt *wdt = to_qcom_wdt(wdd);
 	u32 timeout;
 
-#ifdef CONFIG_QCOM_FORCE_WDOG_BITE_ON_PANIC
 	if (!wdt->in_panic)
 		return 0;
 

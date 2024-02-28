@@ -1818,6 +1818,7 @@ static int do_test(const char *alg, u32 type, u32 mask, int m, u32 num_mb)
 
 	case 160:
 		ret = min(ret, tcrypt_test("xcbc(sm4)"));
+		break;
 
 	case 180:
 		ret = min(ret, tcrypt_test("authenc(hmac(sha256),cbc(aes))"));
