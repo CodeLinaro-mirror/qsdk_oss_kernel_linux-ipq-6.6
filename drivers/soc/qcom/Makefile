@@ -42,3 +42,4 @@ obj-$(CONFIG_QCOM_SOC_NETSTANDBY) += netstandby.o
 obj-$(CONFIG_QTI_TZ_LOG) += tz_log.o
 obj-$(CONFIG_QTI_LICENSE_MANAGER) += license_manager.o
 obj-$(CONFIG_QTI_LICENSE_MANAGER)	+= qwes.o
+obj-$(CONFIG_QCOM_TMELCOM) += tmelcom/
