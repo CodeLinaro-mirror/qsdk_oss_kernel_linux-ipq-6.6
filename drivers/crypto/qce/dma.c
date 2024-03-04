@@ -32,7 +32,11 @@ static int qce_dma_prep_cmd_sg(struct qce_device *qce, struct dma_chan *chan,
 {
 	struct dma_async_tx_descriptor *dma_desc;
 	dma_cookie_t cookie;
+	enum dma_data_direction data_dir;
 	struct qce_desc_info *desc;
+
+	data_dir = (dir == DMA_MEM_TO_DEV) ? DMA_TO_DEVICE :
+		(dir == DMA_DEV_TO_MEM) ? DMA_FROM_DEVICE : DMA_BIDIRECTIONAL;
 
 	desc = qce->dma.qce_bam_txn->qce_desc;
 
@@ -40,7 +44,7 @@ static int qce_dma_prep_cmd_sg(struct qce_device *qce, struct dma_chan *chan,
 		return -EINVAL;
 
 	if (!dma_map_sg(qce->dev, qce_bam_sgl,
-				qce_sgl_cnt, dir)) {
+				qce_sgl_cnt, data_dir)) {
 		dev_err(qce->dev, "failure in mapping sgl for cmd desc\n");
 		return -ENOMEM;
 	}
@@ -49,7 +53,7 @@ static int qce_dma_prep_cmd_sg(struct qce_device *qce, struct dma_chan *chan,
 						dir, flags);
 	if (!dma_desc) {
 		pr_err("%s:failure in prep cmd desc\n",__func__);
-		dma_unmap_sg(qce->dev, qce_bam_sgl, qce_sgl_cnt, dir);
+		dma_unmap_sg(qce->dev, qce_bam_sgl, qce_sgl_cnt, data_dir);
 		kfree(desc);
 		return -EINVAL;
 	}
