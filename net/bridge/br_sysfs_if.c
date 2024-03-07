@@ -229,6 +229,15 @@ static int store_backup_port(struct net_bridge_port *p, char *buf)
 }
 static BRPORT_ATTR_RAW(backup_port, 0644, show_backup_port, store_backup_port);
 
+static ssize_t show_sub_br_id(struct net_bridge_port *p, char *buf)
+{
+	return snprintf(buf, sizeof(u16), "%d\n", p->sub_br_id);
+}
+
+static BRPORT_ATTR(sub_br_id, 0644,
+		show_sub_br_id, br_port_set_sub_br_id);
+
+BRPORT_ATTR_FLAG(upstream_port, BR_UPSTREAM_PORT);
 BRPORT_ATTR_FLAG(hairpin_mode, BR_HAIRPIN_MODE);
 BRPORT_ATTR_FLAG(bpdu_guard, BR_BPDU_GUARD);
 BRPORT_ATTR_FLAG(root_block, BR_ROOT_BLOCK);
@@ -295,6 +304,8 @@ static const struct brport_attribute *brport_attrs[] = {
 	&brport_attr_isolated,
 	&brport_attr_bpdu_filter,
 	&brport_attr_backup_port,
+	&brport_attr_sub_br_id,
+	&brport_attr_upstream_port,
 	NULL
 };
 

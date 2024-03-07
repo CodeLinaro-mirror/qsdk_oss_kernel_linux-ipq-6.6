@@ -392,6 +392,7 @@ struct net_bridge_port {
 	u32				backup_nhid;
 
 	/* STP */
+	u8				sub_br_id;
 	u8				priority;
 	u8				state;
 	u16				port_no;
@@ -906,6 +907,7 @@ netdev_features_t br_features_recompute(struct net_bridge *br,
 void br_port_flags_change(struct net_bridge_port *port, unsigned long mask);
 void br_manage_promisc(struct net_bridge *br);
 int nbp_backup_change(struct net_bridge_port *p, struct net_device *backup_dev);
+int br_port_set_sub_br_id(struct net_bridge_port *p, unsigned long new_sub_br_id);
 
 /* br_input.c */
 int br_pass_frame_up(struct sk_buff *skb);
