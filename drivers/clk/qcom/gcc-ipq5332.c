@@ -2972,7 +2972,22 @@ static const struct qcom_cc_desc gcc_ipq5332_desc = {
 
 static int gcc_ipq5332_probe(struct platform_device *pdev)
 {
-	return qcom_cc_probe(pdev, &gcc_ipq5332_desc);
+	struct regmap *regmap;
+
+	regmap = qcom_cc_map(pdev, &gcc_ipq5332_desc);
+
+	if (IS_ERR(regmap))
+		return PTR_ERR(regmap);
+
+	/* Keep the critical clocks always-On */
+	regmap_update_bits(regmap, 0x2d040, BIT(0), BIT(0)); /* qdss_stm_clk */
+	regmap_update_bits(regmap, 0x2e034, BIT(0), BIT(0)); /* sys_noc_qdss_stm_axi_clk */
+	regmap_update_bits(regmap, 0x2d070, BIT(0), BIT(0)); /* qdss_eud_at_clk */
+	/* Configure QDSS_STM_CMD_RCGR to 200MHz */
+	regmap_write(regmap, 0x2d010, 0x107);
+	regmap_update_bits(regmap, 0x2d00c, BIT(0), BIT(0));
+
+	return qcom_cc_really_probe(pdev, &gcc_ipq5332_desc, regmap);
 }
 
 static const struct of_device_id gcc_ipq5332_match_table[] = {
