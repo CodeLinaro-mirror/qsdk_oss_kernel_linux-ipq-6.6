@@ -488,7 +488,7 @@ static int kill_matching(struct nf_conn *i, void *data)
 static int ct_file_write(struct file *file, char *buf, size_t count)
 {
 	struct seq_file *seq = file->private_data;
-	struct nf_ct_iter_data iter_data;
+	struct nf_ct_iter_data iter_data = { };
 	struct kill_request kr = { };
 
 	if (count == 0)
