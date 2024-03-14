@@ -2857,7 +2857,13 @@ int __qti_scm_aes(struct device *dev, uint32_t req_addr,
 		.owner = ARM_SMCCC_OWNER_SIP,
 	};
 
-	ret = qcom_scm_call(__scm->dev, &desc, &res);
+	ret = __qcom_scm_is_call_available(__scm->dev, QTI_SVC_CRYPTO, cmd_id);
+	if (ret == 1) {
+		ret = qcom_scm_call(__scm->dev, &desc, &res);
+	} else {
+		pr_err("%s : Feature not supported by TZ..!\n", __func__);
+		return -EINVAL;
+	}
 
 	return res.result[0];
 }
