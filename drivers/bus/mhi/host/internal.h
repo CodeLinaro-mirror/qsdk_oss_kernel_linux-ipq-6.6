@@ -292,6 +292,8 @@ int mhi_alloc_bhie_table(struct mhi_controller *mhi_cntrl,
 void mhi_free_bhie_table(struct mhi_controller *mhi_cntrl,
 			 struct image_info *image_info,
 			 enum image_type img_type);
+int mhi_handle_boot_args(struct mhi_controller *mhi_cntrl);
+void mhi_download_fw_license(struct mhi_controller *mhi_cntrl);
 void mhi_free_boot_args(struct mhi_controller *mhi_cntrl);
 void mhi_free_nonce_buffer(struct mhi_controller *mhi_cntrl);
 

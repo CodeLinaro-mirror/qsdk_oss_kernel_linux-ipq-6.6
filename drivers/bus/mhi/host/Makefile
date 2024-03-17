@@ -1,5 +1,5 @@
 obj-$(CONFIG_MHI_BUS) += mhi.o
-mhi-y := init.o main.o pm.o boot.o
+mhi-y := init.o main.o pm.o boot.o boot_lm.o
 mhi-$(CONFIG_MHI_BUS_DEBUG) += debugfs.o
 
 obj-$(CONFIG_MHI_BUS_PCI_GENERIC) += mhi_pci_generic.o
