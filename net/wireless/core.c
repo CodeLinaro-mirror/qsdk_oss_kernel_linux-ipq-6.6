@@ -1245,7 +1245,8 @@ static void _cfg80211_unregister_wdev(struct wireless_dev *wdev,
 
 			curbss = wdev->links[link_id].client.current_bss;
 
-			if (WARN_ON(curbss)) {
+			if (curbss) {
+				printk("Freeing current BSS\n");
 				cfg80211_unhold_bss(curbss);
 				cfg80211_put_bss(wdev->wiphy, &curbss->pub);
 				wdev->links[link_id].client.current_bss = NULL;
@@ -1513,10 +1514,12 @@ static int cfg80211_netdev_notifier_call(struct notifier_block *nb,
 		wiphy_lock(&rdev->wiphy);
 		cfg80211_update_iface_num(rdev, wdev->iftype, -1);
 		if (rdev->scan_req && rdev->scan_req->wdev == wdev) {
-			if (WARN_ON(!rdev->scan_req->notified &&
+			if (!rdev->scan_req->notified &&
 				    (!rdev->int_scan_req ||
-				     !rdev->int_scan_req->notified)))
+				     !rdev->int_scan_req->notified)) {
+				printk("Aborting scan for device\n");
 				rdev->scan_req->info.aborted = true;
+			}
 			___cfg80211_scan_done(rdev, false);
 		}
 
