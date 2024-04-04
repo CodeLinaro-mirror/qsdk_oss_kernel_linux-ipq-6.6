@@ -177,7 +177,7 @@ struct tc_ppetbl_qopt {
 
 /* PPEPRIO section */
 
-#define TCA_PPEPRIO_MAX_BANDS 4
+#define TCA_PPEPRIO_MAX_BANDS 8
 
 enum {
         TCA_PPEPRIO_UNSPEC,
