@@ -359,6 +359,17 @@ done:
 	return 0;
 }
 
+static void dwc3_configure_fladj_guctl(struct dwc3 *dwc)
+{
+	struct device		*dev = dwc->dev;
+	u32 fladj, guctl;
+
+	if (!device_property_read_u32(dev, "snps,quirk-guctl", &guctl))
+		dwc3_writel(dwc->regs, DWC3_GUCTL, guctl);
+	if (!device_property_read_u32(dev, "snps,quirk-fladj", &fladj))
+		dwc3_writel(dwc->regs, DWC3_GFLADJ, fladj);
+}
+
 /*
  * dwc3_frame_length_adjustment - Adjusts frame length if required
  * @dwc3: Pointer to our controller context structure
@@ -1276,6 +1287,8 @@ static int dwc3_core_init(struct dwc3 *dwc)
 
 	/* Adjust Reference Clock Period */
 	dwc3_ref_clk_period(dwc);
+
+	dwc3_configure_fladj_guctl(dwc);
 
 	dwc3_set_incr_burst_type(dwc);
 
