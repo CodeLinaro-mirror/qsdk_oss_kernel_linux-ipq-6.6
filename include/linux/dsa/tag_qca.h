@@ -9,7 +9,17 @@ struct dsa_switch;
 struct sk_buff;
 
 #define QCA_HDR_LEN	2
+#define QCA_4B_HDR_LEN	4
 #define QCA_HDR_VERSION	0x2
+
+/* 4bytes HDR type value, need sync with reg 0x0098 low 16 bits */
+#define QCA_HDR_TYPE_VALUE	0xAAAA
+
+/**
+ * MHT port information placement in mark field.
+ */
+#define HOLB_MHT_VALID_TAG		0xBB
+#define HOLB_MHT_TAG_SHIFT		24
 
 #define QCA_HDR_RECV_VERSION		GENMASK(15, 14)
 #define QCA_HDR_RECV_PRIORITY		GENMASK(13, 11)
@@ -82,6 +92,7 @@ struct qca_tagger_data {
 				   struct sk_buff *skb);
 	void (*mib_autocast_handler)(struct dsa_switch *ds,
 				     struct sk_buff *skb);
+	bool tx_hdr_offload;
 };
 
 #endif /* __TAG_QCA_H */

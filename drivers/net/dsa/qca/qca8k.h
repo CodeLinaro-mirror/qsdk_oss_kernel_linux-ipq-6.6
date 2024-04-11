@@ -28,6 +28,8 @@
 #define QCA8K_ID_QCA8327				0x12
 #define PHY_ID_QCA8337					0x004dd036
 #define QCA8K_ID_QCA8337				0x13
+#define PHY_ID_QCA8386					0x004dd180
+#define QCA8K_ID_QCA8386				0x17
 
 #define QCA8K_QCA832X_MIB_COUNT				39
 #define QCA8K_QCA833X_MIB_COUNT				41
@@ -36,7 +38,7 @@
 
 #define QCA8K_NUM_FDB_RECORDS				2048
 
-#define QCA8K_PORT_VID_DEF				1
+#define QCA8K_PORT_VID_DEF				0
 
 /* Global control registers */
 #define QCA8K_REG_MASK_CTRL				0x000
@@ -148,6 +150,11 @@
 #define   QCA8K_PORT_STATUS_LINK_AUTO			BIT(9)
 #define   QCA8K_PORT_STATUS_LINK_PAUSE			BIT(10)
 #define   QCA8K_PORT_STATUS_FLOW_AUTO			BIT(12)
+#define QCA8K_HEADER_CTL				0x98
+#define   QCA8K_HEADER_LENGTH_SEL_BIT			BIT(16)
+#define   QCA8K_HEADER_LENGTH_SEL_VAL(x)		FIELD_PREP(QCA8K_HEADER_LENGTH_SEL_BIT, x)
+#define   QCA8K_HEADER_TYPE_VAL_MASK			GENMASK(15, 0)
+#define   QCA8K_HEADER_TYPE_VAL_VAL(x) 			FIELD_PREP(QCA8K_HEADER_TYPE_VAL_MASK, x)
 #define QCA8K_REG_PORT_HDR_CTRL(_i)			(0x9c + (_i * 4))
 #define   QCA8K_PORT_HDR_CTRL_RX_MASK			GENMASK(3, 2)
 #define   QCA8K_PORT_HDR_CTRL_TX_MASK			GENMASK(1, 0)
@@ -190,6 +197,8 @@
 #define   QCA8K_PORT_VLAN_SVID_MASK			GENMASK(11, 0)
 #define   QCA8K_PORT_VLAN_SVID(x)			FIELD_PREP(QCA8K_PORT_VLAN_SVID_MASK, x)
 #define QCA8K_REG_PORT_VLAN_CTRL1(_i)			(0x424 + (_i * 8))
+#define   QCA8K_PORT_VLAN_EGMODE(x)			((x & 0x3) << 12)
+#define   QCA8K_PORT_VLAN_EGMODE_MASK		GENMASK(13, 12)
 #define QCA8K_REG_IPV4_PRI_BASE_ADDR			0x470
 #define QCA8K_REG_IPV4_PRI_ADDR_MASK			0x474
 
@@ -324,6 +333,11 @@
 #define QCA8K_EGREES_VLAN_PORT_MASK(_i)			(GENMASK(11, 0) << QCA8K_EGREES_VLAN_PORT_SHIFT(_i))
 #define QCA8K_EGREES_VLAN_PORT(_i, x)			((x) << QCA8K_EGREES_VLAN_PORT_SHIFT(_i))
 #define QCA8K_EGRESS_VLAN(x)				(0x0c70 + (4 * (x / 2)))
+
+/* Route Egress VLAN Mode Register */
+#define QCA8K_ROUTE_EGRESS_VLAN				0x0c80
+#define   QCA8K_ROUTE_EGRESS_VLAN_MASK(port)		(0x3 << (port << 2))
+#define   QCA8K_ROUTE_EGRESS_VLAN_VAL(port, val)	(val << (port << 2))
 
 /* L3 registers */
 #define QCA8K_HROUTER_CONTROL				0xe00
