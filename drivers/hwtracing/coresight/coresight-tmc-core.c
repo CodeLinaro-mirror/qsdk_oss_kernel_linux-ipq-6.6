@@ -552,10 +552,13 @@ static int tmc_probe(struct amba_device *adev, const struct amba_id *id)
 
 		if (of_property_read_u32(dev->of_node, "qcom,rproc",
 					 &rproc_node))
-			return -ENODEV;
+			goto skip_ssr;
+
 		rproc = rproc_get_by_phandle(rproc_node);
-		if (!rproc)
+		if (!rproc) {
+			atomic_notifier_chain_unregister(&panic_notifier_list, &drvdata->panic_blk);
 			return -EPROBE_DEFER;
+		}
 
 		drvdata->ssr_blk.notifier_call = tmc_etr_ssr_handler;
 		notifier = qcom_register_ssr_atomic_notifier(rproc->name, &drvdata->ssr_blk);
