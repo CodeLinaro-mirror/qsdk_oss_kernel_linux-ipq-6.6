@@ -496,10 +496,14 @@ struct rproc_dump_segment {
  *				   from Linux to recover, such as firmware
  *				   loading. Linux just needs to attach after
  *				   recovery.
+ * @RPROC_FEAT_NON_SECURE_PIL	 : The remote processor uses non-secure PIL
+ *				   image loading to load the FW image and
+ *				   bring the remote processor out of reset.
  */
 
 enum rproc_features {
 	RPROC_FEAT_ATTACH_ON_RECOVERY,
+	RPROC_FEAT_NON_SECURE_PIL,
 	RPROC_MAX_FEATURES,
 };
 
