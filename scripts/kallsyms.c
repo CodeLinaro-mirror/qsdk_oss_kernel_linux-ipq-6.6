@@ -454,13 +454,15 @@ static void write_src(void)
 	}
 	printf("\n");
 
-	/*
-	 * Now that we wrote out the compressed symbol names, restore the
-	 * original names, which are needed in some of the later steps.
-	 */
-	for (i = 0; i < table_cnt; i++) {
-		expand_symbol(table[i]->sym, table[i]->len, buf);
-		strcpy((char *)table[i]->sym, buf);
+	if (!uncompressed) {
+		/*
+		 * Now that we wrote out the compressed symbol names, restore the
+		 * original names, which are needed in some of the later steps.
+		 */
+		for (i = 0; i < table_cnt; i++) {
+			expand_symbol(table[i]->sym, table[i]->len, buf);
+			strcpy((char *)table[i]->sym, buf);
+		}
 	}
 
 	output_label("kallsyms_markers");
@@ -470,23 +472,22 @@ static void write_src(void)
 
 	free(markers);
 
-	if (uncompressed)
-		return;
+	if (!uncompressed) {
+		output_label("kallsyms_token_table");
+		off = 0;
+		for (i = 0; i < 256; i++) {
+			best_idx[i] = off;
+			expand_symbol(best_table[i], best_table_len[i], buf);
+			printf("\t.asciz\t\"%s\"\n", buf);
+			off += strlen(buf) + 1;
+		}
+		printf("\n");
 
-	output_label("kallsyms_token_table");
-	off = 0;
-	for (i = 0; i < 256; i++) {
-		best_idx[i] = off;
-		expand_symbol(best_table[i], best_table_len[i], buf);
-		printf("\t.asciz\t\"%s\"\n", buf);
-		off += strlen(buf) + 1;
+		output_label("kallsyms_token_index");
+		for (i = 0; i < 256; i++)
+			printf("\t.short\t%d\n", best_idx[i]);
+		printf("\n");
 	}
-	printf("\n");
-
-	output_label("kallsyms_token_index");
-	for (i = 0; i < 256; i++)
-		printf("\t.short\t%d\n", best_idx[i]);
-	printf("\n");
 
 	if (!base_relative)
 		output_label("kallsyms_addresses");
@@ -825,6 +826,7 @@ int main(int argc, char **argv)
 			{"absolute-percpu", no_argument, &absolute_percpu, 1},
 			{"base-relative",   no_argument, &base_relative,   1},
 			{"lto-clang",       no_argument, &lto_clang,       1},
+			{"uncompressed",   no_argument, &uncompressed,   1},
 			{},
 		};
 

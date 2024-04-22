@@ -24,9 +24,9 @@
 #endif
 
 #ifdef MODULE
-#define __EXPORT_SUFFIX(name)
+#define __EXPORT_SUFFIX(sym)
 #else
-#define __EXPORT_SUFFIX(name) + #name
+#define __EXPORT_SUFFIX(sym) "+" #sym
 #endif
 
 /*
@@ -41,7 +41,7 @@
  * former apparently works on all arches according to the binutils source.
  */
 #define __KSYMTAB(name, sym, sec, ns)						\
-	asm("	.section \"__ksymtab_strings __EXPORT_SUFFIX(name)\",\"aMS\",%progbits,1"	"\n"	\
+	asm("	.section \"__ksymtab_strings" __EXPORT_SUFFIX(sym) "\",\"aMS\",%progbits,1"	"\n"	\
 	    "__kstrtab_" #name ":"					"\n"	\
 	    "	.asciz \"" #name "\""					"\n"	\
 	    "__kstrtabns_" #name ":"					"\n"	\
