@@ -172,7 +172,7 @@ static int sdhci_msm_ice_set_hwkey_config(struct qcom_ice *ice,
 	struct ice_config_sec *ice_settings = NULL;
 	int ret;
 
-	ice_settings = kmalloc(sizeof(struct ice_config_sec), GFP_KERNEL);
+	ice_settings = kzalloc(sizeof(struct ice_config_sec), GFP_KERNEL);
 	if (!ice)
 		return -ENOMEM;
 
