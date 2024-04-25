@@ -971,10 +971,10 @@ static int br_setport(struct net_bridge_port *p, struct nlattr *tb[],
 	br_set_port_flag(p, tb, IFLA_BRPORT_NEIGH_SUPPRESS, BR_NEIGH_SUPPRESS);
 	br_set_port_flag(p, tb, IFLA_BRPORT_ISOLATED, BR_ISOLATED);
 	br_set_port_flag(p, tb, IFLA_BRPORT_LOCKED, BR_PORT_LOCKED);
-	br_set_port_flag(p, tb, IFLA_BRPORT_BPDU_FILTER, BR_BPDU_FILTER);
 	br_set_port_flag(p, tb, IFLA_BRPORT_MAB, BR_PORT_MAB);
 	br_set_port_flag(p, tb, IFLA_BRPORT_NEIGH_VLAN_SUPPRESS,
 			 BR_NEIGH_VLAN_SUPPRESS);
+	br_set_port_flag(p, tb, IFLA_BRPORT_BPDU_FILTER, BR_BPDU_FILTER);
 
 	if ((p->flags & BR_PORT_MAB) &&
 	    (!(p->flags & BR_PORT_LOCKED) || !(p->flags & BR_LEARNING))) {
