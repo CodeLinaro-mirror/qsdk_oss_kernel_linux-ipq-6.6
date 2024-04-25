@@ -1696,13 +1696,13 @@ static int qcom_pcie_probe(struct platform_device *pdev)
 
 	/* If nvmem-cells present on PCIe node in DTSI, then check the QFPROM
 	 * fuses for PCIe is disabled */
-	pcie_nvmem = of_nvmem_cell_get(pdev->dev.of_node, NULL);
+	pcie_nvmem = devm_nvmem_cell_get(dev, NULL);
 	if (IS_ERR(pcie_nvmem)) {
 		if (PTR_ERR(pcie_nvmem) == -EPROBE_DEFER)
 			return -EPROBE_DEFER;
 	} else {
 		disable_status = nvmem_cell_read(pcie_nvmem, &len);
-		nvmem_cell_put(pcie_nvmem);
+		devm_nvmem_cell_put(dev, pcie_nvmem);
 		if ( !IS_ERR(disable_status) && ((unsigned int)(*disable_status) == 1) ) {
 			dev_info(dev,"Disabled in qfprom efuse\n");
 			kfree(disable_status);
