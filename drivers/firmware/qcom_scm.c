@@ -321,7 +321,7 @@ int qcom_config_sec_ice(void *buf, int size)
 	struct qcom_scm_desc desc = {
 		.svc = QCOM_SVC_ICE,
 		.cmd = QCOM_SCM_ICE_CMD,
-		.arginfo = QCOM_SCM_ARGS(2),
+		.arginfo = QCOM_SCM_ARGS(2, QCOM_SCM_RO),
 		.owner = ARM_SMCCC_OWNER_SIP,
 	};
 
