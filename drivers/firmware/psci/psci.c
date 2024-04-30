@@ -19,6 +19,7 @@
 #include <linux/reboot.h>
 #include <linux/slab.h>
 #include <linux/suspend.h>
+#include <linux/delay.h>
 
 #include <uapi/linux/psci.h>
 
@@ -308,6 +309,31 @@ static int get_set_conduit_method(const struct device_node *np)
 static int psci_sys_reset(struct notifier_block *nb, unsigned long action,
 			  void *data)
 {
+	/*
+	 * From kernel, psci_sys_reset function is called during reboot for
+	 * both warm and cold reset.
+	 *
+	 * QSEE differentiates between warm and cold reset by checking the
+	 * TZ_WONCE register, which is set by SBL based on CDT settings.
+	 *
+	 * During cold reset, QSEE communicates with RPM via glink and requests
+	 * RPM to reset and during warm reset, QSEE directly toggles PSHOLD
+	 * register.
+	 *
+	 * During warm reset case, the "Restarting system" print after reboot
+	 * command is given is not flushed from the serial driver to console
+	 * before which the board gets rebooted.
+	 *
+	 * The pr_emerg("Restarting system\n") is called after the reboot
+	 * notifier callbacks are finished, therefore even if we add a
+	 * reboot notifier in serial driver and flush the tx buffer, it still
+	 * wouldn't help.
+	 *
+	 * We have added this 100 ms delay before invoking psci call for the
+	 * serial driver to flush the tx buf contents to console before
+	 * rebooting.
+	 */
+	mdelay(100);
 	if ((reboot_mode == REBOOT_WARM || reboot_mode == REBOOT_SOFT) &&
 	    psci_system_reset2_supported) {
 		/*
@@ -330,6 +356,7 @@ static struct notifier_block psci_sys_reset_nb = {
 
 static void psci_sys_poweroff(void)
 {
+	mdelay(10);
 	invoke_psci_fn(PSCI_0_2_FN_SYSTEM_OFF, 0, 0, 0);
 }
 
