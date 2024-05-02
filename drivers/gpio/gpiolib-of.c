@@ -1138,17 +1138,19 @@ static int of_gpio_export_probe(struct platform_device *pdev)
 		of_property_read_string(cnp, "gpio-export,name", &name);
 
 		if (!name)
-			// max_gpio = of_gpio_count(cnp);
+			max_gpio = of_gpio_named_count(cnp, "gpios");
 
 		for (i = 0; i < max_gpio; i++) {
+			struct gpio_desc *desc;
 			unsigned flags = 0;
 			enum of_gpio_flags of_flags;
 
-			gpio = of_get_named_gpio(cnp, i, &of_flags);
-			if (!gpio_is_valid(gpio))
-				return gpio;
+			desc = of_get_named_gpiod_flags(cnp, "gpios", i, &of_flags);
+			if (IS_ERR(desc))
+				return PTR_ERR(desc);
+			gpio = desc_to_gpio(desc);
 
-			if (of_flags == OF_GPIO_ACTIVE_LOW)
+			if (of_flags & OF_GPIO_ACTIVE_LOW)
 				flags |= GPIOF_ACTIVE_LOW;
 
 			if (!of_property_read_u32(cnp, "gpio-export,output", &val))
@@ -1160,7 +1162,7 @@ static int of_gpio_export_probe(struct platform_device *pdev)
 				continue;
 
 			dmc = of_property_read_bool(cnp, "gpio-export,direction_may_change");
-			gpio_export_with_name(gpio, dmc, name);
+			gpio_export_with_name(gpio_to_desc(gpio), dmc, name);
 			nb++;
 		}
 	}

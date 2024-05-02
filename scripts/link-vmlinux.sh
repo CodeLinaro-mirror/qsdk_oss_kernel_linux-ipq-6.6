@@ -160,7 +160,7 @@ kallsyms()
 		kallsymopt="${kallsymopt} --lto-clang"
 	fi
 
-	if [ -n "${CONFIG_KALLSYMS_UNCOMPRESSED}" ]; then
+	if is_enabled CONFIG_KALLSYMS_UNCOMPRESSED; then
 		kallsymopt="${kallsymopt} --uncompressed"
 	fi
 

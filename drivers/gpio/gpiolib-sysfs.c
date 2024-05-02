@@ -647,6 +647,13 @@ int gpiod_export(struct gpio_desc *desc, bool direction_may_change)
 }
 EXPORT_SYMBOL_GPL(gpiod_export);
 
+int gpio_export_with_name(struct gpio_desc *desc, bool direction_may_change,
+			  const char *name)
+{
+	return __gpiod_export(desc, direction_may_change, name);
+}
+EXPORT_SYMBOL_GPL(gpio_export_with_name);
+
 static int match_export(struct device *dev, const void *desc)
 {
 	struct gpiod_data *data = dev_get_drvdata(dev);
