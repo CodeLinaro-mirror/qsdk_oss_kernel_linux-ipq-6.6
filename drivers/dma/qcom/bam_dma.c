@@ -400,6 +400,8 @@ struct bam_device {
 
 	/* dma start transaction tasklet */
 	struct tasklet_struct task;
+
+	bool is_bam_lite;
 };
 
 /**
@@ -443,8 +445,9 @@ static void bam_reset(struct bam_device *bdev)
 	writel_relaxed(val, bam_addr(bdev, 0, BAM_CTRL));
 
 	/* set descriptor threshhold, start with 4 bytes */
-	writel_relaxed(DEFAULT_CNT_THRSHLD,
-			bam_addr(bdev, 0, BAM_DESC_CNT_TRSHLD));
+	if (!bdev->is_bam_lite)
+		writel_relaxed(DEFAULT_CNT_THRSHLD,
+			       bam_addr(bdev, 0, BAM_DESC_CNT_TRSHLD));
 
 	/* Enable default set of h/w workarounds, ie all except BAM_FULL_PIPE */
 	writel_relaxed(BAM_CNFG_BITS_DEFAULT, bam_addr(bdev, 0, BAM_CNFG_BITS));
@@ -1306,6 +1309,9 @@ static int bam_dma_probe(struct platform_device *pdev)
 		dev_err(bdev->dev, "failed to prepare/enable clock\n");
 		return ret;
 	}
+
+	bdev->is_bam_lite = of_property_read_bool(pdev->dev.of_node,
+						  "qcom,bam-lite");
 
 	ret = bam_init(bdev);
 	if (ret)
