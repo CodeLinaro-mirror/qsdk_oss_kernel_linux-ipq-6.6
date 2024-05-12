@@ -442,7 +442,12 @@ static void cqhci_prep_task_desc(struct mmc_request *mrq,
 	task_desc[0] = cpu_to_le64(desc0);
 
 	if (cq_host->caps & CQHCI_TASK_DESC_SZ_128) {
-		u64 desc1 = cqhci_crypto_prep_task_desc(mrq);
+		u64 desc1;
+
+		if (cq_host->use_hwkey)
+			desc1 = cqhci_crypto_prep_hwkey_task_desc(mrq);
+		else
+			desc1 = cqhci_crypto_prep_task_desc(mrq);
 
 		task_desc[1] = cpu_to_le64(desc1);
 

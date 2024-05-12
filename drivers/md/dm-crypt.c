@@ -41,6 +41,8 @@
 #include <keys/encrypted-type.h>
 #include <keys/trusted-type.h>
 #include <linux/blk-crypto.h>
+#include <linux/firmware/qcom/qcom_scm.h>
+#include <soc/qcom/ice.h>
 
 #include <linux/device-mapper.h>
 
@@ -139,7 +141,8 @@ enum flags { DM_CRYPT_SUSPENDED, DM_CRYPT_KEY_VALID,
 	     DM_CRYPT_SAME_CPU, DM_CRYPT_NO_OFFLOAD,
 	     DM_CRYPT_NO_READ_WORKQUEUE, DM_CRYPT_NO_WRITE_WORKQUEUE,
 	     DM_CRYPT_WRITE_INLINE, DM_CRYPT_INLINE_ENCRYPTION,
-	     DM_CRYPT_INLINE_ENCRYPTION_USE_HWKEY };
+	     DM_CRYPT_INLINE_ENCRYPTION_USE_HWKEY,
+	     DM_CRYPT_INLINE_OEMSEED_CRBK };
 
 enum cipher_flags {
 	CRYPT_MODE_INTEGRITY_AEAD,	/* Use authenticated mode for cipher */
@@ -2735,25 +2738,26 @@ static int crypt_set_key(struct crypt_config *cc, char *key)
 	int key_string_len = strlen(key);
 
 	/* Hyphen (which gives a key_size of zero) means there is no key. */
-	if (!cc->key_size && strcmp(key, "-"))
-		goto out;
+	if (!test_bit(DM_CRYPT_INLINE_OEMSEED_CRBK, &cc->flags)) {
+		if (!cc->key_size && strcmp(key, "-"))
+			goto out;
+		/* ':' means the key is in kernel keyring, short-circuit normal key processing */
+		if (key[0] == ':') {
+			r = crypt_set_keyring_key(cc, key + 1);
+			goto out;
+		}
 
-	/* ':' means the key is in kernel keyring, short-circuit normal key processing */
-	if (key[0] == ':') {
-		r = crypt_set_keyring_key(cc, key + 1);
-		goto out;
+		/* clear the flag since following operations may invalidate previously valid key */
+		clear_bit(DM_CRYPT_KEY_VALID, &cc->flags);
+
+		/* wipe references to any kernel keyring key */
+		kfree_sensitive(cc->key_string);
+		cc->key_string = NULL;
+
+		/* Decode key from its hex representation. */
+		if (cc->key_size && hex2bin(cc->key, key, cc->key_size) < 0)
+			goto out;
 	}
-
-	/* clear the flag since following operations may invalidate previously valid key */
-	clear_bit(DM_CRYPT_KEY_VALID, &cc->flags);
-
-	/* wipe references to any kernel keyring key */
-	kfree_sensitive(cc->key_string);
-	cc->key_string = NULL;
-
-	/* Decode key from its hex representation. */
-	if (cc->key_size && hex2bin(cc->key, key, cc->key_size) < 0)
-		goto out;
 
 	r = crypt_setkey(cc);
 	if (!r)
@@ -3243,6 +3247,94 @@ static int crypt_ctr_cipher(struct dm_target *ti, char *cipher_in, char *key)
 	return ret;
 }
 
+#ifdef CONFIG_BLK_INLINE_ENCRYPTION
+static int qcom_set_ice_context(struct dm_target *ti, char **argv)
+{
+	struct crypt_config *cc = ti->private;
+	uint8_t *hex_data_context = NULL, *hex_salt_context = NULL;
+	uint32_t hex_salt_len = 0, hex_data_len = 0;
+	char *buf = NULL;
+	uint32_t seedtype = 0;
+	unsigned short algo_mode, key_size;
+	int i, ret = -1;
+
+	switch (cc->crypto_mode) {
+	case BLK_ENCRYPTION_MODE_AES_128_XTS:
+		algo_mode = ICE_CRYPTO_ALGO_MODE_HW_AES_XTS;
+		key_size = ICE_CRYPTO_KEY_SIZE_HW_128;
+		break;
+	case BLK_ENCRYPTION_MODE_AES_256_XTS:
+		algo_mode = ICE_CRYPTO_ALGO_MODE_HW_AES_XTS;
+		key_size = ICE_CRYPTO_KEY_SIZE_HW_256;
+		break;
+	case BLK_ENCRYPTION_MODE_AES_128_ECB:
+		algo_mode = ICE_CRYPTO_ALGO_MODE_HW_AES_ECB;
+		key_size = ICE_CRYPTO_KEY_SIZE_HW_128;
+		break;
+	case BLK_ENCRYPTION_MODE_AES_256_ECB:
+		algo_mode = ICE_CRYPTO_ALGO_MODE_HW_AES_ECB;
+		key_size = ICE_CRYPTO_KEY_SIZE_HW_256;
+		break;
+	default:
+		ti->error = "Unhandled crypto mode";
+		return -EINVAL;
+	}
+
+	if (!strcmp(argv[8], "oemseed"))
+		seedtype = 1;
+
+	hex_data_context  = kzalloc(DATA_COTEXT_LEN, GFP_KERNEL);
+	if (!hex_data_context) {
+		DMERR("%s: no memory allocated\n", __func__);
+		return -ENOMEM;
+	}
+
+	buf = argv[9];
+	hex_data_len = strlen(argv[9]) / 2;
+	if (hex_data_len != DATA_COTEXT_LEN || strlen(argv[9]) % 2 != 0) {
+		DMERR("%s: Invalid data context length. Context length \
+				must be %d\n", __func__, DATA_COTEXT_LEN * 2);
+		goto out;
+	}
+	for (i = 0; i < hex_data_len; i++) {
+		sscanf(buf, "%2hhx", &hex_data_context[i]);
+		buf += 2;
+	}
+
+
+	if (algo_mode == ICE_CRYPTO_ALGO_MODE_HW_AES_XTS) {
+		hex_salt_context = kzalloc(SALT_COTEXT_LEN, GFP_KERNEL);
+		if (!hex_salt_context) {
+			DMERR("%s: no memory allocated\n", __func__);
+			goto out;
+		}
+
+		buf = argv[10];
+		hex_salt_len = strlen(argv[10]) / 2;
+		if (hex_salt_len != SALT_COTEXT_LEN || strlen(argv[10]) % 2 != 0) {
+			DMERR("%s: Invalid salt context length. Context length \
+				must be %d\n", __func__, SALT_COTEXT_LEN * 2);
+			goto out;
+		}
+		for (i = 0; i < hex_salt_len; i++) {
+			sscanf(buf, "%2hhx", &hex_salt_context[i]);
+			buf += 2;
+		}
+		buf = NULL;
+	}
+
+	ret = qcom_context_ice_sec(seedtype, key_size, algo_mode, hex_data_context,
+				hex_data_len, hex_salt_context, hex_salt_len);
+	if (ret)
+		DMERR("%s: ice context configuration fail\n", __func__);
+
+out:
+	kfree(hex_data_context);
+	kfree(hex_salt_context);
+	return ret;
+}
+#endif
+
 static int crypt_ctr_optional(struct dm_target *ti, unsigned int argc, char **argv)
 {
 	struct crypt_config *cc = ti->private;
@@ -3287,6 +3379,9 @@ static int crypt_ctr_optional(struct dm_target *ti, unsigned int argc, char **ar
 			set_bit(DM_CRYPT_INLINE_ENCRYPTION, &cc->flags);
 		else if (!strcasecmp(opt_string, "hwkey"))
 			set_bit(DM_CRYPT_INLINE_ENCRYPTION_USE_HWKEY, &cc->flags);
+		else if (!strcasecmp(opt_string, "oemseed") ||
+				!strcasecmp(opt_string, "CRBK"))
+			set_bit(DM_CRYPT_INLINE_OEMSEED_CRBK, &cc->flags);
 #endif
 		else if (sscanf(opt_string, "integrity:%u:", &val) == 1) {
 			if (val == 0 || val > MAX_TAG_SIZE) {
@@ -3422,6 +3517,13 @@ static int crypt_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 	if (ret < 0)
 		goto bad;
 
+#ifdef CONFIG_BLK_INLINE_ENCRYPTION
+	if (test_bit(DM_CRYPT_INLINE_OEMSEED_CRBK, &cc->flags)) {
+		ret = qcom_set_ice_context(ti, argv);
+		if (ret < 0)
+			goto bad;
+	}
+#endif
 	if (test_bit(DM_CRYPT_INLINE_ENCRYPTION, &cc->flags))
 		return 0;
 

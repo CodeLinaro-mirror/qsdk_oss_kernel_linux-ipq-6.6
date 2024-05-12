@@ -313,6 +313,69 @@ static bool __qcom_scm_is_call_available(struct device *dev, u32 svc_id,
 	return ret ? false : !!res.result[0];
 }
 
+int qcom_context_ice_sec(u32 type, u8 key_size,
+			 u8 algo_mode, u8 *data_ctxt, u32 data_ctxt_len,
+			 u8 *salt_ctxt, u32 salt_ctxt_len)
+{
+	int ret;
+	struct qcom_scm_res res;
+	void *data_ctxbuf = NULL, *salt_ctxbuf = NULL;
+	dma_addr_t data_context_phy, salt_context_phy = 0;
+
+	struct qcom_scm_desc desc = {
+		.svc = QCOM_SVC_ICE,
+		.cmd = QCOM_SCM_ICE_CONTEXT_CMD,
+		.arginfo = QCOM_SCM_ARGS(7, QCOM_SCM_VAL, QCOM_SCM_VAL,
+				QCOM_SCM_VAL, QCOM_SCM_RO, QCOM_SCM_VAL,
+				QCOM_SCM_RO, QCOM_SCM_VAL),
+		.owner = ARM_SMCCC_OWNER_SIP,
+	};
+
+	if (!data_ctxt)
+		return -EINVAL;
+
+	data_ctxbuf = dma_alloc_coherent(__scm->dev, data_ctxt_len,
+			&data_context_phy, GFP_KERNEL);
+	if (!data_ctxbuf)
+		return -ENOMEM;
+
+	memcpy(data_ctxbuf, data_ctxt, data_ctxt_len);
+
+	if (algo_mode == 0x3 && salt_ctxt) {
+		salt_ctxbuf = dma_alloc_coherent(__scm->dev, salt_ctxt_len,
+				&salt_context_phy, GFP_KERNEL);
+		if (!salt_ctxbuf) {
+			ret = -ENOMEM;
+			goto dma_unmap_data_ctxbuf;
+		}
+
+		memcpy(salt_ctxbuf, salt_ctxt, salt_ctxt_len);
+	}
+
+	desc.args[0] = type;
+	desc.args[1] = key_size;
+	desc.args[2] = algo_mode;
+	desc.args[3] = data_context_phy;
+	desc.args[4] = data_ctxt_len;
+	desc.args[5] = salt_context_phy;
+	desc.args[6] = salt_ctxt_len;
+
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+
+	if (algo_mode == 0x3 && salt_ctxt) {
+		memzero_explicit(salt_ctxt, salt_ctxt_len);
+		dma_free_coherent(__scm->dev, salt_ctxt_len,
+				salt_ctxbuf, salt_context_phy);
+	}
+
+dma_unmap_data_ctxbuf:
+	memzero_explicit(data_ctxbuf, data_ctxt_len);
+	dma_free_coherent(__scm->dev, data_ctxt_len, data_ctxbuf, data_context_phy);
+	return ret ?  : res.result[0];
+
+}
+EXPORT_SYMBOL_GPL(qcom_context_ice_sec);
+
 int qcom_config_sec_ice(void *buf, int size)
 {
 	int ret;
@@ -333,7 +396,7 @@ int qcom_config_sec_ice(void *buf, int size)
 	ret = qcom_scm_call(__scm->dev, &desc, &res);
 	return ret ? false : !!res.result[0];
 }
-EXPORT_SYMBOL(qcom_config_sec_ice);
+EXPORT_SYMBOL_GPL(qcom_config_sec_ice);
 
 static int qcom_scm_set_boot_addr(void *entry, const u8 *cpu_bits)
 {
