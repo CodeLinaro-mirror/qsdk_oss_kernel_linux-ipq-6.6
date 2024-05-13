@@ -27,6 +27,9 @@
 
 #include "qcom_scm.h"
 
+#define SDI_DISABLE		BIT(0)
+#define ABNORMAL_MAGIC		BIT(1)
+
 static bool download_mode = IS_ENABLED(CONFIG_QCOM_SCM_DOWNLOAD_MODE_DEFAULT);
 module_param(download_mode, bool, 0);
 
@@ -2976,6 +2979,7 @@ static int qcom_scm_probe(struct platform_device *pdev)
 {
 	struct qcom_scm *scm;
 	int irq, ret;
+	unsigned long data;
 
 	scm = devm_kzalloc(&pdev->dev, sizeof(*scm), GFP_KERNEL);
 	if (!scm)
@@ -2984,6 +2988,9 @@ static int qcom_scm_probe(struct platform_device *pdev)
 	ret = qcom_scm_find_dload_address(&pdev->dev, &scm->dload_mode_addr);
 	if (ret < 0)
 		return ret;
+
+	data = (unsigned long)of_device_get_match_data(&pdev->dev);
+	dev_set_drvdata(&pdev->dev, (unsigned long *)data);
 
 	ret = of_property_read_u32(pdev->dev.of_node, "hvc-log-cmd-id", &scm->hvc_log_cmd_id);
 	if (ret)
@@ -3053,8 +3060,10 @@ static int qcom_scm_probe(struct platform_device *pdev)
 		qcom_scm_set_download_mode(true);
 	}
 	else {
-		qcom_scm_sdi_disable(__scm->dev);
-		qcom_scm_set_abnormal_magic(true);
+		if (data & SDI_DISABLE)
+			qcom_scm_sdi_disable(__scm->dev);
+		if (data & ABNORMAL_MAGIC)
+			qcom_scm_set_abnormal_magic(true);
 	}
 
 	return 0;
@@ -3062,9 +3071,12 @@ static int qcom_scm_probe(struct platform_device *pdev)
 
 static void qcom_scm_shutdown(struct platform_device *pdev)
 {
+	unsigned long data = (unsigned long)dev_get_drvdata(&pdev->dev);
+
 	/* Clean shutdown, disable download mode to allow normal restart */
 	qcom_scm_set_download_mode(false);
-	qcom_scm_set_abnormal_magic(false);
+	if (data & ABNORMAL_MAGIC)
+		qcom_scm_set_abnormal_magic(false);
 }
 
 static const struct of_device_id qcom_scm_dt_match[] = {
@@ -3074,6 +3086,7 @@ static const struct of_device_id qcom_scm_dt_match[] = {
 	{ .compatible = "qcom,scm-apq8064" },
 	{ .compatible = "qcom,scm-apq8084" },
 	{ .compatible = "qcom,scm-ipq4019" },
+	{ .compatible = "qcom,scm-ipq9574", .data = (void *)(SDI_DISABLE | ABNORMAL_MAGIC)},
 	{ .compatible = "qcom,scm-msm8953" },
 	{ .compatible = "qcom,scm-msm8974" },
 	{ .compatible = "qcom,scm-msm8996" },
