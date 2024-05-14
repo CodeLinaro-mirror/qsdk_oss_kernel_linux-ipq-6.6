@@ -2738,7 +2738,7 @@ static int crypt_set_key(struct crypt_config *cc, char *key)
 	int key_string_len = strlen(key);
 
 	/* Hyphen (which gives a key_size of zero) means there is no key. */
-	if (!test_bit(DM_CRYPT_INLINE_OEMSEED_CRBK, &cc->flags)) {
+	if (!test_bit(DM_CRYPT_INLINE_ENCRYPTION_USE_HWKEY, &cc->flags)) {
 		if (!cc->key_size && strcmp(key, "-"))
 			goto out;
 		/* ':' means the key is in kernel keyring, short-circuit normal key processing */
@@ -3280,9 +3280,16 @@ static int qcom_set_ice_context(struct dm_target *ti, char **argv)
 		return -EINVAL;
 	}
 
-	if (!strcmp(argv[8], "oemseed"))
-		seedtype = 1;
-
+	if (argv[8] != NULL && !strcmp(argv[8], "oemseed")) {
+		seedtype = OEM_SEED_TYPE;
+	} else {
+		ret = qcom_context_ice_sec(seedtype, key_size, algo_mode,
+				hex_data_context, hex_data_len,
+				hex_salt_context, hex_salt_len);
+		if (ret)
+			DMERR("%s: ice context configuration fail\n", __func__);
+		goto out;
+	}
 	hex_data_context  = kzalloc(DATA_COTEXT_LEN, GFP_KERNEL);
 	if (!hex_data_context) {
 		DMERR("%s: no memory allocated\n", __func__);
@@ -3518,7 +3525,7 @@ static int crypt_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 		goto bad;
 
 #ifdef CONFIG_BLK_INLINE_ENCRYPTION
-	if (test_bit(DM_CRYPT_INLINE_OEMSEED_CRBK, &cc->flags)) {
+	if (test_bit(DM_CRYPT_INLINE_ENCRYPTION_USE_HWKEY, &cc->flags)) {
 		ret = qcom_set_ice_context(ti, argv);
 		if (ret < 0)
 			goto bad;
