@@ -47,6 +47,8 @@
 #include "sd_ops.h"
 #include "sdio_ops.h"
 
+#define EMU_CLK_ADJ_REG 0x194C008
+
 /* The max erase timeout, used when host->max_busy_timeout isn't specified */
 #define MMC_ERASE_TIMEOUT_MS	(60 * 1000) /* 60 s */
 #define SD_DISCARD_TIMEOUT_MS	(250)
@@ -2204,9 +2206,20 @@ void mmc_rescan(struct work_struct *work)
 	struct mmc_host *host =
 		container_of(work, struct mmc_host, detect.work);
 	int i;
+	void __iomem *emu_clk_adj_reg;
 
 	if (host->rescan_disable)
 		return;
+
+	if (of_property_read_bool(host->parent->of_node, "qcom,emulation")) {
+		emu_clk_adj_reg = ioremap(EMU_CLK_ADJ_REG, 4);
+		if (IS_ERR_OR_NULL(emu_clk_adj_reg)) {
+			dev_info(host->parent,
+				 "ioremap failed for emu clk adj register\n");
+			return;
+		}
+		writel(0x0, emu_clk_adj_reg);
+	}
 
 	/* If there is a non-removable card registered, only scan once */
 	if (!mmc_card_is_removable(host) && host->rescan_entered)
@@ -2255,6 +2268,11 @@ void mmc_rescan(struct work_struct *work)
 			break;
 		if (freqs[i] <= host->f_min)
 			break;
+	}
+
+	if (of_property_read_bool(host->parent->of_node, "qcom,emulation")) {
+		writel(0x1, emu_clk_adj_reg);
+		iounmap(emu_clk_adj_reg);
 	}
 
 	/* A non-removable card should have been detected by now. */
