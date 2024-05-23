@@ -3185,7 +3185,7 @@ static int ipmr_vif_seq_show(struct seq_file *seq, void *v)
 		vif_dev = vif_dev_read(vif);
 		name = vif_dev ? vif_dev->name : "none";
 		seq_printf(seq,
-			   "%2td %-10s %8llu %7llu  %8llu %7llu %05X %08X %08X\n",
+			   "%2td %-10s %8lu %7lu  %8lu %7lu %05X %08X %08X\n",
 			   vif - mrt->vif_table,
 			   name, vif->bytes_in, vif->pkt_in,
 			   vif->bytes_out, vif->pkt_out,

@@ -797,8 +797,10 @@ struct net_device *br_port_dev_get(struct net_device *dev, unsigned char *addr,
 				   struct sk_buff *skb,
 				   unsigned int cookie)
 {
+#if !IS_ENABLED(CONFIG_BRIDGE_VLAN_FILTERING)
 	struct net_bridge_fdb_entry *fdbe;
 	struct net_bridge *br;
+#endif
 	struct net_device *netdev = NULL;
 	u16 __maybe_unused vid;
 

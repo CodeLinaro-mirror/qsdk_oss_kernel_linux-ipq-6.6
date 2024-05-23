@@ -324,7 +324,7 @@ static const struct rt6_info ip6_prohibit_entry_template = {
 
 static const struct rt6_info ip6_policy_failed_entry_template = {
 	.dst = {
-		.__rcuref       = ATOMIC_INIT(1),
+		.__rcuref       = RCUREF_INIT(1),
 		.__use          = 1,
 		.obsolete       = DST_OBSOLETE_FORCE_CHK,
 		.error          = -EACCES,
