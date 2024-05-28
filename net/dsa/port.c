@@ -1927,6 +1927,9 @@ static const char * const dsa_switches_apply_workarounds[] = {
 #if IS_ENABLED(CONFIG_NET_DSA_SMSC_LAN9303_I2C)
 	"smsc,lan9303-i2c",
 #endif
+#if IS_ENABLED(CONFIG_NET_DSA_QCA8K)
+	"qca,qca8386",
+#endif
 	NULL,
 };
 
