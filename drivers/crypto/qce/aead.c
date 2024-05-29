@@ -307,8 +307,6 @@ qce_aead_ccm_prepare_buf_assoclen(struct aead_request *req)
 		rctx->dst_sg = rctx->src_sg;
 	}
 
-	kfree(rctx->adata);
-
 	return 0;
 err_free:
 	sg_free_table(&rctx->src_tbl);
