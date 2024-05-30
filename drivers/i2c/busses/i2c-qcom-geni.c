@@ -801,6 +801,9 @@ static int geni_i2c_probe(struct platform_device *pdev)
 		gi2c->clk_freq_out = KHZ(100);
 	}
 
+#ifdef CONFIG_QCOM_GENI_SE_FW_LOAD
+	geni_se_fw_load(&gi2c->se, QUPV3_SE_I2C);
+#endif /* CONFIG_QCOM_GENI_SE_FW_LOAD */
 	if (has_acpi_companion(dev))
 		ACPI_COMPANION_SET(&gi2c->adap.dev, ACPI_COMPANION(dev));
 
