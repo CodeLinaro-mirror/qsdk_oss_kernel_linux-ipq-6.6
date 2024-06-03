@@ -798,7 +798,7 @@ static void dw_pcie_link_set_max_link_width(struct dw_pcie *pci, u32 num_lanes)
 
 void dw_pcie_iatu_detect(struct dw_pcie *pci)
 {
-	int max_region, ob, ib;
+	int max_region, ob, ib = 0;
 	u32 val, min, dir;
 	u64 max;
 
@@ -822,11 +822,13 @@ void dw_pcie_iatu_detect(struct dw_pcie *pci)
 			break;
 	}
 
-	for (ib = 0; ib < max_region; ib++) {
-		dw_pcie_writel_atu_ib(pci, ib, PCIE_ATU_LOWER_TARGET, 0x11110000);
-		val = dw_pcie_readl_atu_ib(pci, ib, PCIE_ATU_LOWER_TARGET);
-		if (val != 0x11110000)
-			break;
+	if (!list_empty(&pci->pp.bridge->dma_ranges)) {
+		for (ib = 0; ib < max_region; ib++) {
+			dw_pcie_writel_atu_ib(pci, ib, PCIE_ATU_LOWER_TARGET, 0x11110000);
+			val = dw_pcie_readl_atu_ib(pci, ib, PCIE_ATU_LOWER_TARGET);
+			if (val != 0x11110000)
+				break;
+		}
 	}
 
 	if (ob) {
