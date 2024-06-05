@@ -2987,7 +2987,7 @@ static int gcc_ipq5332_probe(struct platform_device *pdev)
 	regmap_write(regmap, 0x2d010, 0x107);
 	regmap_update_bits(regmap, 0x2d00c, BIT(0), BIT(0));
 
-	return qcom_cc_really_probe(pdev, &gcc_ipq5332_desc, regmap);
+	return qcom_cc_really_probe(&pdev->dev, &gcc_ipq5332_desc, regmap);
 }
 
 static const struct of_device_id gcc_ipq5332_match_table[] = {
