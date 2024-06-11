@@ -9,10 +9,15 @@
 /* The max number of the datasets that TPDM supports */
 #define TPDM_DATASETS       7
 
+#define TPDM_CMB_CR		(0xA00)
 /* DSB Subunit Registers */
 #define TPDM_DSB_CR		(0x780)
 /* Enable bit for DSB subunit */
 #define TPDM_DSB_CR_ENA		BIT(0)
+/* Enable bit for CMB subunit */
+#define TPDM_CMB_CR_ENA		BIT(0)
+/* Enable bit for CMB flowcontrol */
+#define TPDM_CMB_FC_ENA		BIT(2)
 
 /* TPDM integration test registers */
 #define TPDM_ITATBCNTRL		(0xEF0)
@@ -39,6 +44,7 @@
 
 #define TPDM_PIDR0_DS_IMPDEF	BIT(0)
 #define TPDM_PIDR0_DS_DSB	BIT(1)
+#define TPDM_PIDR0_DS_CMB	BIT(2)
 
 /**
  * struct tpdm_drvdata - specifics associated to an TPDM component

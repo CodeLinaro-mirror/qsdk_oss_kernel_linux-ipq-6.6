@@ -27,8 +27,10 @@ static void tpda_enable_pre_port(struct tpda_drvdata *drvdata)
 	u32 val;
 
 	val = readl_relaxed(drvdata->base + TPDA_CR);
-	val &= ~TPDA_CR_ATID;
+	val &= ~(TPDA_CR_ATID | TPDA_CR_MID);
 	val |= FIELD_PREP(TPDA_CR_ATID, drvdata->atid);
+	val |= FIELD_PREP(TPDA_CR_MID, 4);
+	val |= BIT(1) | BIT(2); //FREQREQ, FREQTS
 	writel_relaxed(val, drvdata->base + TPDA_CR);
 }
 
@@ -36,9 +38,19 @@ static void tpda_enable_port(struct tpda_drvdata *drvdata, int port)
 {
 	u32 val;
 
+	val = readl_relaxed(drvdata->base + TPDA_FPID_CR);
+	val = 0x0;
+	writel_relaxed(val, drvdata->base + TPDA_FPID_CR);
+
+	val = readl_relaxed(drvdata->base + TPDA_SYNCR);
+	val = 0xFFF;
+	writel_relaxed(val, drvdata->base + TPDA_SYNCR);
+
 	val = readl_relaxed(drvdata->base + TPDA_Pn_CR(port));
 	/* Enable the port */
 	val |= TPDA_Pn_CR_ENA;
+	val |= (1 << 6); //CMBESIZE
+	val |= (2 << 9); //IMPLDEFSIZE
 	writel_relaxed(val, drvdata->base + TPDA_Pn_CR(port));
 }
 
@@ -46,10 +58,10 @@ static void __tpda_enable(struct tpda_drvdata *drvdata, int port)
 {
 	CS_UNLOCK(drvdata->base);
 
+	tpda_enable_port(drvdata, port);
+
 	if (!drvdata->csdev->enable)
 		tpda_enable_pre_port(drvdata);
-
-	tpda_enable_port(drvdata, port);
 
 	CS_LOCK(drvdata->base);
 }
@@ -123,11 +135,13 @@ static int tpda_init_default_data(struct tpda_drvdata *drvdata)
 		return atid;
 
 	drvdata->atid = atid;
+	drvdata->atid = 32;
 	return 0;
 }
 
 static int tpda_probe(struct amba_device *adev, const struct amba_id *id)
 {
+	
 	int ret;
 	struct device *dev = &adev->dev;
 	struct coresight_platform_data *pdata;
