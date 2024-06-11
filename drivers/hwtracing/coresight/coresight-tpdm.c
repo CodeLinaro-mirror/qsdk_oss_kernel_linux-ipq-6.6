@@ -30,6 +30,17 @@ static void tpdm_enable_dsb(struct tpdm_drvdata *drvdata)
 	writel_relaxed(val, drvdata->base + TPDM_DSB_CR);
 }
 
+static void tpdm_enable_cmb(struct tpdm_drvdata *drvdata)
+{
+	u32 val;
+
+	/* Set the enable bit of DSB control register to 1 */
+	val = readl_relaxed(drvdata->base + TPDM_CMB_CR);
+	val |= TPDM_CMB_CR_ENA | TPDM_CMB_FC_ENA;
+	writel_relaxed(val, drvdata->base + TPDM_CMB_CR);
+}
+
+
 /* TPDM enable operations */
 static void __tpdm_enable(struct tpdm_drvdata *drvdata)
 {
@@ -39,6 +50,9 @@ static void __tpdm_enable(struct tpdm_drvdata *drvdata)
 	if (drvdata->datasets & TPDM_PIDR0_DS_DSB)
 		tpdm_enable_dsb(drvdata);
 
+	/* Check if CMB datasets is present for TPDM. */
+	if (drvdata->datasets & TPDM_PIDR0_DS_CMB)
+		tpdm_enable_cmb(drvdata);
 	CS_LOCK(drvdata->base);
 }
 
@@ -219,7 +233,6 @@ static int tpdm_probe(struct amba_device *adev, const struct amba_id *id)
 	tpdm_init_default_data(drvdata);
 	/* Decrease pm refcount when probe is done.*/
 	pm_runtime_put(&adev->dev);
-
 	return 0;
 }
 
@@ -235,10 +248,15 @@ static void tpdm_remove(struct amba_device *adev)
  * The difference is 0-7 bits' value. So ignore 0-7 bits.
  */
 static struct amba_id tpdm_ids[] = {
-	{
-		.id = 0x000f0e00,
-		.mask = 0x000fff00,
-	},
+        {
+              .id = 0x000f0e00,
+              .mask = 0x000fff00,
+        },	
+        {
+               .id=0x1f0e04,
+               .mask=0x000fffff,
+        },
+
 	{ 0, 0},
 };
 
