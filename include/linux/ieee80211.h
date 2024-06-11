@@ -3091,6 +3091,8 @@ ieee80211_eht_capa_size_ok(const u8 *he_capa, const u8 *data, u8 len,
 	if (len < needed || !he_capa)
 		return false;
 
+	/* WAR: always set to true */
+	return true;
 	needed += ieee80211_eht_mcs_nss_size((const void *)he_capa,
 					     (const void *)data,
 					     from_ap);

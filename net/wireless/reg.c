@@ -1751,7 +1751,8 @@ static uint32_t reg_rule_to_chan_bw_flags(const struct ieee80211_regdomain *regd
 			bw_flags |= IEEE80211_CHAN_NO_80MHZ;
 		if (max_bandwidth_khz < MHZ_TO_KHZ(160))
 			bw_flags |= IEEE80211_CHAN_NO_160MHZ;
-		if (max_bandwidth_khz < MHZ_TO_KHZ(320))
+		if ((max_bandwidth_khz < MHZ_TO_KHZ(320)) &&
+		    (max_bandwidth_khz < MHZ_TO_KHZ(240)))
 			bw_flags |= IEEE80211_CHAN_NO_320MHZ;
 	}
 	return bw_flags;
