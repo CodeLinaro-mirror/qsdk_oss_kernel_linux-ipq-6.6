@@ -1920,7 +1920,7 @@ static const struct of_device_id qcom_pcie_match[] = {
 	{ .compatible = "qcom,pcie-apq8084", .data = &cfg_1_0_0 },
 	{ .compatible = "qcom,pcie-ipq4019", .data = &cfg_2_4_0 },
 	{ .compatible = "qti,pcie-ipq5332", .data = &cfg_1_27_0 },
-	{ .compatible = "qcom,pcie-devsoc", .data = &cfg_1_27_0 },
+	{ .compatible = "qcom,pcie-ipq5424", .data = &cfg_1_27_0 },
 	{ .compatible = "qcom,pcie-ipq6018", .data = &cfg_2_9_0 },
 	{ .compatible = "qcom,pcie-ipq8064", .data = &cfg_2_1_0 },
 	{ .compatible = "qcom,pcie-ipq8064-v2", .data = &cfg_2_1_0 },
