@@ -1010,8 +1010,8 @@ char *symbol_string(char *buf, char *end, void *ptr,
 	mod = __module_address(value);
 	if (mod)
 		snprintf(sym + len, sizeof(sym) - len, " [%s@%p+0x%x]",
-			 mod->name, mod->core_layout.base,
-			 mod->core_layout.size);
+			mod->name, mod->mem[MOD_TEXT].base,
+			mod->mem[MOD_TEXT].size);
 #endif
 	return string(buf, end, sym, spec);
 }
