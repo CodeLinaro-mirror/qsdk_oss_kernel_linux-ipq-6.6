@@ -1604,6 +1604,42 @@ static struct notifier_block cfg80211_netdev_notifier = {
 	.notifier_call = cfg80211_netdev_notifier_call,
 };
 
+void cfg80211_stop_interface_recovery(struct net_device *dev, int link_id)
+{
+	struct wireless_dev *wdev = dev->ieee80211_ptr;
+	struct cfg80211_registered_device *rdev = wiphy_to_rdev(wdev->wiphy);
+
+	wiphy_lock(&rdev->wiphy);
+	wdev_lock(wdev);
+
+	lockdep_assert_held(&rdev->wiphy.mtx);
+	ASSERT_WDEV_LOCK(wdev);
+	switch (wdev->iftype) {
+		case NL80211_IFTYPE_P2P_CLIENT:
+		case NL80211_IFTYPE_STATION:
+			cfg80211_disconnect(rdev, dev, WLAN_REASON_DEAUTH_LEAVING, true);
+			break;
+		case NL80211_IFTYPE_AP:
+		case NL80211_IFTYPE_P2P_GO:
+			__cfg80211_stop_ap(rdev, dev, link_id, true);
+			break;
+		case NL80211_IFTYPE_ADHOC:
+		case NL80211_IFTYPE_AP_VLAN:
+		case NL80211_IFTYPE_WDS:
+		case NL80211_IFTYPE_MONITOR:
+		case NL80211_IFTYPE_MESH_POINT:
+		case NL80211_IFTYPE_P2P_DEVICE:
+		case NL80211_IFTYPE_OCB:
+		case NL80211_IFTYPE_NAN:
+		case NL80211_IFTYPE_UNSPECIFIED:
+		case NUM_NL80211_IFTYPES:
+			break;
+	}
+	wdev_unlock(wdev);
+	wiphy_unlock(&rdev->wiphy);
+}
+EXPORT_SYMBOL(cfg80211_stop_interface_recovery);
+
 static void __net_exit cfg80211_pernet_exit(struct net *net)
 {
 	struct cfg80211_registered_device *rdev;
