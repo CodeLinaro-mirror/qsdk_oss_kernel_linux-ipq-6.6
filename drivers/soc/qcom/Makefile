@@ -40,6 +40,7 @@ obj-$(CONFIG_MSM_RPM_LOG)	+= rpm_log.o
 obj-$(CONFIG_IPQ_REG_UPDATE) += ipq_reg_update.o
 obj-$(CONFIG_QCOM_SOC_NETSTANDBY) += netstandby.o
 obj-$(CONFIG_QTI_TZ_LOG) += tz_log.o
+obj-$(CONFIG_QCOM_CTXT_SAVE) += ctx-save.o
 obj-$(CONFIG_QTI_LICENSE_MANAGER) += license_manager.o
 obj-$(CONFIG_QTI_LICENSE_MANAGER)	+= qwes.o
 obj-$(CONFIG_QCOM_TMELCOM) += tmelcom/

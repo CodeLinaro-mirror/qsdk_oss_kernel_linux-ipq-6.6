@@ -95,6 +95,21 @@ config QCOM_MDT_LOADER
 	tristate
 	select QCOM_SCM
 
+config QCA_MINIDUMP
+        bool "QCA minidump feature"
+        depends on QCOM_WDT && KALLSYMS
+        help
+          Say Y here to include QCA minidump feature.
+          This feature enables dumping desired regions
+          instead of dumping whole DDR up on system crash.
+          Currently supported on IPQ807x /IPQ60xx targets
+
+config QCA_MINIDUMP_DEBUG
+        bool "QCA minidump Debug feature"
+        depends on QCA_MINIDUMP
+        help
+          Say Y here to include QCA minidump Debug logging.
+
 config QCOM_OCMEM
 	tristate "Qualcomm On Chip Memory (OCMEM) driver"
 	depends on ARCH_QCOM
@@ -318,6 +333,14 @@ config QTI_EMULATION_APSS_ACC
 	  to the ACC associated with the CPU accessing the region.
 
 	  If unsure, say N.
+
+config QCOM_CTXT_SAVE
+        tristate "QCOM context save log"
+        depends on QCOM_SCM
+        help
+          Enable the context save driver, this driver provides a memory to
+          TZ for crashdump collection, also it provides a TLV buffer for
+          storing user specific buffer info into crashdump.
 
 config QCOM_DCC_V2
 	bool "QCOM Data Capture and Compare enigne support"

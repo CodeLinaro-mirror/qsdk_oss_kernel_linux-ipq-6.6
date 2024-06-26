@@ -297,6 +297,7 @@ extern int qcom_scm_lmh_profile_change(u32 profile_id);
 extern bool qcom_scm_lmh_dcvsh_available(void);
 extern int qti_seccrypt_clearkey(void);
 extern int qti_sec_crypt(void *buf, int size);
+extern int qcom_scm_regsave(void *scm_regsave, u32 buf_size);
 extern int qti_set_qcekey_sec(void *buf, int size);
 extern int qcom_qcekey_release_xpu_prot(void);
 
