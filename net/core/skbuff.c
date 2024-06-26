@@ -1343,8 +1343,13 @@ bool __kfree_skb_reason(struct sk_buff *skb, enum skb_drop_reason reason)
 void __fix_address
 kfree_skb_reason(struct sk_buff *skb, enum skb_drop_reason reason)
 {
-	if (__kfree_skb_reason(skb, reason))
+	if (__kfree_skb_reason(skb, reason)) {
+#if defined(CONFIG_SKB_RECYCLER)
+		dev_kfree_skb(skb);
+#else
 		__kfree_skb(skb);
+#endif
+	}
 }
 EXPORT_SYMBOL(kfree_skb_reason);
 
