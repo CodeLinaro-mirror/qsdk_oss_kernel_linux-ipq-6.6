@@ -20,7 +20,6 @@ static struct sk_buff *_qca_tag_xmit(struct sk_buff *skb, struct net_device *dev
 	struct dsa_switch *ds = dp->ds;
 	struct qca_tagger_data *tagger_data;
 	__be16 *phdr;
-	u16 hdr;
 
 	tagger_data = ds->tagger_data;
 
