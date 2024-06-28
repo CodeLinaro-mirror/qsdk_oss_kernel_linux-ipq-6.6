@@ -289,6 +289,14 @@ struct tsens_plat_data data_ipq5332 = {
 	.fields		= tsens_v2_regfields,
 };
 
+struct tsens_plat_data data_ipq5424 = {
+	.num_sensors	= 7,
+	.ops		= &ops_ipq5332,
+	.hw_ids		= (unsigned int []){9, 10, 11, 12, 13, 14, 15},
+	.feat		= &ipq5332_feat,
+	.fields		= tsens_v2_regfields,
+};
+
 /* Kept around for backward compatibility with old msm8996.dtsi */
 struct tsens_plat_data data_8996 = {
 	.num_sensors	= 13,
