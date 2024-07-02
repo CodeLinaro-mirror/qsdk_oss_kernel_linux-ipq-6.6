@@ -49,6 +49,11 @@ struct fuse_payload_ipq9574 {
 	uint32_t val;
 };
 
+struct load_segs_info {
+	u32 start_addr;
+	u32 end_addr;
+};
+
 enum qseecom_qceos_cmd_id {
 	QSEOS_APP_START_COMMAND = 0x01,
 	QSEOS_APP_SHUTDOWN_COMMAND,
@@ -341,6 +346,10 @@ extern int qcom_sec_upgrade_auth(unsigned int scm_cmd_id,
 extern int qcom_sec_upgrade_auth_meta_data(unsigned int scm_cmd_id,unsigned int sw_type,
 					   unsigned int img_size,unsigned int load_addr,
 					   void* hash_addr,unsigned int hash_size);
+extern int qcom_sec_upgrade_auth_ld_segments(unsigned int scm_cmd_id, unsigned int sw_type,
+					     u32 elf_addr, u32 meta_data_size,
+					     struct load_segs_info *ld_seg_info,
+					     u32 ld_seg_buff_size, u64 *status);
 extern int qcom_scm_enable_try_mode(void);
 extern int qcom_read_dload_reg(void);
 extern int qti_scm_qseecom_remove_xpu(void);

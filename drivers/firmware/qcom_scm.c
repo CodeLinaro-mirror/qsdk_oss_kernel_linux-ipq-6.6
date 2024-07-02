@@ -2619,6 +2619,70 @@ int qcom_sec_upgrade_auth_meta_data(unsigned int scm_cmd_id,unsigned int sw_type
 }
 EXPORT_SYMBOL_GPL(qcom_sec_upgrade_auth_meta_data);
 
+/**
+ * qcom_sec_upgrade_auth_ld_segments() - Pass the structure pointer containing
+ * the start and end addr of the elf loadable segments and the elf address to
+ * TZ for authentication. TZ invokes IPC to TME for the image authentication.
+ *
+ * scm_cmd_id: SCM CMD ID
+ * sw_type: SW type of the image to be authenticated
+ * elf_addr: Physical address where the elf is loaded
+ * meta_data_size: offset + size of the last NULL segment in ELF
+ * ld_seg_info: Structure pointer containing the start and end addr of the
+ *		elf loadable segments
+ * ld_seg_count: count of the lodable segments
+ */
+int qcom_sec_upgrade_auth_ld_segments(unsigned int scm_cmd_id, unsigned int sw_type,
+				      u32 elf_addr, u32 meta_data_size,
+				      struct load_segs_info *ld_seg_info,
+				      u32 ld_seg_count, u64 *status)
+{
+	int ret;
+	struct qcom_scm_res res;
+	u32 ld_seg_buff_size;
+	struct qcom_scm_desc desc = {
+		.svc = QCOM_SCM_SVC_BOOT,
+		.cmd = scm_cmd_id,
+		.arginfo = QCOM_SCM_ARGS(5, QCOM_SCM_VAL, QCOM_SCM_VAL, QCOM_SCM_VAL,
+				QCOM_SCM_RO, QCOM_SCM_VAL),
+		.owner = ARM_SMCCC_OWNER_SIP,
+	};
+	dma_addr_t ld_seg_addr;
+
+	desc.args[0] = elf_addr;
+	desc.args[1] = meta_data_size;
+	desc.args[2] = sw_type;
+
+	if (ld_seg_info) {
+		ld_seg_buff_size = ld_seg_count * sizeof(struct load_segs_info);
+		ld_seg_addr = dma_map_single(__scm->dev, ld_seg_info,
+					     ld_seg_buff_size, DMA_TO_DEVICE);
+
+		ret = dma_mapping_error(__scm->dev, ld_seg_addr);
+		if (ret != 0) {
+			pr_err("%s: DMA Mapping Error: %d\n", __func__, ret);
+			return ret;
+		}
+		desc.args[3] = ld_seg_addr;
+		desc.args[4] = ld_seg_buff_size;
+	} else {
+		/* Passing NULL and zero for ld_seg_addr and ld_seg_buff_size for
+		 * rootfs image auth as it does not contain loadable segments
+		 */
+		desc.args[3] = (u64)NULL;
+		desc.args[4] = 0;
+	}
+
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+	*status = res.result[0];
+
+	if (ld_seg_info)
+		dma_unmap_single(__scm->dev, ld_seg_addr, ld_seg_buff_size, DMA_TO_DEVICE);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(qcom_sec_upgrade_auth_ld_segments);
+
 int qcom_qfprom_write_version(uint32_t sw_type, uint32_t value, uint32_t qfprom_ret_ptr)
 {
 	int ret;
