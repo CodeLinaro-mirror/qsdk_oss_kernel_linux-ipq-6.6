@@ -3852,25 +3852,6 @@ static int nl80211_send_iface(struct sk_buff *msg, u32 portid, u32 seq, int flag
 	    nla_put_u8(msg, NL80211_ATTR_4ADDR, wdev->use_4addr))
 		goto nla_put_failure;
 
-	if (rdev->ops->get_channel && !wdev->valid_links) {
-		struct cfg80211_chan_def chandef = {};
-		int ret;
-
-		ret = rdev_get_channel(rdev, wdev, 0, &chandef);
-		if (ret == 0 && nl80211_send_chandef(msg, &chandef))
-			goto nla_put_failure;
-	}
-
-	if (rdev->ops->get_tx_power) {
-		int dbm, ret;
-
-		ret = rdev_get_tx_power(rdev, wdev, &dbm);
-		if (ret == 0 &&
-		    nla_put_u32(msg, NL80211_ATTR_WIPHY_TX_POWER_LEVEL,
-				DBM_TO_MBM(dbm)))
-			goto nla_put_failure;
-	}
-
 	wdev_lock(wdev);
 	switch (wdev->iftype) {
 	case NL80211_IFTYPE_AP:
@@ -3935,10 +3916,36 @@ static int nl80211_send_iface(struct sk_buff *msg, u32 portid, u32 seq, int flag
 			if (ret == 0 && nl80211_send_chandef(msg, &chandef))
 				goto nla_put_failure;
 
+			if (rdev->ops->get_tx_power) {
+				int dbm, ret;
+				ret = rdev_get_tx_power(rdev, wdev, link_id, &dbm);
+				if (ret == 0 &&
+				    nla_put_u32(msg, NL80211_ATTR_WIPHY_TX_POWER_LEVEL,
+				    DBM_TO_MBM(dbm)))
+					goto nla_put_failure;
+			}
 			nla_nest_end(msg, link);
 		}
 
 		nla_nest_end(msg, links);
+	} else {
+		if (rdev->ops->get_channel) {
+			struct cfg80211_chan_def chandef = {};
+			int ret;
+
+			ret = rdev_get_channel(rdev, wdev, 0, &chandef);
+			if (ret == 0 && nl80211_send_chandef(msg, &chandef))
+				goto nla_put_failure;
+		}
+
+		if (rdev->ops->get_tx_power) {
+			int dbm, ret;
+			ret = rdev_get_tx_power(rdev, wdev, 0, &dbm);
+			if (ret == 0 &&
+			    nla_put_u32(msg, NL80211_ATTR_WIPHY_TX_POWER_LEVEL,
+			    DBM_TO_MBM(dbm)))
+				goto nla_put_failure;
+		}
 	}
 
 	genlmsg_end(msg, hdr);
