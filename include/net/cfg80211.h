@@ -1471,6 +1471,7 @@ struct cfg80211_color_change_settings {
  *
  * Used to pass interface combination parameters
  *
+ * @radio_idx: wiphy radio index or -1 for global
  * @num_different_channels: the number of different channels we want
  *	to use for verification
  * @radar_detect: a bitmap where each bit corresponds to a channel
@@ -1484,6 +1485,7 @@ struct cfg80211_color_change_settings {
  *	the verification
  */
 struct iface_combination_params {
+	int radio_idx;
 	int num_different_channels;
 	u8 radar_detect;
 	int iftype_num[NUM_NL80211_IFTYPES];
@@ -4452,6 +4454,8 @@ struct cfg80211_link_reconfig_removal_params {
  *	scheduled for removal with ML reconfigure IE built for that particular
  *	link along with the TBTT count until which the beacon with ML
  *	reconfigure IE should be sent.
+ * @get_radio_mask: get bitmask of radios in use.
+ *	(invoked with the wiphy mutex held)
  */
 struct cfg80211_ops {
 	int	(*suspend)(struct wiphy *wiphy, struct cfg80211_wowlan *wow);
@@ -4821,6 +4825,7 @@ struct cfg80211_ops {
 	int	(*link_reconfig_remove)(struct wiphy *wiphy,
 		struct net_device *dev,
 		const struct cfg80211_link_reconfig_removal_params *params);
+	u32	(*get_radio_mask)(struct wiphy *wiphy, struct net_device *dev);
 };
 
 /*
