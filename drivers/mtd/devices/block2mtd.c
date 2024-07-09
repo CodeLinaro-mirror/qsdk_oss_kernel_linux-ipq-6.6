@@ -34,7 +34,7 @@
 char parent_mtd_name[80];
 
 /* Maximum number of comma-separated items in the 'block2mtd=' parameter */
-#define BLOCK2MTD_PARAM_MAX_COUNT 3
+#define BLOCK2MTD_PARAM_MAX_COUNT 5
 
 /* Info for the block device */
 struct block2mtd_dev {
@@ -438,7 +438,7 @@ static int block2mtd_setup2(const char *val)
 	 * 80 for parent mtd device name, 8 for timeout */
 	char buf[80 + 12 + 80 + 80 + 8];
 	char *str = buf;
-	char *token[BLOCK2MTD_PARAM_MAX_COUNT + 1];
+	char *token[BLOCK2MTD_PARAM_MAX_COUNT];
 	char *name;
 	char *label = NULL;
 	size_t erase_size = PAGE_SIZE;
@@ -453,7 +453,7 @@ static int block2mtd_setup2(const char *val)
 	strcpy(str, val);
 	kill_final_newline(str);
 
-	for (i = 0; i < BLOCK2MTD_PARAM_MAX_COUNT + 1; i++)
+	for (i = 0; i < BLOCK2MTD_PARAM_MAX_COUNT; i++)
 		token[i] = strsep(&str, ",");
 
 	if (str) {
