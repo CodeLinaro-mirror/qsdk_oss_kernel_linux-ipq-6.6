@@ -92,27 +92,32 @@
 struct kmem_cache *skbuff_cache __ro_after_init;
 
 struct kmem_cache *skb_data_cache;
+struct kmem_cache *skb_data_cache_2100;
 
-/*
- * For low memory profile, NSS_SKB_FIXED_SIZE_2K is enabled and
- * CONFIG_SKB_RECYCLER is disabled. For premium and enterprise profile
- * CONFIG_SKB_RECYCLER is enabled and NSS_SKB_FIXED_SIZE_2K is disabled.
- * Irrespective of NSS_SKB_FIXED_SIZE_2K enabled/disabled, the
- * CONFIG_SKB_RECYCLER and __LP64__ determines the value of SKB_DATA_CACHE_SIZE
- */
 #if defined(CONFIG_SKB_RECYCLER)
-/*
- * 2688 for 64bit arch, 2624 for 32bit arch
- */
 #define SKB_DATA_CACHE_SIZE (SKB_DATA_ALIGN(SKB_RECYCLE_SIZE + NET_SKB_PAD) + SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
-#else
 /*
- * 2368 for 64bit arch, 2176 for 32bit arch
+ * Both caches are kept same size in 1G profile so that all
+ * skbs could be recycled. For 256M and 512M profiles, new slab of size
+ * 2100 is created.
+ */
+#if CONFIG_IPQ_MEM_PROFILE == 256 || CONFIG_IPQ_MEM_PROFILE == 512
+#define SKB_DATA_CACHE_SIZE_2100 (SKB_DATA_ALIGN(2100 + NET_SKB_PAD) + SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
+#else
+#define SKB_DATA_CACHE_SIZE_2100 SKB_DATA_CACHE_SIZE
+#endif
+#else /* CONFIG_SKB_RECYCLER */
+/*
+ * DATA CACHE is 2368 for 64bit arch, 2176 for 32bit arch
+ * DATA_CACHE_2100 is 2496 for 64bit arch, 2432 for 32bit arch
+ * DATA CACHE size should always be lesser than that of DATA_CACHE_2100 size
  */
 #if defined(__LP64__)
 #define SKB_DATA_CACHE_SIZE ((SKB_DATA_ALIGN(1984 + NET_SKB_PAD)) + SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
+#define SKB_DATA_CACHE_SIZE_2100 (SKB_DATA_ALIGN(2100 + NET_SKB_PAD) + SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
 #else
 #define SKB_DATA_CACHE_SIZE ((SKB_DATA_ALIGN(1856 + NET_SKB_PAD)) + SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
+#define SKB_DATA_CACHE_SIZE_2100 (SKB_DATA_ALIGN(2100 + NET_SKB_PAD) + SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
 #endif
 #endif
 
@@ -590,12 +595,22 @@ static void *kmalloc_reserve(unsigned int *size, gfp_t flags, int node,
 	obj_size = SKB_HEAD_ALIGN(*size);
 	if ((obj_size <= SKB_SMALL_HEAD_CACHE_SIZE &&
 	    !(flags & KMALLOC_NOT_NORMAL_BITS)) ||
-	    (obj_size > SZ_2K && obj_size <= SKB_DATA_CACHE_SIZE)) {
-		skb_cache = (obj_size <= SKB_SMALL_HEAD_CACHE_SIZE) ? skb_small_head_cache : skb_data_cache;
+	    (obj_size > SZ_2K && obj_size <= SKB_DATA_CACHE_SIZE_2100)) {
+		if (obj_size <= SKB_SMALL_HEAD_CACHE_SIZE)
+			skb_cache = skb_small_head_cache;
+		else if (obj_size <= SKB_DATA_CACHE_SIZE)
+			skb_cache = skb_data_cache;
+		else
+			skb_cache = skb_data_cache_2100;
 		obj = kmem_cache_alloc_node(skb_cache,
 				flags | __GFP_NOMEMALLOC | __GFP_NOWARN,
 				node);
-		*size = (obj_size <= SKB_SMALL_HEAD_CACHE_SIZE) ? SKB_SMALL_HEAD_CACHE_SIZE : SKB_DATA_CACHE_SIZE;
+		if (obj_size <= SKB_SMALL_HEAD_CACHE_SIZE)
+			*size = SKB_SMALL_HEAD_CACHE_SIZE;
+		else if (obj_size <= SKB_DATA_CACHE_SIZE)
+			*size = SKB_DATA_CACHE_SIZE;
+		else
+			*size = SKB_DATA_CACHE_SIZE_2100;
 
 		if (obj || !(gfp_pfmemalloc_allowed(flags)))
 			goto out;
@@ -5166,6 +5181,11 @@ void __init skb_init(void)
 	skb_data_cache = kmem_cache_create_usercopy("skb_data_cache",
 						SKB_DATA_CACHE_SIZE,
 						0, SLAB_PANIC, 0, SKB_DATA_CACHE_SIZE,
+						NULL);
+
+	skb_data_cache_2100 = kmem_cache_create_usercopy("skb_data_cache_2100",
+						SKB_DATA_CACHE_SIZE_2100,
+						0, SLAB_PANIC, 0, SKB_DATA_CACHE_SIZE_2100,
 						NULL);
 
 	skbuff_cache = kmem_cache_create_usercopy("skbuff_head_cache",
