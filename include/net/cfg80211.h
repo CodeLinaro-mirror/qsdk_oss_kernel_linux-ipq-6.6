@@ -4017,6 +4017,8 @@ struct mgmt_frame_regs {
 	u32 global_mcast_stypes, interface_mcast_stypes;
 };
 
+#define CFG80211_PER_LINK_TX_POWER 1
+
 /**
  * struct cfg80211_ops - backend description for wireless configuration
  *
@@ -4565,7 +4567,7 @@ struct cfg80211_ops {
 	int	(*set_tx_power)(struct wiphy *wiphy, struct wireless_dev *wdev,
 				enum nl80211_tx_power_setting type, int mbm);
 	int	(*get_tx_power)(struct wiphy *wiphy, struct wireless_dev *wdev,
-				int *dbm);
+				unsigned int link_id, int *dbm);
 
 	void	(*rfkill_poll)(struct wiphy *wiphy);
 
