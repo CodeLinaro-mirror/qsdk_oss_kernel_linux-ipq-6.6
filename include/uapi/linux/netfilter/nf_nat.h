@@ -52,4 +52,13 @@ struct nf_nat_range2 {
 	union nf_conntrack_man_proto	base_proto;
 };
 
+struct nf_npt_info {
+	union nf_inet_addr	src_pfx;
+	union nf_inet_addr	dst_pfx;
+	__u8			src_pfx_len;
+	__u8			dst_pfx_len;
+	/* Used internally by the kernel */
+	__sum16			adjustment;
+};
+
 #endif /* _NETFILTER_NF_NAT_H */

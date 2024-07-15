@@ -1423,10 +1423,14 @@ enum nft_reject_attributes {
  *
  * @NFT_NAT_SNAT: source NAT
  * @NFT_NAT_DNAT: destination NAT
+ * @NFT_NAT_SNPT: source NPT
+ * @NFT_NAT_DNPT: destination NPT
  */
 enum nft_nat_types {
 	NFT_NAT_SNAT,
 	NFT_NAT_DNAT,
+	NFT_NAT_SNPT,
+	NFT_NAT_DNPT
 };
 
 /**
@@ -1484,6 +1488,28 @@ enum nft_masq_attributes {
 	__NFTA_MASQ_MAX
 };
 #define NFTA_MASQ_MAX		(__NFTA_MASQ_MAX - 1)
+
+/**
+ * enum nft_npt_attributes - nf_tables NPT expression attributes
+ *
+ * @NFTA_NPT_TYPE: NPT type (NLA_U32: nft_nat_types)
+ * @NFTA_NPT_FAMILY: NPT family (NLA_U32)
+ * @NFTA_NPT_REG_SRC_PFX: register of Source Prefix (NLA_U32: nft_registers)
+ * @NFTA_NPT_REG_DST_PFX: register of Destination Prefix (NLA_U32: nft_registers)
+ * @NFTA_NPT_REG_SRC_PFX_LEN: Source prefix length value (NLA_U8)
+ * @NFTA_NPT_REG_DST_PFX_LEN: Destination prefix length value (NLA_U8)
+ */
+enum nft_npt_attributes {
+	NFTA_NPT_UNSPEC,
+	NFTA_NPT_TYPE,
+	NFTA_NPT_FAMILY,
+	NFTA_NPT_REG_SRC_PFX,
+	NFTA_NPT_REG_DST_PFX,
+	NFTA_NPT_REG_SRC_PFX_LEN,
+	NFTA_NPT_REG_DST_PFX_LEN,
+	__NFTA_NPT_MAX
+};
+#define NFTA_NPT_MAX           (__NFTA_NPT_MAX - 1)
 
 /**
  * enum nft_redir_attributes - nf_tables redirect expression netlink attributes

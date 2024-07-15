@@ -34,6 +34,9 @@ enum nf_ct_ext_id {
 #ifdef CONFIG_NF_CONNTRACK_DSCPREMARK_EXT
 	NF_CT_EXT_DSCPREMARK,
 #endif
+#ifdef CONFIG_NF_CONNTRACK_NPTV6_EXT
+	NF_CT_EXT_NPTV6,
+#endif
 	NF_CT_EXT_NUM,
 };
 
