@@ -17,6 +17,7 @@ properties:
   compatible:
     enum:
       - qcom,ipq9574-qmp-usb3-phy
+      - qcom,ipq5424-qmp-usb3-phy
       - qcom,qcm2290-qmp-usb3-phy
       - qcom,sa8775p-qmp-usb3-uni-phy
       - qcom,sc8280xp-qmp-usb3-uni-phy
@@ -75,6 +76,7 @@ allOf:
           contains:
             enum:
               - qcom,ipq9574-qmp-usb3-phy
+              - qcom,ipq5424-qmp-usb3-phy
     then:
       properties:
         clock-names:
