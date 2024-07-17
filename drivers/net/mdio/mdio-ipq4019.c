@@ -100,6 +100,8 @@ enum mdio_clk_id {
 	MDIO_CLK_UNIPHY0_SYS,
 	MDIO_CLK_UNIPHY1_AHB,
 	MDIO_CLK_UNIPHY1_SYS,
+	MDIO_CLK_UNIPHY2_AHB,
+	MDIO_CLK_UNIPHY2_SYS,
 	MDIO_CLK_CNT
 };
 
@@ -117,7 +119,8 @@ struct ipq4019_mdio_data {
 
 const char * const ppe_clk_name[] = {
 	"gcc_mdio_ahb_clk", "uniphy0_ahb_clk", "uniphy0_sys_clk",
-	"uniphy1_ahb_clk", "uniphy1_sys_clk"
+	"uniphy1_ahb_clk", "uniphy1_sys_clk",
+	"uniphy2_ahb_clk", "uniphy2_sys_clk"
 };
 
 static int ipq4019_mdio_wait_busy(struct mii_bus *bus)
@@ -817,10 +820,12 @@ static int ipq_mdio_reset(struct mii_bus *bus)
 			switch (i) {
 			case MDIO_CLK_UNIPHY0_AHB:
 			case MDIO_CLK_UNIPHY1_AHB:
+			case MDIO_CLK_UNIPHY2_AHB:
 				rate = IPQ_UNIPHY_AHB_CLK_RATE;
 				break;
 			case MDIO_CLK_UNIPHY0_SYS:
 			case MDIO_CLK_UNIPHY1_SYS:
+			case MDIO_CLK_UNIPHY2_SYS:
 				rate = IPQ_UNIPHY_SYS_CLK_RATE;
 				break;
 			default:
