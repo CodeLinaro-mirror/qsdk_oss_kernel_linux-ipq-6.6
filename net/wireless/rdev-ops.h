@@ -182,8 +182,21 @@ static inline int rdev_change_beacon(struct cfg80211_registered_device *rdev,
 	return ret;
 }
 
+#ifdef CONFIG_ML_RECONFIG_SINGLE_WIPHY
 static inline int rdev_stop_ap(struct cfg80211_registered_device *rdev,
-			       struct net_device *dev, unsigned int link_id)
+			       struct net_device *dev, unsigned int link_id,
+			       struct cfg80211_ap_settings *settings)
+{
+	int ret;
+	trace_rdev_stop_ap(&rdev->wiphy, dev, link_id);
+	ret = rdev->ops->stop_ap(&rdev->wiphy, dev, link_id, settings);
+	trace_rdev_return_int(&rdev->wiphy, ret);
+	return ret;
+}
+#else
+static inline int rdev_stop_ap(struct cfg80211_registered_device *rdev,
+			       struct net_device *dev, unsigned int link_id,
+			       struct cfg80211_ap_settings *settings)
 {
 	int ret;
 	trace_rdev_stop_ap(&rdev->wiphy, dev, link_id);
@@ -191,6 +204,7 @@ static inline int rdev_stop_ap(struct cfg80211_registered_device *rdev,
 	trace_rdev_return_int(&rdev->wiphy, ret);
 	return ret;
 }
+#endif /* CONFIG_ML_RECONFIG_SINGLE_WIPHY */
 
 static inline int rdev_add_station(struct cfg80211_registered_device *rdev,
 				   struct net_device *dev, u8 *mac,

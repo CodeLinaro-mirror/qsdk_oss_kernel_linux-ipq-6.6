@@ -1316,7 +1316,7 @@ void __cfg80211_leave(struct cfg80211_registered_device *rdev,
 		break;
 	case NL80211_IFTYPE_AP:
 	case NL80211_IFTYPE_P2P_GO:
-		__cfg80211_stop_ap(rdev, dev, -1, true);
+		__cfg80211_stop_ap(rdev, dev, -1, true, NULL);
 		break;
 	case NL80211_IFTYPE_OCB:
 		__cfg80211_leave_ocb(rdev, dev);
@@ -1621,7 +1621,7 @@ void cfg80211_stop_interface_recovery(struct net_device *dev, int link_id)
 			break;
 		case NL80211_IFTYPE_AP:
 		case NL80211_IFTYPE_P2P_GO:
-			__cfg80211_stop_ap(rdev, dev, link_id, true);
+			__cfg80211_stop_ap(rdev, dev, link_id, true, NULL);
 			break;
 		case NL80211_IFTYPE_ADHOC:
 		case NL80211_IFTYPE_AP_VLAN:
