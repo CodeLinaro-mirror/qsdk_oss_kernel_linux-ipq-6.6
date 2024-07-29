@@ -43,7 +43,7 @@ enum ice_crpto_key_mode {
 };
 
 struct ice_config_sec {
-	uint16_t index;
+	uint32_t index;
 	uint8_t key_size;
 	uint8_t algo_mode;
 	uint8_t key_mode;

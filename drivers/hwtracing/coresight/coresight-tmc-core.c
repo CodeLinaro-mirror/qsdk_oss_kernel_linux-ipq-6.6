@@ -455,7 +455,8 @@ static void tmc_get_reserved_region(struct device *dev)
 	drvdata->etr_rsvd_vaddr = devm_ioremap(dev, rmem->base,rmem->size);
 	if (drvdata->etr_rsvd_vaddr) {
 		drvdata->etr_rsvd_paddr = rmem->base;
-		drvdata->rsvd_size =  rmem->size;
+		drvdata->rsvd_size = rmem->size;
+		drvdata->size = rmem->size;
 	}
 }
 

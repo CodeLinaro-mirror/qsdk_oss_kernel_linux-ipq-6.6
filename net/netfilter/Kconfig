@@ -181,6 +181,13 @@ config NF_CONNTRACK_DSCPREMARK_EXT
 	  This option enables support for connection tracking extension
 	  for dscp remark.
 
+config NF_CONNTRACK_NPTV6_EXT
+	bool  'Connection tracking extension for nptv6 target'
+	depends on NETFILTER_ADVANCED
+	help
+	  This option enables support for connection tracking extension
+	  for nptv6 to carry NPTv6 info within the conntrack.
+
 config NF_CONNTRACK_CHAIN_EVENTS
 	bool "Register multiple callbacks to ct events"
 	depends on NF_CONNTRACK_EVENTS
@@ -593,6 +600,16 @@ config NFT_NAT
 	help
 	  This option adds the "nat" expression that you can use to perform
 	  typical Network Address Translation (NAT) packet transformations.
+
+config NFT_NPT
+	depends on NF_CONNTRACK
+	depends on NF_NAT
+	depends on NF_TABLES_IPV6
+	tristate "Netfilter nf_tables NPT support"
+	help
+	  This option adds the "NPT" expression that you can use to perform
+	  Network Prefix Translation (NPT) packet transformations that is
+	  RFC 6296 compliant.
 
 config NFT_TUNNEL
 	tristate "Netfilter nf_tables tunnel module"

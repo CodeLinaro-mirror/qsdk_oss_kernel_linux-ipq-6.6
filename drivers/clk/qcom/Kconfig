@@ -161,10 +161,10 @@ config IPQ_GCC_5332
 	  Say Y if you want to use peripheral devices such as UART, SPI,
 	  i2c, USB, SD/eMMC, etc.
 
-config IPQ_GCC_DEVSOC
-	tristate "DEVSOC Global Clock Controller"
+config IPQ_GCC_5424
+	tristate "IPQ5424 Global Clock Controller"
 	help
-	  Support for the global clock controller on devsoc devices.
+	  Support for the global clock controller on ipq5424 devices.
 	  Say Y if you want to use peripheral devices such as UART, SPI,
 	  i2c, USB, SD/eMMC, etc.
 
@@ -222,11 +222,11 @@ config IPQ_NSSCC_9574
         help
           Support for NSS clock controller on ipq9574 devices.
 
-config IPQ_NSSCC_DEVSOC
-        tristate "DEVSOC NSS Clock Controller"
-        depends on IPQ_GCC_DEVSOC
+config IPQ_NSSCC_5424
+        tristate "IPQ5424 NSS Clock Controller"
+        depends on IPQ_GCC_5424
         help
-          Support for NSS clock controller on devsoc devices.
+          Support for NSS clock controller on ipq5424 devices.
 
 config MSM_GCC_8660
 	tristate "MSM8660 Global Clock Controller"

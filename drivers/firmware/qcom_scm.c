@@ -27,6 +27,8 @@
 
 #include "qcom_scm.h"
 
+#define ICE_CRYPTO_AES_XTS_MODE	0x3
+
 #define SDI_DISABLE		BIT(0)
 #define ABNORMAL_MAGIC		BIT(1)
 
@@ -334,27 +336,27 @@ int qcom_context_ice_sec(u32 type, u8 key_size,
 		.owner = ARM_SMCCC_OWNER_SIP,
 	};
 
-	if (!data_ctxt)
-		return -EINVAL;
+	if (type == OEM_SEED_TYPE) {
+		if (!data_ctxt)
+			return -EINVAL;
 
-	data_ctxbuf = dma_alloc_coherent(__scm->dev, data_ctxt_len,
-			&data_context_phy, GFP_KERNEL);
-	if (!data_ctxbuf)
-		return -ENOMEM;
+		data_ctxbuf = dma_alloc_coherent(__scm->dev, data_ctxt_len,
+				&data_context_phy, GFP_KERNEL);
+		if (!data_ctxbuf)
+			return -ENOMEM;
 
-	memcpy(data_ctxbuf, data_ctxt, data_ctxt_len);
+		memcpy(data_ctxbuf, data_ctxt, data_ctxt_len);
 
-	if (algo_mode == 0x3 && salt_ctxt) {
-		salt_ctxbuf = dma_alloc_coherent(__scm->dev, salt_ctxt_len,
+		if (algo_mode == ICE_CRYPTO_AES_XTS_MODE && salt_ctxt) {
+			salt_ctxbuf = dma_alloc_coherent(__scm->dev, salt_ctxt_len,
 				&salt_context_phy, GFP_KERNEL);
 		if (!salt_ctxbuf) {
 			ret = -ENOMEM;
 			goto dma_unmap_data_ctxbuf;
 		}
-
 		memcpy(salt_ctxbuf, salt_ctxt, salt_ctxt_len);
+		}
 	}
-
 	desc.args[0] = type;
 	desc.args[1] = key_size;
 	desc.args[2] = algo_mode;
@@ -365,15 +367,20 @@ int qcom_context_ice_sec(u32 type, u8 key_size,
 
 	ret = qcom_scm_call(__scm->dev, &desc, &res);
 
-	if (algo_mode == 0x3 && salt_ctxt) {
+	if (type == OEM_SEED_TYPE &&
+	    algo_mode == ICE_CRYPTO_AES_XTS_MODE && salt_ctxt) {
 		memzero_explicit(salt_ctxt, salt_ctxt_len);
 		dma_free_coherent(__scm->dev, salt_ctxt_len,
-				salt_ctxbuf, salt_context_phy);
+			salt_ctxbuf, salt_context_phy);
 	}
 
 dma_unmap_data_ctxbuf:
-	memzero_explicit(data_ctxbuf, data_ctxt_len);
-	dma_free_coherent(__scm->dev, data_ctxt_len, data_ctxbuf, data_context_phy);
+	if (type == OEM_SEED_TYPE) {
+		memzero_explicit(data_ctxbuf, data_ctxt_len);
+		dma_free_coherent(__scm->dev, data_ctxt_len,
+					data_ctxbuf, data_context_phy);
+	}
+
 	return ret ?  : res.result[0];
 
 }

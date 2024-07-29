@@ -28,7 +28,8 @@
 
 #define MAX_MSM_ICE_KEY_LUT_SIZE	32
 #define DATA_COTEXT_LEN			128
-#define SALT_COTEXT_LEN			12
+#define SALT_COTEXT_LEN			128
+#define OEM_SEED_TYPE			0x1
 
 #define QCOM_BREAK_Q6			0x1
 

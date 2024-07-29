@@ -25,6 +25,7 @@
 #include <net/netfilter/nf_conntrack_act_ct.h>
 #include <net/netfilter/nf_nat.h>
 #include <net/netfilter/nf_conntrack_dscpremark_ext.h>
+#include <net/netfilter/nf_conntrack_nptv6_ext.h>
 
 #define NF_CT_EXT_PREALLOC	128u /* conntrack events are on by default */
 
@@ -58,7 +59,9 @@ static const u8 nf_ct_ext_type_len[NF_CT_EXT_NUM] = {
 #ifdef CONFIG_NF_CONNTRACK_DSCPREMARK_EXT
 	[NF_CT_EXT_DSCPREMARK] = sizeof(struct nf_ct_dscpremark_ext),
 #endif
-
+#ifdef CONFIG_NF_CONNTRACK_NPTV6_EXT
+        [NF_CT_EXT_NPTV6] = sizeof(struct nf_ct_nptv6_ext),
+#endif
 };
 
 static __always_inline unsigned int total_extension_size(void)
@@ -93,6 +96,9 @@ static __always_inline unsigned int total_extension_size(void)
 #endif
 #ifdef CONFIG_NF_CONNTRACK_DSCPREMARK_EXT
 		+ sizeof(struct nf_ct_dscpremark_ext)
+#endif
+#ifdef CONFIG_NF_CONNTRACK_NPTV6_EXT
+		+ sizeof(struct nf_ct_nptv6_ext)
 #endif
 	;
 }

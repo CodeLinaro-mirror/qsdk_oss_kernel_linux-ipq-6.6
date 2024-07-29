@@ -22,7 +22,10 @@
  */
 static bool i2c_mii_valid_phy_id(int phy_id)
 {
-	return phy_id != 0x10 && phy_id != 0x11;
+	if (IS_ENABLED(CONFIG_SFP))
+		return phy_id != 0x10 && phy_id != 0x11;
+
+	return true;
 }
 
 static unsigned int i2c_mii_phy_addr(int phy_id)

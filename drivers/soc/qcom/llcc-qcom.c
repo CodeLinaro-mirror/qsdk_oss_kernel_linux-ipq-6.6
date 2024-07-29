@@ -357,7 +357,7 @@ static const struct llcc_slice_config sm8550_data[] =  {
 	{LLCC_VIDVSP,   28,  256, 4, 1, 0xFFFFFF, 0x0,   0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, },
 };
 
-static const struct llcc_slice_config devsoc_data[] =  {
+static const struct llcc_slice_config ipq5424_data[] =  {
 	/* SCID 1 - Descriptors (PPE, CUMAC) */
 	{LLCC_CPUSS,     1,  768, 1, 0,  0xFFFF, 0x0,  0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, },
 	/* SCID 2 - SKB, SKB data (PPE, CUMAC, APSS Core 0,1,2) */
@@ -527,9 +527,9 @@ static const struct qcom_llcc_config sm8550_cfg = {
 	.edac_reg_offset = &llcc_v2_1_edac_reg_offset,
 };
 
-static const struct qcom_llcc_config devsoc_cfg = {
-	.sct_data       = devsoc_data,
-	.size           = ARRAY_SIZE(devsoc_data),
+static const struct qcom_llcc_config ipq5424_cfg = {
+	.sct_data       = ipq5424_data,
+	.size           = ARRAY_SIZE(ipq5424_data),
 	.need_llcc_cfg	= true,
 	.reg_offset	= llcc_v2_1_reg_offset,
 	.edac_reg_offset = &llcc_v2_1_edac_reg_offset,
@@ -1079,7 +1079,7 @@ err:
 }
 
 static const struct of_device_id qcom_llcc_of_match[] = {
-	{ .compatible = "qcom,devsoc-llcc", .data = &devsoc_cfg },
+	{ .compatible = "qcom,ipq5424-llcc", .data = &ipq5424_cfg },
 	{ .compatible = "qcom,sc7180-llcc", .data = &sc7180_cfg },
 	{ .compatible = "qcom,sc7280-llcc", .data = &sc7280_cfg },
 	{ .compatible = "qcom,sc8180x-llcc", .data = &sc8180x_cfg },

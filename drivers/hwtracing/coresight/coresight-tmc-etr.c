@@ -927,7 +927,7 @@ static struct etr_buf *tmc_alloc_etr_buf(struct tmc_drvdata *drvdata,
 	 * Fallback to available mechanisms.
 	 *
 	 */
-	if (size == SZ_1M){
+	if (drvdata->etr_rsvd_paddr) {
 		rc =  tmc_etr_mode_alloc_buf(ETR_MODE_RESERVED, drvdata,
 					    etr_buf, node, pages);
 		goto err_check;

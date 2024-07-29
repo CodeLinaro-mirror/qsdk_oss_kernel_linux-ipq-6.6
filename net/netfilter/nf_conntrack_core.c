@@ -48,6 +48,9 @@
 #ifdef CONFIG_NF_CONNTRACK_DSCPREMARK_EXT
 #include <net/netfilter/nf_conntrack_dscpremark_ext.h>
 #endif
+#ifdef CONFIG_NF_CONNTRACK_NPTV6_EXT
+#include <net/netfilter/nf_conntrack_nptv6_ext.h>
+#endif
 #include <net/netfilter/nf_conntrack_labels.h>
 #include <net/netfilter/nf_conntrack_synproxy.h>
 #include <net/netfilter/nf_nat.h>
@@ -1745,6 +1748,9 @@ init_conntrack(struct net *net, struct nf_conn *tmpl,
 	nf_ct_labels_ext_add(ct);
 #ifdef CONFIG_NF_CONNTRACK_DSCPREMARK_EXT
 	nf_ct_dscpremark_ext_add(ct, GFP_ATOMIC);
+#endif
+#ifdef CONFIG_NF_CONNTRACK_NPTV6_EXT
+	nf_ct_nptv6_ext_add(ct, GFP_ATOMIC);
 #endif
 
 #ifdef CONFIG_NF_CONNTRACK_EVENTS
