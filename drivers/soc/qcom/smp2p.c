@@ -249,6 +249,8 @@ static void qcom_smp2p_notify_in(struct qcom_smp2p *smp2p)
 		val = readl(entry->value);
 
 		status = val ^ entry->last_value;
+		dev_dbg(smp2p->dev, "%s:%d val:0x%X entry->last_value:0x%X status:0x%X\n",
+			__func__, __LINE__, val, entry->last_value, status);
 		entry->last_value = val;
 
 		/* No changes of this entry? */
