@@ -44,3 +44,4 @@ obj-$(CONFIG_QCOM_CTXT_SAVE) += ctx-save.o
 obj-$(CONFIG_QTI_LICENSE_MANAGER) += license_manager.o
 obj-$(CONFIG_QTI_LICENSE_MANAGER)	+= qwes.o
 obj-$(CONFIG_QCOM_TMELCOM) += tmelcom/
+obj-$(CONFIG_QCOM_TMEL_LOG) += tmel_log.o
