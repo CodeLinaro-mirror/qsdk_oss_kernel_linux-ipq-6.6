@@ -126,6 +126,7 @@ static int a55ss_release_secondary(unsigned int cpu)
 	int ret = 0;
 	struct device_node *cpu_node, *acc_node;
 	void __iomem *reg;
+	void __iomem *el_mem_base;
 
 	cpu_node = of_get_cpu_node(cpu, NULL);
 	if (!cpu_node)
@@ -142,6 +143,23 @@ static int a55ss_release_secondary(unsigned int cpu)
 		ret = -ENOMEM;
 		goto out_acc_reg;
 	}
+
+	el_mem_base = ioremap(0x8A700150, 0xc);
+	if (IS_ERR_OR_NULL(el_mem_base)) {
+		pr_err("el_mem base ioremap is failed\n");
+	} else {
+		if (cpu == 0x2) { /* update core2 GICR */
+			writel(0xF280024, el_mem_base + 0x0);
+			writel(0xF280014, el_mem_base + 0x4);
+			writel(0xF290080, el_mem_base + 0x8);
+		} else if (cpu == 0x3) { /* update core3 GICR */
+			writel(0xF2A0024, el_mem_base + 0x0);
+			writel(0xF2A0014, el_mem_base + 0x4);
+			writel(0xF2B0080, el_mem_base + 0x8);
+		}
+	}
+
+	iounmap(el_mem_base);
 
 	a55ss_unclamp_cpu(reg);
 
