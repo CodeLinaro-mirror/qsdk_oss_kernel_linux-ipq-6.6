@@ -601,7 +601,7 @@ static inline int rdev_get_tx_power(struct cfg80211_registered_device *rdev,
 				    unsigned int link_id, int *dbm)
 {
 	int ret;
-	trace_rdev_get_tx_power(&rdev->wiphy, wdev, link_id);
+	trace_rdev_get_tx_power(&rdev->wiphy, wdev);
 	ret = rdev->ops->get_tx_power(&rdev->wiphy, wdev, link_id, dbm);
 	trace_rdev_return_int_int(&rdev->wiphy, ret, *dbm);
 	return ret;
