@@ -34,10 +34,17 @@
 #define QCOM_BREAK_Q6			0x1
 
 #define MAX_FUSE_ADDR_SIZE		0x8
+#define IPQ9574_MAX_FUSE_ADDR_SIZE	22
+
 struct fuse_payload {
 	uint32_t fuse_addr;
 	uint32_t lsb_val;
 	uint32_t msb_val;
+};
+
+struct fuse_payload_ipq9574 {
+	uint32_t fuse_addr;
+	uint32_t val;
 };
 
 enum qseecom_qceos_cmd_id {
@@ -323,7 +330,7 @@ extern int qcom_scm_get_device_provision_response(void *provreq_buf,
 				u32 *prov_resp_size);
 
 extern bool qcom_scm_sec_auth_available(unsigned int scm_cmd_id);
-extern int qcom_scm_get_ipq5332_fuse_list(struct fuse_payload *fuse, size_t size);
+extern int qcom_scm_get_ipq_fuse_list(void *fuse, size_t size);
 extern int qcom_sec_upgrade_auth(unsigned int scm_cmd_id,
 				 unsigned int sw_type, unsigned int img_size,
 				 unsigned int load_addr);
