@@ -390,6 +390,14 @@ config QTI_LICENSE_MANAGER
 	  running to communicate the license termination mode and license
 	  files to the attached PCIe device.
 
+config QCOM_TMEL_LOG
+	tristate "QCOM TMEL Log driver"
+	help
+	  This options enables a Tme-Log driver will send the component IDs and
+	  corresponding loglevels to the TMEL via the Set Config IPC call.
+	  sysfs entry will send the Get TMEL log IPC call to the TMEL and store
+	  the response to the bin file
+
 source "drivers/soc/qcom/tmelcom/Kconfig"
 
 endmenu
