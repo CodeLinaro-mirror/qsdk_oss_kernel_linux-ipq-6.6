@@ -2488,14 +2488,14 @@ int qcom_fuseipq_scm_call(u32 svc_id, u32 cmd_id,void *cmd_buf, size_t size)
 EXPORT_SYMBOL_GPL(qcom_fuseipq_scm_call);
 
 /**
- * qcom_scm_get_ipq5332_fuse_list() - Get OEM Fuse parameter from TME-L
+ * qcom_scm_get_ipq_fuse_list() - Get OEM Fuse parameter from TME-L
  *
  * @fuse: QFPROM CORR addresses
  * @size: size of fuse structure
  *
  * This function can be used to get the OEM Fuse parameters from TME-L.
  */
-int qcom_scm_get_ipq5332_fuse_list(struct fuse_payload *fuse, size_t size)
+int qcom_scm_get_ipq_fuse_list(void *fuse, size_t size)
 {
 	int ret;
 	dma_addr_t dma_fuse;
@@ -2528,7 +2528,7 @@ int qcom_scm_get_ipq5332_fuse_list(struct fuse_payload *fuse, size_t size)
 	return ret ? : res.result[0];
 
 }
-EXPORT_SYMBOL_GPL(qcom_scm_get_ipq5332_fuse_list);
+EXPORT_SYMBOL_GPL(qcom_scm_get_ipq_fuse_list);
 
 /**
  * qcom_scm_sec_auth_available() - Checks if SEC_AUTH is supported.
