@@ -64,6 +64,7 @@
 struct qmp_phy_init_tbl {
 	unsigned int offset;
 	unsigned int val;
+	char *name;
 	/*
 	 * mask of lanes for which this register is written
 	 * for cases when second lane needs different values
@@ -75,6 +76,7 @@ struct qmp_phy_init_tbl {
 	{				\
 		.offset = o,		\
 		.val = v,		\
+		.name = #o,		\
 		.lane_mask = 0xff,	\
 	}
 
@@ -82,6 +84,7 @@ struct qmp_phy_init_tbl {
 	{				\
 		.offset = o,		\
 		.val = v,		\
+		.name = #o,		\
 		.lane_mask = l,		\
 	}
 
@@ -1613,10 +1616,10 @@ static const struct qmp_phy_cfg qcm2290_usb3phy_cfg = {
 	.regs			= qmp_v3_usb3phy_regs_layout,
 };
 
-static void qmp_usb_configure_lane(void __iomem *base,
-					const struct qmp_phy_init_tbl tbl[],
-					int num,
-					u8 lane_mask)
+static void qmp_usb_configure_lane(struct device *dev, void __iomem *base,
+				   const struct qmp_phy_init_tbl tbl[],
+				   int num,
+				   u8 lane_mask)
 {
 	int i;
 	const struct qmp_phy_init_tbl *t = tbl;
@@ -1628,15 +1631,17 @@ static void qmp_usb_configure_lane(void __iomem *base,
 		if (!(t->lane_mask & lane_mask))
 			continue;
 
+		dev_dbg(dev, "Writing Reg: %s Offset: 0x%04x Val: 0x%02x\n",
+			t->name, t->offset, t->val);
 		writel(t->val, base + t->offset);
 	}
 }
 
-static void qmp_usb_configure(void __iomem *base,
-				   const struct qmp_phy_init_tbl tbl[],
-				   int num)
+static void qmp_usb_configure(struct device *dev, void __iomem *base,
+			      const struct qmp_phy_init_tbl tbl[],
+			      int num)
 {
-	qmp_usb_configure_lane(base, tbl, num, 0xff);
+	qmp_usb_configure_lane(dev, base, tbl, num, 0xff);
 }
 
 static int qmp_usb_serdes_init(struct qmp_usb *qmp)
@@ -1646,7 +1651,7 @@ static int qmp_usb_serdes_init(struct qmp_usb *qmp)
 	const struct qmp_phy_init_tbl *serdes_tbl = cfg->serdes_tbl;
 	int serdes_tbl_num = cfg->serdes_tbl_num;
 
-	qmp_usb_configure(serdes, serdes_tbl, serdes_tbl_num);
+	qmp_usb_configure(qmp->dev, serdes, serdes_tbl, serdes_tbl_num);
 
 	return 0;
 }
@@ -1727,18 +1732,18 @@ static int qmp_usb_power_on(struct phy *phy)
 	}
 
 	/* Tx, Rx, and PCS configurations */
-	qmp_usb_configure_lane(tx, cfg->tx_tbl, cfg->tx_tbl_num, 1);
-	qmp_usb_configure_lane(rx, cfg->rx_tbl, cfg->rx_tbl_num, 1);
+	qmp_usb_configure_lane(qmp->dev, tx, cfg->tx_tbl, cfg->tx_tbl_num, 1);
+	qmp_usb_configure_lane(qmp->dev, rx, cfg->rx_tbl, cfg->rx_tbl_num, 1);
 
 	if (cfg->lanes >= 2) {
-		qmp_usb_configure_lane(qmp->tx2, cfg->tx_tbl, cfg->tx_tbl_num, 2);
-		qmp_usb_configure_lane(qmp->rx2, cfg->rx_tbl, cfg->rx_tbl_num, 2);
+		qmp_usb_configure_lane(qmp->dev, qmp->tx2, cfg->tx_tbl, cfg->tx_tbl_num, 2);
+		qmp_usb_configure_lane(qmp->dev, qmp->rx2, cfg->rx_tbl, cfg->rx_tbl_num, 2);
 	}
 
-	qmp_usb_configure(pcs, cfg->pcs_tbl, cfg->pcs_tbl_num);
+	qmp_usb_configure(qmp->dev, pcs, cfg->pcs_tbl, cfg->pcs_tbl_num);
 
 	if (pcs_usb)
-		qmp_usb_configure(pcs_usb, cfg->pcs_usb_tbl, cfg->pcs_usb_tbl_num);
+		qmp_usb_configure(qmp->dev, pcs_usb, cfg->pcs_usb_tbl, cfg->pcs_usb_tbl_num);
 
 	if (cfg->has_pwrdn_delay)
 		usleep_range(10, 20);
