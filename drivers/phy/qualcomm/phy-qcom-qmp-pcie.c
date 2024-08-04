@@ -49,6 +49,7 @@
 struct qmp_phy_init_tbl {
 	unsigned int offset;
 	unsigned int val;
+	char *name;
 	/*
 	 * mask of lanes for which this register is written
 	 * for cases when second lane needs different values
@@ -60,6 +61,7 @@ struct qmp_phy_init_tbl {
 	{				\
 		.offset = o,		\
 		.val = v,		\
+		.name = #o,		\
 		.lane_mask = 0xff,	\
 	}
 
@@ -67,6 +69,7 @@ struct qmp_phy_init_tbl {
 	{				\
 		.offset = o,		\
 		.val = v,		\
+		.name = #o,		\
 		.lane_mask = l,		\
 	}
 
@@ -3397,10 +3400,10 @@ static const struct qmp_phy_cfg sa8775p_qmp_gen4x4_pciephy_cfg = {
 	.phy_status		= PHYSTATUS_4_20,
 };
 
-static void qmp_pcie_configure_lane(void __iomem *base,
-					const struct qmp_phy_init_tbl tbl[],
-					int num,
-					u8 lane_mask)
+static void qmp_pcie_configure_lane(struct device *dev, void __iomem *base,
+				    const struct qmp_phy_init_tbl tbl[],
+				    int num,
+				    u8 lane_mask)
 {
 	int i;
 	const struct qmp_phy_init_tbl *t = tbl;
@@ -3412,15 +3415,17 @@ static void qmp_pcie_configure_lane(void __iomem *base,
 		if (!(t->lane_mask & lane_mask))
 			continue;
 
+		dev_dbg(dev, "Writing Reg: %s Offset: 0x%04x Val: 0x%02x\n",
+			t->name, t->offset, t->val);
 		writel(t->val, base + t->offset);
 	}
 }
 
-static void qmp_pcie_configure(void __iomem *base,
-					const struct qmp_phy_init_tbl tbl[],
-					int num)
+static void qmp_pcie_configure(struct device *dev, void __iomem *base,
+			       const struct qmp_phy_init_tbl tbl[],
+			       int num)
 {
-	qmp_pcie_configure_lane(base, tbl, num, 0xff);
+	qmp_pcie_configure_lane(dev, base, tbl, num, 0xff);
 }
 
 static void qmp_pcie_init_port_b(struct qmp_pcie *qmp, const struct qmp_phy_cfg_tbls *tbls)
@@ -3434,11 +3439,11 @@ static void qmp_pcie_init_port_b(struct qmp_pcie *qmp, const struct qmp_phy_cfg_
 	tx4 = qmp->port_b + offs->tx2;
 	rx4 = qmp->port_b + offs->rx2;
 
-	qmp_pcie_configure_lane(tx3, tbls->tx, tbls->tx_num, 1);
-	qmp_pcie_configure_lane(rx3, tbls->rx, tbls->rx_num, 1);
+	qmp_pcie_configure_lane(qmp->dev, tx3, tbls->tx, tbls->tx_num, 1);
+	qmp_pcie_configure_lane(qmp->dev, rx3, tbls->rx, tbls->rx_num, 1);
 
-	qmp_pcie_configure_lane(tx4, tbls->tx, tbls->tx_num, 2);
-	qmp_pcie_configure_lane(rx4, tbls->rx, tbls->rx_num, 2);
+	qmp_pcie_configure_lane(qmp->dev, tx4, tbls->tx, tbls->tx_num, 2);
+	qmp_pcie_configure_lane(qmp->dev, rx4, tbls->rx, tbls->rx_num, 2);
 }
 
 static void qmp_pcie_init_registers(struct qmp_pcie *qmp, const struct qmp_phy_cfg_tbls *tbls)
@@ -3456,25 +3461,26 @@ static void qmp_pcie_init_registers(struct qmp_pcie *qmp, const struct qmp_phy_c
 	if (!tbls)
 		return;
 
-	qmp_pcie_configure(serdes, tbls->serdes, tbls->serdes_num);
+	qmp_pcie_configure(qmp->dev, serdes, tbls->serdes, tbls->serdes_num);
 
-	qmp_pcie_configure_lane(tx, tbls->tx, tbls->tx_num, 1);
-	qmp_pcie_configure_lane(rx, tbls->rx, tbls->rx_num, 1);
+	qmp_pcie_configure_lane(qmp->dev, tx, tbls->tx, tbls->tx_num, 1);
+	qmp_pcie_configure_lane(qmp->dev, rx, tbls->rx, tbls->rx_num, 1);
 
 	if (cfg->lanes >= 2) {
-		qmp_pcie_configure_lane(tx2, tbls->tx, tbls->tx_num, 2);
-		qmp_pcie_configure_lane(rx2, tbls->rx, tbls->rx_num, 2);
+		qmp_pcie_configure_lane(qmp->dev, tx2, tbls->tx, tbls->tx_num, 2);
+		qmp_pcie_configure_lane(qmp->dev, rx2, tbls->rx, tbls->rx_num, 2);
 	}
 
-	qmp_pcie_configure(pcs, tbls->pcs, tbls->pcs_num);
-	qmp_pcie_configure(pcs_misc, tbls->pcs_misc, tbls->pcs_misc_num);
+	qmp_pcie_configure(qmp->dev, pcs, tbls->pcs, tbls->pcs_num);
+	qmp_pcie_configure(qmp->dev, pcs_misc, tbls->pcs_misc, tbls->pcs_misc_num);
 
 	if (cfg->lanes >= 4 && qmp->tcsr_4ln_config) {
-		qmp_pcie_configure(serdes, cfg->serdes_4ln_tbl, cfg->serdes_4ln_num);
+		qmp_pcie_configure(qmp->dev, serdes, cfg->serdes_4ln_tbl,
+				   cfg->serdes_4ln_num);
 		qmp_pcie_init_port_b(qmp, tbls);
 	}
 
-	qmp_pcie_configure(ln_shrd, tbls->ln_shrd, tbls->ln_shrd_num);
+	qmp_pcie_configure(qmp->dev, ln_shrd, tbls->ln_shrd, tbls->ln_shrd_num);
 }
 
 static int qmp_pcie_init(struct phy *phy)
