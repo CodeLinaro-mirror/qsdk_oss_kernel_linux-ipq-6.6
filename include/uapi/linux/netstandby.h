@@ -63,6 +63,15 @@ struct netstandby_nss_priv_info {
 };
 
 /*
+ * netstandby_wifi_priv_info
+ *	WiFi private information
+ */
+struct netstandby_wifi_priv_info {
+	int link_id[MAX_INTERFACE]; 		/**< Link ids of wakeup interfaces */
+	int link_id_cnt;			/**< Link ids of wakeup interfaces */
+};
+
+/*
  * netstandby_event_compl_info
  */
 struct netstandby_event_compl_info {
@@ -93,6 +102,7 @@ struct netstandby_entry_info {
 	struct net_device *dev[MAX_INTERFACE]; 		/**< List of designated interfaces to exit network standby mode */
 	struct netstandby_exit_trigger_rule tuple;	/**< Trigger rule informataion */
 	struct netstandby_nss_priv_info nss_info;	/**< NSS specific entry information */
+	struct netstandby_wifi_priv_info wifi_info;	/**< WiFi specific entry information */
 	int iface_cnt;					/**< Number of designated wakeup interface */
 };
 
