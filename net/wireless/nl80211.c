@@ -3576,6 +3576,7 @@ static int nl80211_set_wiphy(struct sk_buff *skb, struct genl_info *info)
 		struct wireless_dev *txp_wdev = wdev;
 		enum nl80211_tx_power_setting type;
 		int idx, mbm = 0;
+		int link_id = nl80211_link_id_or_invalid(info->attrs);
 
 		if (!(rdev->wiphy.features & NL80211_FEATURE_VIF_TXPOWER))
 			txp_wdev = NULL;
@@ -3599,7 +3600,7 @@ static int nl80211_set_wiphy(struct sk_buff *skb, struct genl_info *info)
 			mbm = nla_get_u32(info->attrs[idx]);
 		}
 
-		result = rdev_set_tx_power(rdev, txp_wdev, type, mbm);
+		result = rdev_set_tx_power(rdev, txp_wdev, type, mbm, link_id);
 		if (result)
 			goto out;
 	}

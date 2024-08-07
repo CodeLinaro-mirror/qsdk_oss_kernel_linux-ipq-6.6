@@ -4018,6 +4018,7 @@ struct mgmt_frame_regs {
 };
 
 #define CFG80211_PER_LINK_TX_POWER 1
+#define CFG80211_SET_PER_LINK_TX_POWER 1
 
 /**
  * struct cfg80211_ops - backend description for wireless configuration
@@ -4565,7 +4566,7 @@ struct cfg80211_ops {
 	int	(*set_wiphy_params)(struct wiphy *wiphy, u32 changed);
 
 	int	(*set_tx_power)(struct wiphy *wiphy, struct wireless_dev *wdev,
-				enum nl80211_tx_power_setting type, int mbm);
+				enum nl80211_tx_power_setting type, int mbm, int link_id);
 	int	(*get_tx_power)(struct wiphy *wiphy, struct wireless_dev *wdev,
 				unsigned int link_id, int *dbm);
 
