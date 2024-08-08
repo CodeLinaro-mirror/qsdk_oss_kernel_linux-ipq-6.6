@@ -419,6 +419,13 @@ config SKB_TIMESTAMP
 	bool "Timestamp storage enablement in the packet"
 	default n
 
+config SKB_FAST_RECYCLABLE_DEBUG_ENABLE
+	bool "Enable debug API for fast recycled skbs"
+	depends on SKB_RECYCLER
+	default n
+	help
+	 Enable debug API for fast recycled skbs.
+
 menu "Network testing"
 
 config NET_PKTGEN
