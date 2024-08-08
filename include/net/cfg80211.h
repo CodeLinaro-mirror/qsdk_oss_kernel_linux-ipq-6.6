@@ -25,6 +25,10 @@
 #include <linux/rfkill.h>
 #include <net/regulatory.h>
 
+#ifndef CONFIG_ML_RECONFIG_SINGLE_WIPHY
+#define CONFIG_ML_RECONFIG_SINGLE_WIPHY 1
+#endif
+
 /**
  * DOC: Introduction
  *
