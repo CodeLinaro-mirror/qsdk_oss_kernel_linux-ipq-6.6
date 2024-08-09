@@ -895,3 +895,20 @@ int br_port_set_sub_br_id(struct net_bridge_port *p, unsigned long new_sub_br_id
 	p->sub_br_id = new_sub_br_id;
 	return 0;
 }
+
+/*
+ * Set per bridge port MAC learn limit
+ */
+int br_port_set_mac_lrn_limit(struct net_bridge_port *p, unsigned long new_mac_lrn_limit)
+{
+	pr_info("Set mac learn limit old: %d, new: %d\n", p->mac_lrn_limit, new_mac_lrn_limit);
+
+	p->mac_lrn_limit = new_mac_lrn_limit;
+
+	/* Reset current mac learn cnt when mac learn limit is disabled */
+	if(!p->mac_lrn_limit) {
+		p->mac_lrn_cnt = 0;
+	}
+
+	return 0;
+}
