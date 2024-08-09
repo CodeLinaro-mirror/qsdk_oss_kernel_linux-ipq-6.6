@@ -973,7 +973,7 @@ static int cfg80211_wext_siwtxpower(struct net_device *dev,
 	}
 
 	wiphy_lock(&rdev->wiphy);
-	ret = rdev_set_tx_power(rdev, wdev, type, DBM_TO_MBM(dbm));
+	ret = rdev_set_tx_power(rdev, wdev, type, DBM_TO_MBM(dbm), -1);
 	wiphy_unlock(&rdev->wiphy);
 
 	return ret;
