@@ -1366,6 +1366,7 @@ struct cfg80211_unsol_bcast_probe_resp {
  * @punct_bitmap: Preamble puncturing bitmap. Each bit represents
  *	a 20 MHz channel, lowest bit corresponding to the lowest channel.
  *	Bit set to 1 indicates that the channel is punctured.
+ * @reconfig: whether reconfiguration or not
  */
 struct cfg80211_ap_settings {
 	struct cfg80211_chan_def chandef;
@@ -1401,6 +1402,7 @@ struct cfg80211_ap_settings {
 	struct cfg80211_unsol_bcast_probe_resp unsol_bcast_probe_resp;
 	struct cfg80211_mbssid_config mbssid_config;
 	u16 punct_bitmap;
+	bool reconfig;
 };
 
 /**
@@ -4491,8 +4493,14 @@ struct cfg80211_ops {
 			    struct cfg80211_ap_settings *settings);
 	int	(*change_beacon)(struct wiphy *wiphy, struct net_device *dev,
 				 struct cfg80211_beacon_data *info);
+#ifdef CONFIG_ML_RECONFIG_SINGLE_WIPHY
+	int	(*stop_ap)(struct wiphy *wiphy, struct net_device *dev,
+			   unsigned int link_id,
+			   struct cfg80211_ap_settings *settings);
+#else
 	int	(*stop_ap)(struct wiphy *wiphy, struct net_device *dev,
 			   unsigned int link_id);
+#endif /* CONFIG_ML_RECONFIG_SINGLE_WIPHY */
 
 
 	int	(*add_station)(struct wiphy *wiphy, struct net_device *dev,

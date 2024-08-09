@@ -821,6 +821,7 @@ static const struct nla_policy nl80211_policy[NUM_NL80211_ATTR] = {
 	[NL80211_ATTR_RADIO_IFACE] = { .type = NLA_BINARY, .len = IFNAMSIZ-1 },
 	[NL80211_ATTR_AP_REMOVAL_COUNT] = { .type = NLA_U16 },
 	[NL80211_ATTR_TSF] = { .type = NLA_U64 },
+	[NL80211_ATTR_MLO_AP_RECONFIG] = { .type = NLA_FLAG },
 };
 
 /* policy for the key attributes */
@@ -5989,6 +5990,9 @@ static int nl80211_start_ap(struct sk_buff *skb, struct genl_info *info)
 		nla_get_u32(info->attrs[NL80211_ATTR_BEACON_INTERVAL]);
 	params->dtim_period =
 		nla_get_u32(info->attrs[NL80211_ATTR_DTIM_PERIOD]);
+	if (info->attrs[NL80211_ATTR_MLO_AP_RECONFIG])
+		params->reconfig =
+			nla_get_flag(info->attrs[NL80211_ATTR_MLO_AP_RECONFIG]);
 
 	err = cfg80211_validate_beacon_int(rdev, dev->ieee80211_ptr->iftype,
 					   params->beacon_interval);
@@ -6306,7 +6310,7 @@ static int nl80211_stop_ap(struct sk_buff *skb, struct genl_info *info)
 	unsigned int link_id = nl80211_link_id(info->attrs);
 	struct net_device *dev = info->user_ptr[1];
 
-	return cfg80211_stop_ap(rdev, dev, link_id, false);
+	return cfg80211_stop_ap(rdev, dev, link_id, false, info);
 }
 
 static const struct nla_policy sta_flags_policy[NL80211_STA_FLAG_MAX + 1] = {
