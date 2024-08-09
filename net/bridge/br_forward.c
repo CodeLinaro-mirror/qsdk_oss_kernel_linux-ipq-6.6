@@ -203,6 +203,7 @@ void br_flood(struct net_bridge *br, struct sk_buff *skb,
 	      u16 vid)
 {
 	const unsigned char *dest = eth_hdr(skb)->h_dest;
+	struct net_bridge_port *srcp = br_port_get_rcu(skb->dev);
 	struct net_bridge_port *prev = NULL;
 	struct net_bridge_port *p;
 
@@ -238,6 +239,13 @@ void br_flood(struct net_bridge *br, struct sk_buff *skb,
 		    ((p->flags & BR_PROXYARP_WIFI) ||
 		     br_is_neigh_suppress_enabled(p, vid)))
 			continue;
+
+		/* Do not flood to non-upstream port and to ports in different sub bridge */
+		if (srcp &&
+			!((p->flags & BR_UPSTREAM_PORT) || (srcp->flags & BR_UPSTREAM_PORT))
+			&& (p->sub_br_id != srcp->sub_br_id))
+			continue;
+
 
 		prev = maybe_deliver(prev, p, skb, local_orig);
 		if (IS_ERR(prev))

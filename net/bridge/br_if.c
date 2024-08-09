@@ -884,3 +884,14 @@ bool br_is_hairpin_enabled(struct net_device *dev)
 	return false;
 }
 EXPORT_SYMBOL_GPL(br_is_hairpin_enabled);
+
+/*
+ * Set sub bridge ID on a bridge port
+ */
+int br_port_set_sub_br_id(struct net_bridge_port *p, unsigned long new_sub_br_id)
+{
+	pr_info("Set sub br id old: %d, new: %d\n", p->sub_br_id, new_sub_br_id);
+
+	p->sub_br_id = new_sub_br_id;
+	return 0;
+}
