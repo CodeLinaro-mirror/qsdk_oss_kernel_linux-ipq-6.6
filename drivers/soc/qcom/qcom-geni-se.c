@@ -1367,7 +1367,7 @@ void geni_se_fw_load(struct geni_se *se, uint8_t se_mode)
 		cfg_val_off = *((uint16_t*)&hdr->firmware_offset);
 		fw32 = (uint32_t*)&fw[cfg_val_off];
 		cfg_limit = *((uint16_t*)&hdr->firmware_sz_in_items);
-		memcpy((void*)(se->base + SE_GENI_CFG_RAMn_OFFSET),
+		memcpy_toio((void*)(se->base + SE_GENI_CFG_RAMn_OFFSET),
 				fw32, (cfg_limit * sizeof(uint32_t)));
 	}
 
