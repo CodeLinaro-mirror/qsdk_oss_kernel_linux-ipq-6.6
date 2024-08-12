@@ -191,6 +191,21 @@ static struct attribute *dsu_pmu_event_attrs[] = {
 	DSU_EVENT_ATTR(l3d_cache_refill, 0x2a),
 	DSU_EVENT_ATTR(l3d_cache, 0x2b),
 	DSU_EVENT_ATTR(l3d_cache_wb, 0x2c),
+	DSU_EVENT_ATTR(l3d_cache_rd, 0xa0),
+	DSU_EVENT_ATTR(l3d_cache_wr, 0xa1),
+	DSU_EVENT_ATTR(scu_snp_access, 0xc0),
+	DSU_EVENT_ATTR(scu_snp_evict, 0xc1),
+	DSU_EVENT_ATTR(scu_snp_no_cpu_snp, 0xc2),
+	DSU_EVENT_ATTR(scu_pftch_cpu_access, 0x500),
+	DSU_EVENT_ATTR(scu_pftch_cpu_miss, 0x501),
+	DSU_EVENT_ATTR(scu_pftch_cpu_hit, 0x502),
+	DSU_EVENT_ATTR(scu_pftch_cpu_match, 0x503),
+	DSU_EVENT_ATTR(scu_pftch_cpu_kill, 0x504),
+	DSU_EVENT_ATTR(scu_stash_icn_access, 0x510),
+	DSU_EVENT_ATTR(scu_stash_icn_miss, 0x511),
+	DSU_EVENT_ATTR(scu_stash_icn_hit, 0x512),
+	DSU_EVENT_ATTR(scu_stash_icn_match, 0x513),
+	DSU_EVENT_ATTR(scu_stash_icn_kill, 0x514),
 	NULL,
 };
 
@@ -204,7 +219,7 @@ dsu_pmu_event_attr_is_visible(struct kobject *kobj, struct attribute *attr,
 					struct dev_ext_attribute, attr.attr);
 	unsigned long evt = (unsigned long)eattr->var;
 
-	return test_bit(evt, dsu_pmu->cpmceid_bitmap) ? attr->mode : 0;
+	return attr->mode; // AGK : for DSU PMU snoop events // test_bit(evt, dsu_pmu->cpmceid_bitmap) ? attr->mode : 0;
 }
 
 static const struct attribute_group dsu_pmu_events_attr_group = {
