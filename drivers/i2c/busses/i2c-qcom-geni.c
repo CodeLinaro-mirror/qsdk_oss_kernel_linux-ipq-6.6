@@ -145,11 +145,21 @@ struct geni_i2c_clk_fld {
  * time of full period of SCL: t_cycle = (t_cycle_cnt * clk_div) / source_clock
  * clk_freq_out = t / t_cycle
  * source_clock = 19.2 MHz
+ *
+ * static const struct geni_i2c_clk_fld geni_i2c_clk_map[] = {
+ * 	{KHZ(100), 7, 10, 11, 26},
+ * 	{KHZ(400), 2,  5, 12, 24},
+ * 	{KHZ(1000), 1, 3,  9, 18},
+ * };
+*/
+
+/*
+ * source_clock = 32 MHz
  */
 static const struct geni_i2c_clk_fld geni_i2c_clk_map[] = {
-	{KHZ(100), 7, 10, 11, 26},
-	{KHZ(400), 2,  5, 12, 24},
-	{KHZ(1000), 1, 3,  9, 18},
+	{KHZ(100), 7, 14, 18, 40},
+	{KHZ(400), 4,  3, 11, 20},
+	{KHZ(1000), 4, 3,  6, 15},
 };
 
 static int geni_i2c_clk_map_idx(struct geni_i2c_dev *gi2c)
