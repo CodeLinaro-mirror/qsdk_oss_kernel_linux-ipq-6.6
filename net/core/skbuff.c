@@ -1420,6 +1420,7 @@ kfree_skb_list_reason(struct sk_buff *segs, enum skb_drop_reason reason)
 
 		if (__kfree_skb_reason(segs, reason)) {
 			skb_poison_list(segs);
+			skbuff_debugobj_deactivate(segs);
 			kfree_skb_add_bulk(segs, &sa, reason);
 		}
 
@@ -1656,6 +1657,7 @@ static void napi_skb_cache_put(struct sk_buff *skb)
 	u32 i;
 
 	kasan_poison_object_data(skbuff_cache, skb);
+	skbuff_debugobj_deactivate(skb);
 	nc->skb_cache[nc->skb_count++] = skb;
 
 	if (unlikely(nc->skb_count == NAPI_SKB_CACHE_SIZE)) {
