@@ -811,9 +811,6 @@ static int geni_i2c_probe(struct platform_device *pdev)
 		gi2c->clk_freq_out = KHZ(100);
 	}
 
-#ifdef CONFIG_QCOM_GENI_SE_FW_LOAD
-	geni_se_fw_load(&gi2c->se, QUPV3_SE_I2C);
-#endif /* CONFIG_QCOM_GENI_SE_FW_LOAD */
 	if (has_acpi_companion(dev))
 		ACPI_COMPANION_SET(&gi2c->adap.dev, ACPI_COMPANION(dev));
 
@@ -872,6 +869,11 @@ static int geni_i2c_probe(struct platform_device *pdev)
 		dev_err(dev, "Error turning on resources %d\n", ret);
 		return ret;
 	}
+
+#ifdef CONFIG_QCOM_GENI_SE_FW_LOAD
+	geni_se_fw_load(&gi2c->se, QUPV3_SE_I2C);
+#endif /* CONFIG_QCOM_GENI_SE_FW_LOAD */
+
 	proto = geni_se_read_proto(&gi2c->se);
 	if (proto != GENI_SE_I2C) {
 		dev_err(dev, "Invalid proto %d\n", proto);
