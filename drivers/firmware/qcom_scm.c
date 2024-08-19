@@ -1440,6 +1440,19 @@ bool qcom_scm_ice_hwkey_available(void)
 EXPORT_SYMBOL(qcom_scm_ice_hwkey_available);
 
 /**
+ * qcom_qfprom_show_auth_available() - Check if the SCM call to verify
+ *					   secure boot fuse enablement is supported?
+ *
+ * Return: true if the SCM call is supported
+ */
+bool qcom_qfprom_show_auth_available(void)
+{
+	return __qcom_scm_is_call_available(__scm->dev, QCOM_SCM_SVC_FUSE,
+							QCOM_QFPROM_IS_AUTHENTICATE_CMD);
+}
+EXPORT_SYMBOL_GPL(qcom_qfprom_show_auth_available);
+
+/**
  * qcom_scm_ice_invalidate_key() - Invalidate an inline encryption key
  * @index: the keyslot to invalidate
  *
@@ -2248,6 +2261,32 @@ int qcom_qfprom_show_authenticate(void)
 	return buf == 1 ? 1 : 0;
 }
 EXPORT_SYMBOL_GPL(qcom_qfprom_show_authenticate);
+
+int ipq54xx_qcom_qfprom_show_authenticate(void)
+{
+	int ret;
+	struct fuse_payload *fuse = NULL;
+
+	fuse = kzalloc(sizeof(*fuse), GFP_KERNEL);
+	if (!fuse)
+		return -ENOMEM;
+
+	fuse[0].fuse_addr = SECURE_BOOT_FUSE_ADDR;
+
+	ret = qcom_scm_get_ipq_fuse_list(fuse, sizeof(struct fuse_payload));
+	if (ret) {
+		pr_err("SCM call for reading ipq54xx fuse failed with error:%d\n", ret);
+		ret = -1;
+		goto fuse_alloc_err;
+	}
+
+	if (fuse[0].lsb_val & OEM_SEC_BOOT_ENABLE)
+		ret = 1;
+fuse_alloc_err:
+	kfree(fuse);
+	return ret;
+}
+EXPORT_SYMBOL_GPL(ipq54xx_qcom_qfprom_show_authenticate);
 
 int qcom_sec_upgrade_auth(unsigned int scm_cmd_id, unsigned int sw_type,
 				unsigned int img_size, unsigned int load_addr)

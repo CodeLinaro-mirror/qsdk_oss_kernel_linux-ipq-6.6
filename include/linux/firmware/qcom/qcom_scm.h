@@ -35,6 +35,8 @@
 
 #define MAX_FUSE_ADDR_SIZE		0x8
 #define IPQ9574_MAX_FUSE_ADDR_SIZE	22
+#define SECURE_BOOT_FUSE_ADDR		0xA40E0
+#define OEM_SEC_BOOT_ENABLE		BIT(7)
 
 struct fuse_payload {
 	uint32_t fuse_addr;
@@ -228,6 +230,7 @@ extern int qcom_qfprom_read_version(uint32_t sw_type,
 				    uint32_t value,
 				    uint32_t qfprom_ret_ptr);
 extern int qcom_qfprom_show_authenticate(void);
+extern int ipq54xx_qcom_qfprom_show_authenticate(void);
 extern bool qcom_scm_is_available(void);
 
 extern int qcom_scm_set_cold_boot_addr(void *entry);
@@ -284,6 +287,7 @@ extern int qcom_scm_ocmem_unlock(enum qcom_scm_ocmem_client id, u32 offset,
 
 extern bool qcom_scm_ice_available(void);
 extern bool qcom_scm_ice_hwkey_available(void);
+extern bool qcom_qfprom_show_auth_available(void);
 extern int qcom_scm_ice_invalidate_key(u32 index);
 extern int qcom_config_sec_ice(void *buf, int size);
 extern int qcom_scm_ice_set_key(u32 index, const u8 *key, u32 key_size,
