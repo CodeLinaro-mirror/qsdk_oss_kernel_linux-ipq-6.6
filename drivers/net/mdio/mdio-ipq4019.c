@@ -431,6 +431,7 @@ u32 ipq_mii_read(struct mii_bus *mii_bus, u32 reg)
 
 	return val;
 }
+EXPORT_SYMBOL_GPL(ipq_mii_read);
 
 void ipq_mii_write(struct mii_bus *mii_bus, u32 reg, u32 val)
 {
@@ -444,6 +445,7 @@ void ipq_mii_write(struct mii_bus *mii_bus, u32 reg, u32 val)
 			break;
 	}
 }
+EXPORT_SYMBOL_GPL(ipq_mii_write);
 
 static inline void ipq_qca8386_clk_enable(struct mii_bus *mii_bus, u32 reg)
 {
