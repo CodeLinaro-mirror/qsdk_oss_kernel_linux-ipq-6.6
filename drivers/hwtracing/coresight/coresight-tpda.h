@@ -15,7 +15,10 @@
 
 /* Bits 6 ~ 12 is for atid value */
 #define TPDA_CR_ATID		GENMASK(12, 6)
+#define TPDA_CR_MID		GENMASK(19, 13)
 
+#define TPDA_SYNCR		(0x08C)
+#define TPDA_FPID_CR		(0x08C)
 /**
  * struct tpda_drvdata - specifics associated to an TPDA component
  * @base:       memory mapped base address for this component.
