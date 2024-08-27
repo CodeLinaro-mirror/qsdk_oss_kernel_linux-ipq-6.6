@@ -1615,6 +1615,12 @@ static int qcom_geni_serial_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	ret = geni_se_resources_on(&port->se);
+	if (ret) {
+		dev_err(&pdev->dev, "Error turning on resources %d\n", ret);
+		return ret;
+	}
+
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res)
 		return -EINVAL;
