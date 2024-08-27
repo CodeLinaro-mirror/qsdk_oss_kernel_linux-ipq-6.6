@@ -1453,6 +1453,19 @@ bool qcom_qfprom_show_auth_available(void)
 EXPORT_SYMBOL_GPL(qcom_qfprom_show_auth_available);
 
 /**
+ * qcom_sec_dat_fuse_available() - Check if the SCM call to verify
+ *				   fuse sec_dat support is available
+ *
+ * Return: true if the SCM call is supported
+ */
+bool qcom_sec_dat_fuse_available(void)
+{
+	return __qcom_scm_is_call_available(__scm->dev, QCOM_SCM_SVC_FUSE,
+					    TZ_BLOW_FUSE_SECDAT);
+}
+EXPORT_SYMBOL_GPL(qcom_sec_dat_fuse_available);
+
+/**
  * qcom_scm_ice_invalidate_key() - Invalidate an inline encryption key
  * @index: the keyslot to invalidate
  *
