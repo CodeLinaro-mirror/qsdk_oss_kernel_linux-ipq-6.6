@@ -47,7 +47,7 @@
 #define PARF_MHI_CLOCK_RESET_CTRL		0x174
 #define PARF_AXI_MSTR_WR_ADDR_HALT		0x178
 #define PARF_AXI_MSTR_WR_ADDR_HALT_V2		0x1a8
-#define PARF_AXI_MSTR_WR_ADDR_HALT_V2_MASK	0x1F
+#define PARF_AXI_MSTR_WR_ADDR_HALT_V2_MASK	0x3F
 #define PARF_Q2A_FLUSH				0x1ac
 #define PARF_LTSSM				0x1b0
 #define PARF_SID_OFFSET				0x234
@@ -302,6 +302,7 @@ struct qcom_pcie {
 	struct dentry *debugfs;
 	bool suspended;
 	uint32_t axi_wr_addr_halt;
+	uint32_t aggr_noc_rate_adap_val;
 	uint32_t domain;
 	uint32_t num_lanes;
 	int global_irq;
@@ -1220,10 +1221,14 @@ static int qcom_pcie_post_init(struct qcom_pcie *pcie)
 			pcie->parf + PARF_AXI_MSTR_WR_ADDR_HALT_V2);
 	}
 
-	if (pcie->aggr_noc != NULL && !IS_ERR(pcie->aggr_noc))
-		writel(AGGR_NOC_PCIE_1LANE_RATEADAPT_VAL, pcie->aggr_noc);
+	if (!IS_ERR_OR_NULL(pcie->aggr_noc)) {
+		if (pcie->aggr_noc_rate_adap_val)
+			writel(pcie->aggr_noc_rate_adap_val, pcie->aggr_noc);
+		else
+			writel(AGGR_NOC_PCIE_1LANE_RATEADAPT_VAL, pcie->aggr_noc);
+	}
 
-	if (pcie->system_noc != NULL && !IS_ERR(pcie->system_noc)) {
+	if (!IS_ERR_OR_NULL(pcie->system_noc)) {
 		if (pcie->num_lanes == 2)
 			writel(SYSTEM_NOC_PCIE_RATEADAPT_BYPASS, pcie->system_noc);
 	}
@@ -1778,6 +1783,9 @@ static int qcom_pcie_probe(struct platform_device *pdev)
 			goto err_pm_runtime_put;
 		}
 	}
+
+	of_property_read_u32(pdev->dev.of_node, "aggr-noc-val",
+				&pcie->aggr_noc_rate_adap_val);
 
 	of_property_read_u32(pdev->dev.of_node, "axi-halt-val",
 				&pcie->axi_wr_addr_halt);
