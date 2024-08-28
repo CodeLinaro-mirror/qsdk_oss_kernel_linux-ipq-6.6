@@ -44,6 +44,9 @@
 #include <linux/kthread.h>
 #include <linux/init.h>
 #include <linux/mmu_notifier.h>
+#ifdef CONFIG_ATHMEMDEBUG
+#include <linux/ath_memdebug.h>
+#endif
 
 #include <asm/tlb.h>
 #include "internal.h"
@@ -1058,6 +1061,9 @@ static void oom_kill_process(struct oom_control *oc, const char *message)
  */
 static void check_panic_on_oom(struct oom_control *oc)
 {
+#ifdef CONFIG_ATHMEMDEBUG
+	ath_upate_oom_panic(1);
+#endif
 	if (likely(!sysctl_panic_on_oom))
 		return;
 	if (sysctl_panic_on_oom != 2) {
