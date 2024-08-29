@@ -3,7 +3,7 @@ menuconfig ARCH_QCOM
 	bool "Qualcomm Support"
 	depends on ARCH_MULTI_V7
 	select ARM_GIC
-	select ARM_AMBA if !IPQ_FLASH_16M_PROFILE
+	select ARM_AMBA if IPQ_MEM_PROFILE != 256
 	select PINCTRL
 	select QCOM_SCM if SMP
 	select ARM_GIC_V2M if PCI
