@@ -1087,10 +1087,6 @@ static int spi_geni_probe(struct platform_device *pdev)
 		return ret;
 	}
 
-#ifdef CONFIG_QCOM_GENI_SE_FW_LOAD
-	geni_se_fw_load(&mas->se, QUPV3_SE_SPI);
-#endif /* CONFIG_QCOM_GENI_SE_FW_LOAD */
-
 	spi->bus_num = -1;
 	spi->dev.of_node = dev->of_node;
 	spi->mode_bits = SPI_CPOL | SPI_CPHA | SPI_LOOP | SPI_CS_HIGH;
@@ -1129,6 +1125,14 @@ static int spi_geni_probe(struct platform_device *pdev)
 	ret = geni_icc_set_bw(&mas->se);
 	if (ret)
 		goto spi_geni_probe_runtime_disable;
+
+#ifdef CONFIG_QCOM_GENI_SE_FW_LOAD
+	ret = geni_se_resources_on(&mas->se);
+	if (ret)
+		return ret;
+
+	geni_se_fw_load(&mas->se, QUPV3_SE_SPI);
+#endif /* CONFIG_QCOM_GENI_SE_FW_LOAD */
 
 	ret = spi_geni_init(mas);
 	if (ret)
