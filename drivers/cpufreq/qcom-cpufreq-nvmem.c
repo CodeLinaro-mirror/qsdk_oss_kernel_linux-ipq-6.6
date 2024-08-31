@@ -30,6 +30,9 @@
 
 #include <dt-bindings/arm/qcom,ids.h>
 
+#define IPQ5424_BLNK_PART	0xFF
+#define IPQ5424_TURBO_FREQ_LVAL	0x4B
+
 struct qcom_cpufreq_drv;
 
 struct qcom_cpufreq_match_data {
@@ -163,7 +166,10 @@ static int qcom_cpufreq_kryo_name_version(struct device *cpu_dev,
 		break;
 	case QCOM_ID_IPQ5424:
 	case QCOM_ID_IPQ5404:
-		drv->versions = 1 << (unsigned int)!!(*speedbin);
+		drv->versions = (unsigned int)(*speedbin);
+		/* Configure blank parts with turbo frequency */
+		if (drv->versions == IPQ5424_BLNK_PART)
+			drv->versions = IPQ5424_TURBO_FREQ_LVAL;
 		break;
 	case QCOM_ID_MSM8996SG:
 	case QCOM_ID_APQ8096SG:
