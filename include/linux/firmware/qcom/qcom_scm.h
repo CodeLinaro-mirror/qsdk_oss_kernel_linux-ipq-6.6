@@ -294,6 +294,7 @@ extern bool qcom_scm_ice_available(void);
 extern bool qcom_scm_ice_hwkey_available(void);
 extern bool qcom_qfprom_show_auth_available(void);
 extern bool qcom_sec_dat_fuse_available(void);
+extern bool qcom_qfrom_fuse_row_write_available(void);
 extern int qcom_scm_ice_invalidate_key(u32 index);
 extern int qcom_config_sec_ice(void *buf, int size);
 extern int qcom_scm_ice_set_key(u32 index, const u8 *key, u32 key_size,
