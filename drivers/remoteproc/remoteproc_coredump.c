@@ -102,6 +102,47 @@ int rproc_coredump_add_custom_segment(struct rproc *rproc,
 EXPORT_SYMBOL(rproc_coredump_add_custom_segment);
 
 /**
+ * rproc_coredump_add_custom_segment_with_va() - add custom coredump segment
+ * @rproc:	handle of a remote processor
+ * @da:		device address
+ * @va:		device virtual address
+ * @size:	size of segment
+ * @dumpfn:	custom dump function called for each segment during coredump
+ * @priv:	private data
+ *
+ * Add device memory to the list of segments to be included in the coredump
+ * and associate the segment with the given custom dump function and private
+ * data.
+ *
+ * Return: 0 on success, negative errno on error.
+ */
+int rproc_coredump_add_custom_segment_with_va(struct rproc *rproc,
+				      dma_addr_t da, dma_addr_t va, size_t size,
+				      void (*dumpfn)(struct rproc *rproc,
+						     struct rproc_dump_segment *segment,
+						     void *dest, size_t offset,
+						     size_t size),
+				      void *priv)
+{
+	struct rproc_dump_segment *segment;
+
+	segment = kzalloc(sizeof(*segment), GFP_KERNEL);
+	if (!segment)
+		return -ENOMEM;
+
+	segment->da = da;
+	segment->va = va;
+	segment->size = size;
+	segment->priv = priv;
+	segment->dump = dumpfn;
+
+	list_add_tail(&segment->node, &rproc->dump_segments);
+
+	return 0;
+}
+EXPORT_SYMBOL(rproc_coredump_add_custom_segment_with_va);
+
+/**
  * rproc_coredump_set_elf_info() - set coredump elf information
  * @rproc:	handle of a remote processor
  * @class:	elf class for coredump elf file
@@ -295,7 +336,10 @@ void rproc_coredump(struct rproc *rproc)
 		memset(phdr, 0, elf_size_of_phdr(class));
 		elf_phdr_set_p_type(class, phdr, PT_LOAD);
 		elf_phdr_set_p_offset(class, phdr, offset);
-		elf_phdr_set_p_vaddr(class, phdr, segment->da);
+		if (segment->va)
+			elf_phdr_set_p_vaddr(class, phdr, segment->va);
+		else
+			elf_phdr_set_p_vaddr(class, phdr, segment->da);
 		elf_phdr_set_p_paddr(class, phdr, segment->da);
 		elf_phdr_set_p_filesz(class, phdr, segment->size);
 		elf_phdr_set_p_memsz(class, phdr, segment->size);
