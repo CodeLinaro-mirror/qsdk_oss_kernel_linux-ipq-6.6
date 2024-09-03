@@ -2215,6 +2215,9 @@ config UNWIND_PATCH_PAC_INTO_SCS
 	select UNWIND_TABLES
 	select DYNAMIC_SCS
 
+config ARCH_IPQ5424
+	bool "Enable for target IPQ5424"
+
 endmenu # "Kernel Features"
 
 menu "Boot options"
