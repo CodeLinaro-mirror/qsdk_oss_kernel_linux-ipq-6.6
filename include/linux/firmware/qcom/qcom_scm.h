@@ -161,7 +161,7 @@ struct qcom_scm_vmperm {
 struct fuse_blow {
 	dma_addr_t address;
 	size_t size;
-	unsigned long *status;
+	u64 *status;
 };
 
 enum qcom_scm_ocmem_client {
@@ -293,6 +293,7 @@ extern int qcom_scm_ocmem_unlock(enum qcom_scm_ocmem_client id, u32 offset,
 extern bool qcom_scm_ice_available(void);
 extern bool qcom_scm_ice_hwkey_available(void);
 extern bool qcom_qfprom_show_auth_available(void);
+extern bool qcom_sec_dat_fuse_available(void);
 extern int qcom_scm_ice_invalidate_key(u32 index);
 extern int qcom_config_sec_ice(void *buf, int size);
 extern int qcom_scm_ice_set_key(u32 index, const u8 *key, u32 key_size,
