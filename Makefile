@@ -816,6 +816,10 @@ endif # need-config
 
 KBUILD_CFLAGS	+= -fno-delete-null-pointer-checks
 
+ifdef CONFIG_ARCH_IPQ5424
+KBUILD_CFLAGS += -mtune=cortex-a55
+endif
+
 ifdef CONFIG_CC_OPTIMIZE_FOR_PERFORMANCE
 KBUILD_CFLAGS += -O2
 KBUILD_RUSTFLAGS += -Copt-level=2
