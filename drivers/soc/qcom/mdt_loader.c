@@ -51,7 +51,7 @@ struct pdseg_dma_mem_info {
 	void **pt;
 };
 
-static bool mdt_phdr_valid(const struct elf32_phdr *phdr)
+bool mdt_phdr_valid(const struct elf32_phdr *phdr)
 {
 	if (phdr->p_type != PT_LOAD)
 		return false;
@@ -64,6 +64,7 @@ static bool mdt_phdr_valid(const struct elf32_phdr *phdr)
 
 	return true;
 }
+EXPORT_SYMBOL_GPL(mdt_phdr_valid);
 
 static ssize_t mdt_load_split_segment(void *ptr, const struct elf32_phdr *phdrs,
 				      unsigned int segment, const char *fw_name,

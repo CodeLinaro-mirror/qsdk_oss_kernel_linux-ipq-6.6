@@ -39,7 +39,7 @@ int qcom_mdt_load_pd_seg(struct device *dev, const struct firmware *fw,
 			 phys_addr_t *reloc_base);
 void *qcom_mdt_read_metadata(const struct firmware *fw, size_t *data_len,
 			     const char *fw_name, struct device *dev);
-
+bool mdt_phdr_valid(const struct elf32_phdr *phdr);
 #else /* !IS_ENABLED(CONFIG_QCOM_MDT_LOADER) */
 
 static inline ssize_t qcom_mdt_get_size(const struct firmware *fw)
@@ -89,6 +89,10 @@ static inline void *qcom_mdt_read_metadata(const struct firmware *fw,
 	return ERR_PTR(-ENODEV);
 }
 
+static inline bool mdt_phdr_valid(const struct elf32_phdr *phdr)
+{
+	return false;
+}
 #endif /* !IS_ENABLED(CONFIG_QCOM_MDT_LOADER) */
 
 #endif

@@ -481,6 +481,7 @@ struct rproc_dump_segment {
 	struct list_head node;
 
 	dma_addr_t da;
+	dma_addr_t va;
 	size_t size;
 
 	void *priv;
@@ -705,6 +706,13 @@ void rproc_coredump_using_sections(struct rproc *rproc);
 int rproc_coredump_add_segment(struct rproc *rproc, dma_addr_t da, size_t size);
 int rproc_coredump_add_custom_segment(struct rproc *rproc,
 				      dma_addr_t da, size_t size,
+				      void (*dumpfn)(struct rproc *rproc,
+						     struct rproc_dump_segment *segment,
+						     void *dest, size_t offset,
+						     size_t size),
+				      void *priv);
+int rproc_coredump_add_custom_segment_with_va(struct rproc *rproc,
+				      dma_addr_t da, dma_addr_t va, size_t size,
 				      void (*dumpfn)(struct rproc *rproc,
 						     struct rproc_dump_segment *segment,
 						     void *dest, size_t offset,
