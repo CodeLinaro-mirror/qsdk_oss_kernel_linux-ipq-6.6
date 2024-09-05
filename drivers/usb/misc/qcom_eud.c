@@ -23,6 +23,9 @@
 #define EUD_REG_CSR_EUD_EN	0x1014
 #define EUD_REG_SW_ATTACH_DET	0x1018
 #define EUD_REG_EUD_EN2		0x0000
+#define EUD_DEV_ID_1		0x1004
+#define EUD_DEV_ID_2		0x1008
+#define EUD_DEV_ID_3		0x100c
 
 #define EUD_ENABLE		BIT(0)
 #define EUD_INT_PET_EUD		BIT(0)
@@ -47,6 +50,11 @@ static int enable_eud(struct eud_chip *priv)
 	writel(EUD_INT_VBUS | EUD_INT_SAFE_MODE,
 			priv->base + EUD_REG_INT1_EN_MASK);
 	writel(1, priv->mode_mgr + EUD_REG_EUD_EN2);
+
+	/* write EUD DEV_ID */
+	writel_relaxed(0x80, priv->base + EUD_DEV_ID_1);
+	writel_relaxed(0x30, priv->base + EUD_DEV_ID_2);
+	writel_relaxed(0x79, priv->base + EUD_DEV_ID_3);
 
 	return usb_role_switch_set_role(priv->role_sw, USB_ROLE_DEVICE);
 }
