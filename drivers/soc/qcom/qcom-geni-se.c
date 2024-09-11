@@ -1386,9 +1386,8 @@ void geni_se_fw_load(struct geni_se *se, uint8_t se_mode)
 	/* Enable Output control */
 	writel(0x7F, se->base + SE_GENI_OUTPUT_CTRL_OFFSET);
 
-	/* Enable DMA for SPI & I2C SEs */
-	if ((se_mode == QUPV3_SE_SPI) || (se_mode == QUPV3_SE_I2C))
-		writel(0x1, se->base + SE_DMA_IF_EN_OFFSET);
+	/* Enable DMA mode */
+	writel(0x1, se->base + SE_DMA_IF_EN_OFFSET);
 }
 #endif /* CONFIG_QCOM_GENI_SE_FW_LOAD */
 
