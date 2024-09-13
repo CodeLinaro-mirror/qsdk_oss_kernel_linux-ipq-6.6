@@ -277,7 +277,7 @@ static bool qcom_geni_serial_poll_bit(struct uart_port *uport,
 	struct qcom_geni_serial_port *port;
 	unsigned int baud;
 	unsigned int fifo_bits;
-	unsigned long timeout_us = 20000;
+	unsigned long timeout_us = 200000;
 	struct qcom_geni_private_data *private_data = uport->private_data;
 
 	if (private_data->drv) {
