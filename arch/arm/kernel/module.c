@@ -52,6 +52,13 @@ void *module_alloc(unsigned long size)
 				GFP_KERNEL, PAGE_KERNEL_EXEC, 0, NUMA_NO_NODE,
 				__builtin_return_address(0));
 }
+
+void *module_alloc_core(unsigned long size)
+{
+	return __vmalloc_node_range(size, 1,  VMALLOC_START, VMALLOC_END,
+				GFP_KERNEL, PAGE_KERNEL_EXEC, 0, NUMA_NO_NODE,
+				__builtin_return_address(0));
+}
 #endif
 
 bool module_init_section(const char *name)

@@ -1210,11 +1210,24 @@ static bool mod_mem_use_vmalloc(enum mod_mem_type type)
 		mod_mem_type_is_core_data(type);
 }
 
+void *__weak module_alloc_core(unsigned int size)
+{
+	return module_alloc(size);
+}
+
+static void *module_alloc_by_type(unsigned int size, enum mod_mem_type type)
+{
+	if (mod_mem_type_is_init(type))
+		return module_alloc(size);
+	else
+		return module_alloc_core(size);
+}
+
 static void *module_memory_alloc(unsigned int size, enum mod_mem_type type)
 {
 	if (mod_mem_use_vmalloc(type))
 		return vzalloc(size);
-	return module_alloc(size);
+	return module_alloc_by_type(size, type);
 }
 
 static void module_memory_free(void *ptr, enum mod_mem_type type)
