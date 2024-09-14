@@ -126,28 +126,6 @@ static void get_krait_bin_format_b(struct device *cpu_dev,
 	dev_dbg(cpu_dev, "PVS version: %d\n", *pvs_ver);
 }
 
-static int get_max_opp_supported_hw_val(struct device *cpu_dev, u32 *value)
-{
-	struct device_node *opp_tbl_np, *np;
-	u32 temp, hw_val = 0;
-	int ret;
-
-	opp_tbl_np = dev_pm_opp_of_get_opp_desc_node(cpu_dev);
-	if (!opp_tbl_np)
-		return -ENOENT;
-
-	for_each_available_child_of_node(opp_tbl_np, np) {
-		ret = of_property_read_u32_index(np, "opp-supported-hw", 0, &temp);
-		if (ret) {
-			pr_err("Failed to read opp-supported-hw value ret:%d\n", ret);
-			return ret;
-		}
-		hw_val = max(hw_val, temp);
-	}
-	*value = hw_val;
-	return 0;
-}
-
 static int qcom_cpufreq_kryo_name_version(struct device *cpu_dev,
 					  struct nvmem_cell *speedbin_nvmem,
 					  char **pvs_name,
@@ -185,13 +163,7 @@ static int qcom_cpufreq_kryo_name_version(struct device *cpu_dev,
 		break;
 	case QCOM_ID_IPQ5424:
 	case QCOM_ID_IPQ5404:
-		drv->versions = (unsigned int)(*speedbin);
-		/* Configure non-fused parts with maximum supported frequency */
-		if (drv->versions == 0xFF) {
-			ret = get_max_opp_supported_hw_val(cpu_dev, &drv->versions);
-			if (ret)
-				return ret;
-		}
+		drv->versions =  (*speedbin != 0x3b) ? BIT(0) : BIT(1);
 		break;
 	case QCOM_ID_MSM8996SG:
 	case QCOM_ID_APQ8096SG:
