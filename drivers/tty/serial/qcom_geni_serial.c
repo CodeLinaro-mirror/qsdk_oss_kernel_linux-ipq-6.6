@@ -189,14 +189,21 @@ static int qcom_geni_serial_request_port(struct uart_port *uport)
 {
 	struct platform_device *pdev = to_platform_device(uport->dev);
 	struct qcom_geni_serial_port *port = to_dev_port(uport);
+	const struct qcom_geni_device_data *data;
 
+	data = of_device_get_match_data(&pdev->dev);
+	if (!data)
+		return -EINVAL;
 	uport->membase = devm_platform_ioremap_resource(pdev, 0);
 	if (IS_ERR(uport->membase))
 		return PTR_ERR(uport->membase);
 	port->se.base = uport->membase;
 
 #ifdef CONFIG_QCOM_GENI_SE_FW_LOAD
-	geni_se_fw_load(&port->se, QUPV3_SE_UART);
+	if (!data->console)
+		geni_se_fw_load(&port->se, QUPV3_SE_UART);
+	else
+		pr_info("Skipping GENI FW load for console UART\n");
 #endif /* CONFIG_QCOM_GENI_SE_FW_LOAD */
 
 	return 0;
