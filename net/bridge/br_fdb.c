@@ -357,7 +357,7 @@ static void fdb_delete(struct net_bridge *br, struct net_bridge_fdb_entry *f,
 {
 	trace_fdb_delete(br, f);
 
-	if (f->dst && f->dst->mac_lrn_limit) {
+	if (f->dst && f->dst->mac_lrn_limit && (f->dst->mac_lrn_cnt > 0)) {
 		f->dst->mac_lrn_cnt--;
 	}
 
@@ -966,7 +966,7 @@ void br_fdb_update(struct net_bridge *br, struct net_bridge_port *source,
 				fdb_modified = true;
 
 				/* Updated the number of learned entries for both new and old source */
-				if (dst_orig && dst_orig->mac_lrn_limit) {
+				if (dst_orig && dst_orig->mac_lrn_limit && (dst_orig->mac_lrn_cnt > 0)) {
 					dst_orig->mac_lrn_cnt--;
 				}
 
