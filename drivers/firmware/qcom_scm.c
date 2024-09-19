@@ -1479,6 +1479,19 @@ bool qcom_qfrom_fuse_row_write_available(void)
 EXPORT_SYMBOL_GPL(qcom_qfrom_fuse_row_write_available);
 
 /**
+ * qcom_qfrom_fuse_row_read_available() - is the fuse row read interface
+ *                                        available ?
+ *
+ * Return: true if the SCM call is supported
+ */
+bool qcom_qfrom_fuse_row_read_available(void)
+{
+	return __qcom_scm_is_call_available(__scm->dev, QCOM_SCM_SVC_FUSE,
+					    QCOM_QFPROM_ROW_READ_CMD);
+}
+EXPORT_SYMBOL_GPL(qcom_qfrom_fuse_row_read_available);
+
+/**
  * qcom_scm_ice_invalidate_key() - Invalidate an inline encryption key
  * @index: the keyslot to invalidate
  *
