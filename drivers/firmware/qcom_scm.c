@@ -3124,6 +3124,65 @@ int qcom_scm_sdi_disable(struct device *dev)
 }
 EXPORT_SYMBOL_GPL(qcom_scm_sdi_disable);
 
+static ssize_t hlos_done_show(struct device *device,
+			      struct device_attribute *attr,
+			      char *buf)
+{
+	u32 val;
+	int ret;
+
+	ret = qcom_scm_io_readl(__scm->dload_mode_addr, &val);
+	if (ret) {
+		dev_err(__scm->dev,
+			"dload secure read failed with err: %d\n", ret);
+		return -EINVAL;
+	}
+
+	return sysfs_emit(buf, "%d\n", (val & HLOS_MILESTONE_BIT) ? 1 : 0);
+}
+
+static ssize_t hlos_done_store(struct device *device,
+			       struct device_attribute *attr,
+			       const char *buf, size_t count)
+{
+	unsigned long input;
+	u32 val;
+	int ret;
+
+	if (kstrtoul(buf, 0, &input))
+		return -EINVAL;
+
+	if (input != 0)
+		return -EINVAL;
+
+	ret = qcom_scm_io_readl(__scm->dload_mode_addr, &val);
+	if (ret) {
+		dev_err(__scm->dev,
+			"dload secure read failed with err: %d\n", ret);
+		return -EINVAL;
+	}
+
+	val &= (~HLOS_MILESTONE_BIT);
+
+	ret = qcom_scm_io_writel(__scm->dload_mode_addr, val);
+	if (ret) {
+		dev_err(__scm->dev,
+			"Clearing HLOS milestone bit failed with err: %d\n", ret);
+		return -EINVAL;
+	}
+
+	return count;
+}
+
+static DEVICE_ATTR_RW(hlos_done);
+
+static struct attribute *qcom_firmware_attrs[] = {
+	&dev_attr_hlos_done.attr,
+	NULL,
+};
+
+ATTRIBUTE_GROUPS(qcom_firmware);
+
 static int qcom_scm_probe(struct platform_device *pdev)
 {
 	struct qcom_scm *scm;
@@ -3247,6 +3306,7 @@ static struct platform_driver qcom_scm_driver = {
 	.driver = {
 		.name	= "qcom_scm",
 		.of_match_table = qcom_scm_dt_match,
+		.dev_groups = qcom_firmware_groups,
 		.suppress_bind_attrs = true,
 	},
 	.probe = qcom_scm_probe,
