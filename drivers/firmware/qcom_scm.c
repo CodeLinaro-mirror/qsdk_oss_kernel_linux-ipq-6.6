@@ -2742,6 +2742,75 @@ int qcom_sec_upgrade_auth_ld_segments(unsigned int scm_cmd_id, unsigned int sw_t
 }
 EXPORT_SYMBOL_GPL(qcom_sec_upgrade_auth_ld_segments);
 
+int qcom_sec_upgrade_auth_hash_n_metadata(unsigned int scm_cmd_id, unsigned int sw_type,
+					  void *md_addr, u32 meta_data_size,
+					  struct load_segs_info *ld_seg_info,
+					  u32 ld_seg_count, void *hash_buf, u32 hash_size)
+{
+	int ret;
+	struct qcom_scm_res res;
+	u32 ld_seg_buff_size;
+	struct qcom_scm_desc desc = {
+		.svc = QCOM_SCM_SVC_BOOT,
+		.cmd = scm_cmd_id,
+		.arginfo = QCOM_SCM_ARGS(7, QCOM_SCM_VAL, QCOM_SCM_VAL, QCOM_SCM_VAL,
+				QCOM_SCM_RO, QCOM_SCM_VAL, QCOM_SCM_RO, QCOM_SCM_VAL),
+		.owner = ARM_SMCCC_OWNER_SIP,
+	};
+	dma_addr_t hash_addr, meta_data_addr, ld_seg_addr;
+
+	meta_data_addr = dma_map_single(__scm->dev, md_addr,
+					meta_data_size, DMA_TO_DEVICE);
+	ret = dma_mapping_error(__scm->dev, meta_data_addr);
+	if (ret) {
+		pr_err("%s: DMA Mapping Error: %d\n", __func__, ret);
+		return ret;
+	}
+
+	hash_addr = dma_map_single(__scm->dev, hash_buf,
+				   hash_size, DMA_TO_DEVICE);
+	ret = dma_mapping_error(__scm->dev, hash_addr);
+	if (ret) {
+		pr_err("%s: DMA Mapping Error: %d\n", __func__, ret);
+		return ret;
+	}
+	desc.args[0] = meta_data_addr;
+	desc.args[1] = meta_data_size;
+	desc.args[2] = sw_type;
+	desc.args[5] = hash_addr;
+	desc.args[6] = hash_size;
+
+	if (ld_seg_info) {
+		ld_seg_buff_size = ld_seg_count * sizeof(struct load_segs_info);
+		ld_seg_addr = dma_map_single(__scm->dev, ld_seg_info,
+				ld_seg_buff_size, DMA_TO_DEVICE);
+
+		ret = dma_mapping_error(__scm->dev, ld_seg_addr);
+		if (ret) {
+			pr_err("%s: DMA Mapping Error: %d\n", __func__, ret);
+			return ret;
+		}
+		desc.args[3] = ld_seg_addr;
+		desc.args[4] = ld_seg_buff_size;
+	} else {
+		/* Passing NULL and zero for ld_seg_addr and ld_seg_buff_size
+		 * for rootfs image or if reserved memory is not available
+		 */
+		desc.args[3] = 0;
+		desc.args[4] = 0;
+	}
+
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+	dma_unmap_single(__scm->dev, hash_addr, hash_size, DMA_TO_DEVICE);
+	dma_unmap_single(__scm->dev, meta_data_addr, meta_data_size, DMA_TO_DEVICE);
+
+	if (ld_seg_info)
+		dma_unmap_single(__scm->dev, ld_seg_addr, ld_seg_buff_size, DMA_TO_DEVICE);
+
+	return ret ? : res.result[0];
+}
+EXPORT_SYMBOL_GPL(qcom_sec_upgrade_auth_hash_n_metadata);
+
 int qcom_qfprom_write_version(uint32_t sw_type, uint32_t value, uint32_t qfprom_ret_ptr)
 {
 	int ret;
