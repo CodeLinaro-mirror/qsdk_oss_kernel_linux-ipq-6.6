@@ -2708,7 +2708,7 @@ int qcom_sec_upgrade_auth_ld_segments(unsigned int scm_cmd_id, unsigned int sw_t
 		/* Passing NULL and zero for ld_seg_addr and ld_seg_buff_size for
 		 * rootfs image auth as it does not contain loadable segments
 		 */
-		desc.args[3] = (u64)NULL;
+		desc.args[3] = 0;
 		desc.args[4] = 0;
 	}
 
