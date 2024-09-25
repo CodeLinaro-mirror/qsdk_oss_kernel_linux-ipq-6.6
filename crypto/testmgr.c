@@ -425,11 +425,6 @@ static const struct testvec_config default_hash_testvec_configs[] = {
 		.key_offset = 1,
 		.key_offset_relative_to_alignmask = true,
 	},
-#ifndef CONFIG_CRYPTO_DISABLE_AHASH_TYPE2_TESTS
-	/*
-	 * Update in testmgr requires the result back whereas HW hides result from the user
-	 * TODO : Require support for ahash multiple update
-	 */
 	{
 		.name = "init+update+update+final two even splits",
 		.src_divs = {
@@ -441,7 +436,6 @@ static const struct testvec_config default_hash_testvec_configs[] = {
 		},
 		.finalization_type = FINALIZATION_TYPE_FINAL,
 	},
-#endif
 	{
 		.name = "digest uneven misaligned splits, may sleep",
 		.req_flags = CRYPTO_TFM_REQ_MAY_SLEEP,
