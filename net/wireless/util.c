@@ -2690,10 +2690,9 @@ void cfg80211_remove_links(struct wireless_dev *wdev)
 
 	/*
 	 * links are controlled by upper layers (userspace/cfg)
-	 * only for AP and STA mode, so only remove them here for AP or STA
+	 * only for AP, so only remove them here for AP
 	 */
-	if (wdev->iftype != NL80211_IFTYPE_AP &&
-		wdev->iftype != NL80211_IFTYPE_STATION)
+	if (wdev->iftype != NL80211_IFTYPE_AP)
 		return;
 
 	wdev_lock(wdev);
