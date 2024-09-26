@@ -25,6 +25,7 @@
 #define QTI_TZ_LOG_NO_UPDATE		-6
 #define QTI_SCM_SVC_FUSE		0x8
 #define QTI_TRYBIT			BIT(12)
+#define HLOS_MILESTONE_BIT		BIT(12)
 
 #define MAX_MSM_ICE_KEY_LUT_SIZE	32
 #define DATA_COTEXT_LEN			128
