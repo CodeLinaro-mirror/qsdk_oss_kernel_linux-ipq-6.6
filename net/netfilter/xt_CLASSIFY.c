@@ -30,7 +30,12 @@ classify_tg(struct sk_buff *skb, const struct xt_action_param *par)
 {
 	const struct xt_classify_target_info *clinfo = par->targinfo;
 
-	skb->priority = clinfo->priority;
+	if (XT_SET_PRIORITY & clinfo->set_flags)
+		skb->priority = clinfo->priority;
+
+	if (XT_SET_INT_PRI & clinfo->set_flags)
+		skb->int_pri = clinfo->int_pri;
+
 	return XT_CONTINUE;
 }
 
