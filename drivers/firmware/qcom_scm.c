@@ -659,7 +659,6 @@ static void qcom_scm_set_abnormal_magic(bool enable)
 
 static void qcom_scm_clr_milestone_bit(void)
 {
-	bool avail;
 	int ret = 0;
 
 	if (!of_device_is_compatible(__scm->dev->of_node, "qcom,scm-ipq5424"))
