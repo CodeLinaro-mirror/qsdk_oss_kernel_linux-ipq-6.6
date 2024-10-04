@@ -1478,12 +1478,19 @@ EXPORT_SYMBOL_GPL(qcom_qfprom_show_auth_available);
  *
  * Return: true if the SCM call is supported
  */
-bool qcom_sec_dat_fuse_available(void)
+bool qcom_sec_dat_fuse_available(u32 cmd_id)
 {
 	return __qcom_scm_is_call_available(__scm->dev, QCOM_SCM_SVC_FUSE,
-					    TZ_BLOW_FUSE_SECDAT);
+					    cmd_id);
 }
 EXPORT_SYMBOL_GPL(qcom_sec_dat_fuse_available);
+
+bool qcom_sec_upgrade_auth_ld_segments_available(u32 cmd_id)
+{
+	return __qcom_scm_is_call_available(__scm->dev, QCOM_SCM_SVC_BOOT,
+					    cmd_id);
+}
+EXPORT_SYMBOL_GPL(qcom_sec_upgrade_auth_ld_segments_available);
 
 /**
  * qcom_qfrom_fuse_row_write_available() - is the fuse row write interface
