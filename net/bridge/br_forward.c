@@ -25,28 +25,17 @@ static inline int should_deliver(const struct net_bridge_port *p,
 
 	vg = nbp_vlan_group_rcu(p);
 
-	if ((skb->dev != p->dev) &&
-	    br_allowed_egress(vg, skb) && p->state == BR_STATE_FORWARDING &&
-	    nbp_switchdev_allowed_egress(p, skb) &&
-	    !br_skb_isolated(p, skb)) {
-		return true;
-	}
-
-	if ((skb->dev == p->dev) &&
-	    (p->flags & BR_HAIRPIN_MODE) &&
-	    br_allowed_egress(vg, skb) && p->state == BR_STATE_FORWARDING) {
-
-		/* Allow hairpin only on WLAN netdevices.
-		 * For ethernet interfaces, hairpin not allowed
-		 * due to issue with switchdevs. */
-		if ( skb->dev->ieee80211_ptr == NULL) {
-			return false;
-		}
-
-		return true;
-	}
-
-	return false;
+	/*
+	 * When hairpin enabled, don't allow multicast go back
+	 * to the original device that disabled hairpin flood.
+	 */
+	return (((p->flags & BR_HAIRPIN_MODE)
+		&& (!(p->flags & BR_NO_HAIRPIN_FLOOD)
+			|| !is_multicast_ether_addr(eth_hdr(skb)->h_dest)))
+		|| (skb->dev != p->dev)) &&
+		br_allowed_egress(vg, skb) && (p->state == BR_STATE_FORWARDING) &&
+		nbp_switchdev_allowed_egress(p, skb) &&
+		!br_skb_isolated(p, skb);
 }
 
 int br_dev_queue_push_xmit(struct net *net, struct sock *sk, struct sk_buff *skb)

@@ -265,6 +265,7 @@ BRPORT_ATTR_FLAG(broadcast_flood, BR_BCAST_FLOOD);
 BRPORT_ATTR_FLAG(neigh_suppress, BR_NEIGH_SUPPRESS);
 BRPORT_ATTR_FLAG(isolated, BR_ISOLATED);
 BRPORT_ATTR_FLAG(bpdu_filter, BR_BPDU_FILTER);
+BRPORT_ATTR_FLAG(no_hairpin_flood, BR_NO_HAIRPIN_FLOOD);
 
 #ifdef CONFIG_BRIDGE_IGMP_SNOOPING
 static ssize_t show_multicast_router(struct net_bridge_port *p, char *buf)
@@ -323,6 +324,7 @@ static const struct brport_attribute *brport_attrs[] = {
 	&brport_attr_upstream_port,
 	&brport_attr_mac_lrn_limit,
 	&brport_attr_mac_lrn_cnt,
+	&brport_attr_no_hairpin_flood,
 	NULL
 };
 
