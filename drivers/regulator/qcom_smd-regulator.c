@@ -28,6 +28,7 @@ struct qcom_rpm_reg {
 	unsigned int enabled_updated:1;
 	unsigned int uv_updated:1;
 	unsigned int load_updated:1;
+	unsigned int corn_updated:1;
 };
 
 struct rpm_regulator_req {
@@ -39,6 +40,7 @@ struct rpm_regulator_req {
 #define RPM_KEY_SWEN	0x6e657773 /* "swen" */
 #define RPM_KEY_UV	0x00007675 /* "uv" */
 #define RPM_KEY_MA	0x0000616d /* "ma" */
+#define RPM_KEY_CORN 	0x6e726f63 /* "corn" */
 
 static int rpm_reg_write_active(struct qcom_rpm_reg *vreg)
 {
@@ -55,6 +57,13 @@ static int rpm_reg_write_active(struct qcom_rpm_reg *vreg)
 
 	if (vreg->uv_updated && vreg->is_enabled) {
 		req[reqlen].key = cpu_to_le32(RPM_KEY_UV);
+		req[reqlen].nbytes = cpu_to_le32(sizeof(u32));
+		req[reqlen].value = cpu_to_le32(vreg->uV);
+		reqlen++;
+	}
+
+	if (vreg->corn_updated && vreg->is_enabled) {
+		req[reqlen].key = cpu_to_le32(RPM_KEY_CORN);
 		req[reqlen].nbytes = cpu_to_le32(sizeof(u32));
 		req[reqlen].value = cpu_to_le32(vreg->uV);
 		reqlen++;
@@ -77,6 +86,7 @@ static int rpm_reg_write_active(struct qcom_rpm_reg *vreg)
 		vreg->enabled_updated = 0;
 		vreg->uv_updated = 0;
 		vreg->load_updated = 0;
+		vreg->corn_updated = 0;
 	}
 
 	return ret;
@@ -137,6 +147,25 @@ static int rpm_reg_set_voltage(struct regulator_dev *rdev,
 
 	vreg->uV = min_uV;
 	vreg->uv_updated = 1;
+
+	ret = rpm_reg_write_active(vreg);
+	if (ret)
+		vreg->uV = old_uV;
+
+	return ret;
+}
+
+static int rpm_reg_set_corner(struct regulator_dev *rdev,
+			       int min_uV,
+			       int max_uV,
+			       unsigned *selector)
+{
+	struct qcom_rpm_reg *vreg = rdev_get_drvdata(rdev);
+	int ret;
+	int old_uV = vreg->uV;
+
+	vreg->uV = min_uV;
+	vreg->corn_updated = 1;
 
 	ret = rpm_reg_write_active(vreg);
 	if (ret)
@@ -206,6 +235,16 @@ static const struct regulator_ops rpm_mp5496_ops = {
 
 	.get_voltage = rpm_reg_get_voltage,
 	.set_voltage = rpm_reg_set_voltage,
+};
+
+static const struct regulator_ops rpm_mp5496_corner_ops = {
+	.enable = rpm_reg_enable,
+	.disable = rpm_reg_disable,
+	.is_enabled = rpm_reg_is_enabled,
+	.list_voltage = regulator_list_voltage_linear_range,
+
+	.get_voltage = rpm_reg_get_voltage,
+	.set_voltage = rpm_reg_set_corner,
 };
 
 static const struct regulator_desc pma8084_hfsmps = {
@@ -757,6 +796,15 @@ static const struct regulator_desc mp5496_smps = {
 	.ops = &rpm_mp5496_ops,
 };
 
+static const struct regulator_desc mp5496_corn = {
+	.linear_ranges = (struct linear_range[]) {
+		REGULATOR_LINEAR_RANGE(1, 0, 9, 1),
+	},
+	.n_linear_ranges = 1,
+	.n_voltages = 9,
+	.ops = &rpm_mp5496_corner_ops,
+};
+
 static const struct regulator_desc mp5496_ldoa2 = {
 	.linear_ranges = (struct linear_range[]) {
 		REGULATOR_LINEAR_RANGE(800000, 0, 127, 25000),
@@ -796,6 +844,7 @@ struct rpm_regulator_data {
 static const struct rpm_regulator_data rpm_mp5496_regulators[] = {
 	{ "s1", QCOM_SMD_RPM_SMPA, 1, &mp5496_smps, "s1", 875000 },
 	{ "s2", QCOM_SMD_RPM_SMPA, 2, &mp5496_smps, "s2", 875000 },
+	{ "s4", QCOM_SMD_RPM_SMPA, 4, &mp5496_corn, "s4", 5 },
 	{ "l2", QCOM_SMD_RPM_LDOA, 2, &mp5496_ldoa2, "l2", 2950000 },
 	{}
 };
