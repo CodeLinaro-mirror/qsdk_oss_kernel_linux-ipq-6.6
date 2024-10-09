@@ -2704,6 +2704,7 @@ void cfg80211_remove_link(struct wireless_dev *wdev, unsigned int link_id)
 	rdev_del_intf_link(rdev, wdev, link_id);
 
 	wdev->valid_links &= ~BIT(link_id);
+	wdev->fallback_valid_links &= ~BIT(link_id);
 
 	eth_zero_addr(wdev->links[link_id].addr);
 }
@@ -2722,6 +2723,9 @@ void cfg80211_remove_links(struct wireless_dev *wdev)
 	wdev_lock(wdev);
 	if (wdev->valid_links) {
 		for_each_valid_link(wdev, link_id)
+			cfg80211_remove_link(wdev, link_id);
+	} else if (wdev->fallback_valid_links) {
+		for_each_fallback_valid_link(wdev, link_id)
 			cfg80211_remove_link(wdev, link_id);
 	}
 	wdev_unlock(wdev);

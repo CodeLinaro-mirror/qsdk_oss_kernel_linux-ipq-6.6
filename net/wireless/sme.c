@@ -872,6 +872,7 @@ void __cfg80211_connect_result(struct net_device *dev,
 		cfg80211_put_bss(wdev->wiphy, cr->links[link].bss);
 	}
 	wdev->valid_links = cr->valid_links;
+	wdev->fallback_valid_links = cr->fallback_valid_links;
 	for_each_valid_link(cr, link)
 		wdev->links[link].client.current_bss =
 			bss_from_pub(cr->links[link].bss);
@@ -1052,6 +1053,8 @@ void cfg80211_connect_done(struct net_device *dev,
 	if (params->fils.update_erp_next_seq_num)
 		ev->cr.fils.erp_next_seq_num = params->fils.erp_next_seq_num;
 	ev->cr.valid_links = params->valid_links;
+	ev->cr.fallback_valid_links = params->fallback_valid_links;
+
 	for_each_valid_link(params, link) {
 		if (params->links[link].bss)
 			cfg80211_hold_bss(
