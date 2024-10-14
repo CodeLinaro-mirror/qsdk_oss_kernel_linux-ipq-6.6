@@ -217,6 +217,8 @@ struct tmc_drvdata {
 	u32			rsvd_size;
 	struct notifier_block	panic_blk;
 	struct notifier_block	ssr_blk;
+	u32			etr_axictl;
+	u32			etr_ffcr;
 };
 
 struct etr_buf_operations {

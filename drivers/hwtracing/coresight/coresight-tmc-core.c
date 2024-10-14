@@ -541,6 +541,8 @@ static int tmc_probe(struct amba_device *adev, const struct amba_id *id)
 		idr_init(&drvdata->idr);
 		mutex_init(&drvdata->idr_mutex);
 		dev_list = &etr_devs;
+		of_property_read_u32(dev->of_node, "etr-axictl", &drvdata->etr_axictl);
+		of_property_read_u32(dev->of_node, "etr-ffcr", &drvdata->etr_ffcr);
 		drvdata->panic_blk.notifier_call = tmc_etr_panic_handler;
 		ret = atomic_notifier_chain_register(&panic_notifier_list, &drvdata->panic_blk);
 		if (ret) {

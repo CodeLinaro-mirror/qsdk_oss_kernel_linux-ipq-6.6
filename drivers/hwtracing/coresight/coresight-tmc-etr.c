@@ -1045,21 +1045,26 @@ static int __tmc_etr_enable_hw(struct tmc_drvdata *drvdata)
 	writel_relaxed(etr_buf->size / 4, drvdata->base + TMC_RSZ);
 	writel_relaxed(TMC_MODE_CIRCULAR_BUFFER, drvdata->base + TMC_MODE);
 
-	axictl = readl_relaxed(drvdata->base + TMC_AXICTL);
-	axictl &= ~TMC_AXICTL_CLEAR_MASK;
-	axictl |= TMC_AXICTL_PROT_CTL_B1;
-	axictl |= TMC_AXICTL_WR_BURST(drvdata->max_burst_size);
-	axictl |= TMC_AXICTL_AXCACHE_OS;
+	if (drvdata->etr_axictl) {
+		writel_relaxed(drvdata->etr_axictl, drvdata->base + TMC_AXICTL);
+	} else {
+		axictl = readl_relaxed(drvdata->base + TMC_AXICTL);
+		axictl &= ~TMC_AXICTL_CLEAR_MASK;
+		axictl |= TMC_AXICTL_PROT_CTL_B1;
+		axictl |= TMC_AXICTL_WR_BURST(drvdata->max_burst_size);
+		axictl |= TMC_AXICTL_AXCACHE_OS;
 
-	if (tmc_etr_has_cap(drvdata, TMC_ETR_AXI_ARCACHE)) {
-		axictl &= ~TMC_AXICTL_ARCACHE_MASK;
-		axictl |= TMC_AXICTL_ARCACHE_OS;
+		if (tmc_etr_has_cap(drvdata, TMC_ETR_AXI_ARCACHE)) {
+			axictl &= ~TMC_AXICTL_ARCACHE_MASK;
+			axictl |= TMC_AXICTL_ARCACHE_OS;
+		}
+
+		if (etr_buf->mode == ETR_MODE_ETR_SG)
+			axictl |= TMC_AXICTL_SCT_GAT_MODE;
+
+		writel_relaxed(axictl, drvdata->base + TMC_AXICTL);
 	}
 
-	if (etr_buf->mode == ETR_MODE_ETR_SG)
-		axictl |= TMC_AXICTL_SCT_GAT_MODE;
-
-	writel_relaxed(axictl, drvdata->base + TMC_AXICTL);
 	tmc_write_dba(drvdata, etr_buf->hwaddr);
 	/*
 	 * If the TMC pointers must be programmed before the session,
@@ -1073,10 +1078,15 @@ static int __tmc_etr_enable_hw(struct tmc_drvdata *drvdata)
 		writel_relaxed(sts, drvdata->base + TMC_STS);
 	}
 
-	writel_relaxed(TMC_FFCR_EN_FMT | TMC_FFCR_EN_TI |
-		       TMC_FFCR_FON_FLIN | TMC_FFCR_FON_TRIG_EVT |
-		       TMC_FFCR_TRIGON_TRIGIN,
-		       drvdata->base + TMC_FFCR);
+	if (drvdata->etr_ffcr) {
+		writel_relaxed(drvdata->etr_ffcr, drvdata->base + TMC_FFCR);
+	} else {
+		writel_relaxed(TMC_FFCR_EN_FMT | TMC_FFCR_EN_TI |
+			       TMC_FFCR_FON_FLIN | TMC_FFCR_FON_TRIG_EVT |
+			       TMC_FFCR_TRIGON_TRIGIN,
+			       drvdata->base + TMC_FFCR);
+	}
+
 	writel_relaxed(drvdata->trigger_cntr, drvdata->base + TMC_TRG);
 	tmc_enable_hw(drvdata);
 
