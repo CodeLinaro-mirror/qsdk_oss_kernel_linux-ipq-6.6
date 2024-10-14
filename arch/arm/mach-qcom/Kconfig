@@ -68,4 +68,10 @@ config SKB_FIXED_SIZE_2K
 	  This is a hint to the NSS driver that the ‘skbuff’ size might
 	  need to be fixed at 2KB, to conserve memory.
 
+config IO_COHERENCY
+	bool "Enable IO Coherency for kernel modules"
+	default n
+	help
+	  Enable/Disable IO Coherency for kernel modules.
+
 endif

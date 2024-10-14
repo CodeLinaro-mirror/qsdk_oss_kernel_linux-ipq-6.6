@@ -2218,6 +2218,12 @@ config UNWIND_PATCH_PAC_INTO_SCS
 config ARCH_IPQ5424
 	bool "Enable for target IPQ5424"
 
+config IO_COHERENCY
+	bool "Enable IO Coherency for kernel modules"
+	default n
+	help
+	  Enable/Disable IO Coherency for kernel modules.
+
 endmenu # "Kernel Features"
 
 menu "Boot options"
