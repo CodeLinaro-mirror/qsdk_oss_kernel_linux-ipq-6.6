@@ -228,8 +228,8 @@ config SND_SOC_IPQ
 	Say Y or M to if you want to add support for SoC audio on
 	Qualcomm Technologies IPQ based board.
 
-config SND_SOC_IPQ9574_LPASS_PCM_RAW
-	tristate "IPQ9574_LPASS_PCM"
+config SND_SOC_IPQ_LPASS_PCM_RAW
+	tristate "IPQ_LPASS_PCM"
 	depends on SND_SOC_IPQ
 
 config SND_SOC_IPQ_LPASS

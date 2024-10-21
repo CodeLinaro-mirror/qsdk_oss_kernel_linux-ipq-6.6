@@ -80,6 +80,7 @@ static const u8 qcom_scm_cpu_warm_bits[QCOM_SCM_BOOT_MAX_CPUS] = {
 #define QCOM_SMC_WAITQ_FLAG_WAKE_ALL	BIT(1)
 
 #define QCOM_DLOAD_MASK		GENMASK(5, 4)
+#define QCOM_MILESTONE_MASK	BIT(12)
 enum qcom_dload_mode {
 	QCOM_DLOAD_NODUMP	= 0,
 	QCOM_DLOAD_FULLDUMP	= 1,
@@ -654,6 +655,25 @@ static void qcom_scm_set_abnormal_magic(bool enable)
 	ret = qcom_scm_io_writel(__scm->dload_mode_addr, enable ?
 			val | QCOM_SCM_ABNORMAL_MAGIC :
 			val & ~(QCOM_SCM_ABNORMAL_MAGIC));
+}
+
+static void qcom_scm_clr_milestone_bit(void)
+{
+	int ret = 0;
+
+	if (!of_device_is_compatible(__scm->dev->of_node, "qcom,scm-ipq5424"))
+		return;
+
+	if (__scm->dload_mode_addr)
+		ret = qcom_scm_io_rmw(__scm->dload_mode_addr,
+				      QCOM_MILESTONE_MASK,
+				      FIELD_PREP(QCOM_MILESTONE_MASK, 0));
+	else
+		dev_err(__scm->dev,
+			"No available mechanism for clearing milestone bit\n");
+
+	if (ret)
+		dev_err(__scm->dev, "failed to clear milestone bit: %d\n", ret);
 }
 
 static void qcom_scm_set_download_mode(bool enable)
@@ -1458,12 +1478,19 @@ EXPORT_SYMBOL_GPL(qcom_qfprom_show_auth_available);
  *
  * Return: true if the SCM call is supported
  */
-bool qcom_sec_dat_fuse_available(void)
+bool qcom_sec_dat_fuse_available(u32 cmd_id)
 {
 	return __qcom_scm_is_call_available(__scm->dev, QCOM_SCM_SVC_FUSE,
-					    TZ_BLOW_FUSE_SECDAT);
+					    cmd_id);
 }
 EXPORT_SYMBOL_GPL(qcom_sec_dat_fuse_available);
+
+bool qcom_sec_upgrade_auth_ld_segments_available(u32 cmd_id)
+{
+	return __qcom_scm_is_call_available(__scm->dev, QCOM_SCM_SVC_BOOT,
+					    cmd_id);
+}
+EXPORT_SYMBOL_GPL(qcom_sec_upgrade_auth_ld_segments_available);
 
 /**
  * qcom_qfrom_fuse_row_write_available() - is the fuse row write interface
@@ -1477,6 +1504,19 @@ bool qcom_qfrom_fuse_row_write_available(void)
 					    QCOM_QFPROM_ROW_WRITE_CMD);
 }
 EXPORT_SYMBOL_GPL(qcom_qfrom_fuse_row_write_available);
+
+/**
+ * qcom_qfrom_fuse_row_read_available() - is the fuse row read interface
+ *                                        available ?
+ *
+ * Return: true if the SCM call is supported
+ */
+bool qcom_qfrom_fuse_row_read_available(void)
+{
+	return __qcom_scm_is_call_available(__scm->dev, QCOM_SCM_SVC_FUSE,
+					    QCOM_QFPROM_ROW_READ_CMD);
+}
+EXPORT_SYMBOL_GPL(qcom_qfrom_fuse_row_read_available);
 
 /**
  * qcom_scm_ice_invalidate_key() - Invalidate an inline encryption key
@@ -2695,7 +2735,7 @@ int qcom_sec_upgrade_auth_ld_segments(unsigned int scm_cmd_id, unsigned int sw_t
 		/* Passing NULL and zero for ld_seg_addr and ld_seg_buff_size for
 		 * rootfs image auth as it does not contain loadable segments
 		 */
-		desc.args[3] = (u64)NULL;
+		desc.args[3] = 0;
 		desc.args[4] = 0;
 	}
 
@@ -3111,6 +3151,65 @@ int qcom_scm_sdi_disable(struct device *dev)
 }
 EXPORT_SYMBOL_GPL(qcom_scm_sdi_disable);
 
+static ssize_t hlos_done_show(struct device *device,
+			      struct device_attribute *attr,
+			      char *buf)
+{
+	u32 val;
+	int ret;
+
+	ret = qcom_scm_io_readl(__scm->dload_mode_addr, &val);
+	if (ret) {
+		dev_err(__scm->dev,
+			"dload secure read failed with err: %d\n", ret);
+		return -EINVAL;
+	}
+
+	return sysfs_emit(buf, "%d\n", (val & HLOS_MILESTONE_BIT) ? 1 : 0);
+}
+
+static ssize_t hlos_done_store(struct device *device,
+			       struct device_attribute *attr,
+			       const char *buf, size_t count)
+{
+	unsigned long input;
+	u32 val;
+	int ret;
+
+	if (kstrtoul(buf, 0, &input))
+		return -EINVAL;
+
+	if (input != 0)
+		return -EINVAL;
+
+	ret = qcom_scm_io_readl(__scm->dload_mode_addr, &val);
+	if (ret) {
+		dev_err(__scm->dev,
+			"dload secure read failed with err: %d\n", ret);
+		return -EINVAL;
+	}
+
+	val &= (~HLOS_MILESTONE_BIT);
+
+	ret = qcom_scm_io_writel(__scm->dload_mode_addr, val);
+	if (ret) {
+		dev_err(__scm->dev,
+			"Clearing HLOS milestone bit failed with err: %d\n", ret);
+		return -EINVAL;
+	}
+
+	return count;
+}
+
+static DEVICE_ATTR_RW(hlos_done);
+
+static struct attribute *qcom_firmware_attrs[] = {
+	&dev_attr_hlos_done.attr,
+	NULL,
+};
+
+ATTRIBUTE_GROUPS(qcom_firmware);
+
 static int qcom_scm_probe(struct platform_device *pdev)
 {
 	struct qcom_scm *scm;
@@ -3187,6 +3286,8 @@ static int qcom_scm_probe(struct platform_device *pdev)
 
 	__get_convention();
 
+	qcom_scm_clr_milestone_bit();
+
 	/*
 	 * If requested enable "download mode", from this point on warmboot
 	 * will cause the boot stages to enter download mode, unless
@@ -3234,6 +3335,7 @@ static struct platform_driver qcom_scm_driver = {
 	.driver = {
 		.name	= "qcom_scm",
 		.of_match_table = qcom_scm_dt_match,
+		.dev_groups = qcom_firmware_groups,
 		.suppress_bind_attrs = true,
 	},
 	.probe = qcom_scm_probe,

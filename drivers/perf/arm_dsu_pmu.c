@@ -213,12 +213,6 @@ static umode_t
 dsu_pmu_event_attr_is_visible(struct kobject *kobj, struct attribute *attr,
 				int unused)
 {
-	struct pmu *pmu = dev_get_drvdata(kobj_to_dev(kobj));
-	struct dsu_pmu *dsu_pmu = to_dsu_pmu(pmu);
-	struct dev_ext_attribute *eattr = container_of(attr,
-					struct dev_ext_attribute, attr.attr);
-	unsigned long evt = (unsigned long)eattr->var;
-
 	return attr->mode; // AGK : for DSU PMU snoop events // test_bit(evt, dsu_pmu->cpmceid_bitmap) ? attr->mode : 0;
 }
 

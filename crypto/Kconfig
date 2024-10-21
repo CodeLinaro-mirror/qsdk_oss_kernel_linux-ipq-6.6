@@ -248,12 +248,6 @@ config CRYPTO_NO_AES_XTS_ZERO_KEY_SUPPORT
 	help
 	  Disable support for zero key test cases
 
-config CRYPTO_DISABLE_AHASH_TYPE2_TESTS
-	bool "Disable AHASH type 2 test cases"
-	default y
-	help
-	  Disable AHASH type 2 tests
-
 config CRYPTO_DISABLE_AHASH_TYPE3_TESTS
 	bool "Disable AHASH type 3 test cases"
 	default y

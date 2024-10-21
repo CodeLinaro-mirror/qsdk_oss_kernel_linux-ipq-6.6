@@ -13,3 +13,4 @@ config MHI_BUS_TEST
 
 source "drivers/bus/mhi/host/Kconfig"
 source "drivers/bus/mhi/ep/Kconfig"
+source "drivers/bus/mhi/clients/Kconfig"

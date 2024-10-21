@@ -25,6 +25,7 @@
 #define QTI_TZ_LOG_NO_UPDATE		-6
 #define QTI_SCM_SVC_FUSE		0x8
 #define QTI_TRYBIT			BIT(12)
+#define HLOS_MILESTONE_BIT		BIT(12)
 
 #define MAX_MSM_ICE_KEY_LUT_SIZE	32
 #define DATA_COTEXT_LEN			128
@@ -204,8 +205,10 @@ enum qcom_scm_ice_cipher {
 #define QCOM_SCM_SVC_FUSE          0x8
 #define FUSEPROV_INVALID_HASH      0x9
 #define FUSEPROV_SECDAT_LOCK_BLOWN 0xB
+#define IMAGE_AUTH_FAILURE         0x101
 #define QCOM_KERNEL_AUTH_CMD       0x15
 #define TZ_BLOW_FUSE_SECDAT        0x20
+#define QCOM_AUTH_FUSE_UIE_KEY_CMD 0x23
 #define QCOM_KERNEL_META_AUTH_CMD  0x23
 
 #define QTI_OWNER_QSEE_OS		50
@@ -293,8 +296,10 @@ extern int qcom_scm_ocmem_unlock(enum qcom_scm_ocmem_client id, u32 offset,
 extern bool qcom_scm_ice_available(void);
 extern bool qcom_scm_ice_hwkey_available(void);
 extern bool qcom_qfprom_show_auth_available(void);
-extern bool qcom_sec_dat_fuse_available(void);
+extern bool qcom_sec_dat_fuse_available(u32 cmd_id);
+extern bool qcom_sec_upgrade_auth_ld_segments_available(u32 cmd_id);
 extern bool qcom_qfrom_fuse_row_write_available(void);
+extern bool qcom_qfrom_fuse_row_read_available(void);
 extern int qcom_scm_ice_invalidate_key(u32 index);
 extern int qcom_config_sec_ice(void *buf, int size);
 extern int qcom_scm_ice_set_key(u32 index, const u8 *key, u32 key_size,

@@ -1324,6 +1324,7 @@ struct mhi_device *mhi_alloc_device(struct mhi_controller *mhi_cntrl)
 	}
 
 	mhi_dev->mhi_cntrl = mhi_cntrl;
+	mhi_dev->mtu = MHI_MAX_MTU;
 	mhi_dev->dev_wake = 0;
 
 	return mhi_dev;

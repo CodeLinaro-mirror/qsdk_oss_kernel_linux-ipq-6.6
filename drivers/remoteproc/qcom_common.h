@@ -77,5 +77,4 @@ static inline bool qcom_sysmon_shutdown_acked(struct qcom_sysmon *sysmon)
 #endif
 s8 qcom_get_pd_asid(struct device_node *node);
 
-int q6v5_userpd_copy_bootargs(struct rproc *rproc, void *data);
 #endif

@@ -239,7 +239,23 @@ struct mhi_pci_dev_info {
 		.channel = ch_num,		\
 	}
 
+#define MHI_EVENT_CONFIG_HW_DATA_CLI_MANAGED(ev_ring, el_count, ch_num) \
+	{					\
+		.num_elements = el_count,	\
+		.irq_moderation_ms = 1,		\
+		.irq = (ev_ring) + 1,		\
+		.priority = 1,			\
+		.mode = MHI_DB_BRST_DISABLE,	\
+		.data_type = MHI_ER_DATA,	\
+		.hardware_event = true,		\
+		.client_managed = true,	\
+		.offload_channel = false,	\
+		.channel = ch_num,		\
+	}
+
 static const struct mhi_channel_config modem_qcom_v1_mhi_channels[] = {
+	MHI_CHANNEL_CONFIG_UL_SBL(2, "SAHARA", 32, 0),
+	MHI_CHANNEL_CONFIG_DL_SBL(3, "SAHARA", 256, 0),
 	MHI_CHANNEL_CONFIG_UL(4, "DIAG", 16, 1),
 	MHI_CHANNEL_CONFIG_DL(5, "DIAG", 16, 1),
 	MHI_CHANNEL_CONFIG_UL(12, "MBIM", 4, 0),
@@ -254,6 +270,8 @@ static const struct mhi_channel_config modem_qcom_v1_mhi_channels[] = {
 	MHI_CHANNEL_CONFIG_DL(47, "IP_SW0", 64, 3),
 	MHI_CHANNEL_CONFIG_HW_UL(100, "IP_HW0", 128, 4),
 	MHI_CHANNEL_CONFIG_HW_DL(101, "IP_HW0", 128, 5),
+	MHI_CHANNEL_CONFIG_UL(105, "RMNET_CTL", 128, 6),
+	MHI_CHANNEL_CONFIG_DL(106, "RMNET_CTL", 128, 7),
 };
 
 static struct mhi_event_config modem_qcom_v1_mhi_events[] = {
@@ -266,7 +284,10 @@ static struct mhi_event_config modem_qcom_v1_mhi_events[] = {
 	MHI_EVENT_CONFIG_SW_DATA(3, 64),
 	/* Hardware channels request dedicated hardware event rings */
 	MHI_EVENT_CONFIG_HW_DATA(4, 1024, 100),
-	MHI_EVENT_CONFIG_HW_DATA(5, 2048, 101)
+	MHI_EVENT_CONFIG_HW_DATA_CLI_MANAGED(5, 2048, 101),
+	MHI_EVENT_CONFIG_HW_DATA(6, 1024, 105),
+	MHI_EVENT_CONFIG_HW_DATA(7, 1024, 106),
+
 };
 
 static const struct mhi_controller_config modem_qcom_v1_mhiv_config = {
