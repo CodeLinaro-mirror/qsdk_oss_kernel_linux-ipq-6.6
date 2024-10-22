@@ -204,7 +204,7 @@ found:
 		of_remove_property(np, of_find_property(np, "mac-address-increment-byte", NULL));
 	}
 
-	of_add_mac_address(np, addr);
+	ret = of_add_mac_address(np, addr);
 	return ret;
 }
 EXPORT_SYMBOL(of_get_mac_address);
