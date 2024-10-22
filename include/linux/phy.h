@@ -339,6 +339,7 @@ struct mdio_bus_stats {
  */
 struct phy_package_shared {
 	int addr;
+	struct device_node *np;
 	refcount_t refcnt;
 	unsigned long flags;
 	size_t priv_size;
@@ -1360,6 +1361,14 @@ int phy_read_mmd(struct phy_device *phydev, int devad, u32 regnum);
 	__ret; \
 })
 
+int __phy_package_read_mmd(struct phy_device *phydev,
+                           unsigned int addr_offset, int devad,
+                           u32 regnum);
+int __phy_package_write_mmd(struct phy_device *phydev,
+                            unsigned int addr_offset, int devad,
+                            u32 regnum, u16 val);
+int devm_of_phy_package_join(struct device *dev, struct phy_device *phydev,
+                             size_t priv_size);
 /*
  * __phy_read_mmd - Convenience function for reading a register
  * from an MMD on a given PHY.
@@ -2001,46 +2010,69 @@ int __phy_hwtstamp_set(struct phy_device *phydev,
 		       struct kernel_hwtstamp_config *config,
 		       struct netlink_ext_ack *extack);
 
-static inline int phy_package_read(struct phy_device *phydev, u32 regnum)
+static inline int phy_package_address(struct phy_device *phydev,
+                                      unsigned int addr_offset)
 {
-	struct phy_package_shared *shared = phydev->shared;
+        struct phy_package_shared *shared = phydev->shared;
+        u8 base_addr = shared->addr;
 
-	if (!shared)
-		return -EIO;
+        if (addr_offset >= PHY_MAX_ADDR - base_addr)
+                return -EIO;
 
-	return mdiobus_read(phydev->mdio.bus, shared->addr, regnum);
+        /* we know that addr will be in the range 0..31 and thus the
+         * implicit cast to a signed int is not a problem.
+         */
+        return base_addr + addr_offset;
 }
 
-static inline int __phy_package_read(struct phy_device *phydev, u32 regnum)
+static inline int phy_package_read(struct phy_device *phydev,
+				unsigned int addr_offset, u32 regnum)
 {
-	struct phy_package_shared *shared = phydev->shared;
+	int addr = phy_package_address(phydev, addr_offset);
 
-	if (!shared)
-		return -EIO;
+        if (addr < 0)
+                return addr;
 
-	return __mdiobus_read(phydev->mdio.bus, shared->addr, regnum);
+
+        return __mdiobus_read(phydev->mdio.bus, addr, regnum);
+}
+
+static inline int __phy_package_read(struct phy_device *phydev,
+                                     unsigned int addr_offset, u32 regnum)
+{
+	int addr = phy_package_address(phydev, addr_offset);
+
+        if (addr < 0)
+                return addr;
+
+
+	return __mdiobus_read(phydev->mdio.bus, addr, regnum);
 }
 
 static inline int phy_package_write(struct phy_device *phydev,
+				    unsigned int addr_offset, 
 				    u32 regnum, u16 val)
 {
-	struct phy_package_shared *shared = phydev->shared;
+	int addr = phy_package_address(phydev, addr_offset);
 
-	if (!shared)
-		return -EIO;
+        if (addr < 0)
+                return addr;
 
-	return mdiobus_write(phydev->mdio.bus, shared->addr, regnum, val);
+
+        return __mdiobus_read(phydev->mdio.bus, addr, regnum);
+
 }
 
 static inline int __phy_package_write(struct phy_device *phydev,
+				      unsigned int addr_offset, 
 				      u32 regnum, u16 val)
 {
-	struct phy_package_shared *shared = phydev->shared;
+	int addr = phy_package_address(phydev, addr_offset);
 
-	if (!shared)
-		return -EIO;
+        if (addr < 0)
+                return addr;
 
-	return __mdiobus_write(phydev->mdio.bus, shared->addr, regnum, val);
+	return __mdiobus_write(phydev->mdio.bus, addr, regnum, val);
 }
 
 static inline bool __phy_package_set_once(struct phy_device *phydev,

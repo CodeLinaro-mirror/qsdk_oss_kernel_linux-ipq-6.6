@@ -6,6 +6,9 @@
 #include <linux/phy.h>
 #include <linux/of.h>
 
+static int mmd_phy_write(struct mii_bus *bus, int phy_addr, bool is_c45,
+                         int devad, u32 regnum, u16 val);
+
 /**
  * phy_speed_to_str - Return a string representing the PHY link speed
  *
@@ -540,6 +543,18 @@ static void mmd_phy_indirect(struct mii_bus *bus, int phy_addr, int devad,
 			devad | MII_MMD_CTRL_NOINCR);
 }
 
+static int mmd_phy_read(struct mii_bus *bus, int phy_addr, bool is_c45,
+                        int devad, u32 regnum)
+{
+        if (is_c45)
+                return __mdiobus_c45_read(bus, phy_addr, devad, regnum);
+
+        mmd_phy_indirect(bus, phy_addr, devad, regnum);
+        /* Read the content of the MMD's selected register */
+        return __mdiobus_read(bus, phy_addr, MII_MMD_DATA);
+}
+
+
 /**
  * __phy_read_mmd - Convenience function for reading a register
  * from an MMD on a given PHY.
@@ -594,6 +609,50 @@ int phy_read_mmd(struct phy_device *phydev, int devad, u32 regnum)
 	return ret;
 }
 EXPORT_SYMBOL(phy_read_mmd);
+
+/**
+ * __phy_package_write_mmd - write MMD reg relative to PHY package base addr
+ * @phydev: The phy_device struct
+ * @addr_offset: The offset to be added to PHY package base_addr
+ * @devad: The MMD to write to
+ * @regnum: The register on the MMD to write
+ * @val: value to write to @regnum
+ *
+ * Convenience helper for writing a register of an MMD on a given PHY
+ * using the PHY package base address. The base address is added to
+ * the addr_offset value.
+ *
+ * Same calling rules as for __phy_write();
+ *
+ * NOTE: It's assumed that the entire PHY package is either C22 or C45.
+ */
+int __phy_package_write_mmd(struct phy_device *phydev,
+                            unsigned int addr_offset, int devad,
+                            u32 regnum, u16 val)
+{
+        int addr = phy_package_address(phydev, addr_offset);
+
+        if (addr < 0)
+                return addr;
+
+        if (regnum > (u16)~0 || devad > 32)
+                return -EINVAL;
+
+        return mmd_phy_write(phydev->mdio.bus, addr, phydev->is_c45, devad,
+                             regnum, val);
+}
+EXPORT_SYMBOL(__phy_package_write_mmd);
+
+static int mmd_phy_write(struct mii_bus *bus, int phy_addr, bool is_c45,
+                         int devad, u32 regnum, u16 val)
+{
+        if (is_c45)
+                return __mdiobus_c45_write(bus, phy_addr, devad, regnum, val);
+
+        mmd_phy_indirect(bus, phy_addr, devad, regnum);
+        /* Write the data into MMD's selected register */
+        return __mdiobus_write(bus, phy_addr, MII_MMD_DATA, val);
+}
 
 /**
  * __phy_write_mmd - Convenience function for writing a register
@@ -653,6 +712,38 @@ int phy_write_mmd(struct phy_device *phydev, int devad, u32 regnum, u16 val)
 	return ret;
 }
 EXPORT_SYMBOL(phy_write_mmd);
+
+/**
+ * __phy_package_read_mmd - read MMD reg relative to PHY package base addr
+ * @phydev: The phy_device struct
+ * @addr_offset: The offset to be added to PHY package base_addr
+ * @devad: The MMD to read from
+ * @regnum: The register on the MMD to read
+ *
+ * Convenience helper for reading a register of an MMD on a given PHY
+ * using the PHY package base address. The base address is added to
+ * the addr_offset value.
+ *
+ * Same calling rules as for __phy_read();
+ *
+ * NOTE: It's assumed that the entire PHY package is either C22 or C45.
+ */
+int __phy_package_read_mmd(struct phy_device *phydev,
+                           unsigned int addr_offset, int devad,
+                           u32 regnum)
+{
+        int addr = phy_package_address(phydev, addr_offset);
+
+        if (addr < 0)
+                return addr;
+
+        if (regnum > (u16)~0 || devad > 32)
+                return -EINVAL;
+
+        return mmd_phy_read(phydev->mdio.bus, addr, phydev->is_c45, devad,
+                            regnum);
+}
+EXPORT_SYMBOL(__phy_package_read_mmd);
 
 /**
  * phy_modify_changed - Function for modifying a PHY register
