@@ -150,6 +150,7 @@ int br_handle_frame_finish(struct net *net, struct sock *sk, struct sk_buff *skb
 		br_fdb_update(br, p, eth_hdr(skb)->h_source, vid, 0);
 
 	local_rcv = !!(br->dev->flags & IFF_PROMISC);
+
 	if (is_multicast_ether_addr(eth_hdr(skb)->h_dest)) {
 		/* by definition the broadcast is also a multicast address */
 		if (is_broadcast_ether_addr(eth_hdr(skb)->h_dest)) {
@@ -426,6 +427,8 @@ static rx_handler_result_t br_handle_frame(struct sk_buff **pskb)
 			if (fwd_mask & (1u << dest[5]))
 				goto forward;
 		}
+
+		BR_INPUT_SKB_CB(skb)->promisc = false;
 
 		/* The else clause should be hit when nf_hook():
 		 *   - returns < 0 (drop/error)
