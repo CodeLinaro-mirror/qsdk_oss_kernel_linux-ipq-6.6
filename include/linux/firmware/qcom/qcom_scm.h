@@ -210,6 +210,7 @@ enum qcom_scm_ice_cipher {
 #define TZ_BLOW_FUSE_SECDAT        0x20
 #define QCOM_AUTH_FUSE_UIE_KEY_CMD 0x23
 #define QCOM_KERNEL_META_AUTH_CMD  0x23
+#define QCOM_KERNEL_HASH_N_META_AUTH_CMD 0x24
 
 #define QTI_OWNER_QSEE_OS		50
 #define QTI_OWNER_TZ_APPS		48
@@ -357,6 +358,11 @@ extern int qcom_sec_upgrade_auth_ld_segments(unsigned int scm_cmd_id, unsigned i
 					     u32 elf_addr, u32 meta_data_size,
 					     struct load_segs_info *ld_seg_info,
 					     u32 ld_seg_buff_size, u64 *status);
+extern int qcom_sec_upgrade_auth_hash_n_metadata(unsigned int scm_cmd_id, unsigned int sw_type,
+						 void *md_addr, u32 meta_data_size,
+						 struct load_segs_info *ld_seg_info,
+						 u32 ld_seg_count, void *hash_buf,
+						 u32 hash_size);
 extern int qcom_scm_enable_try_mode(void);
 extern int qcom_read_dload_reg(void);
 extern int qti_scm_qseecom_remove_xpu(void);
