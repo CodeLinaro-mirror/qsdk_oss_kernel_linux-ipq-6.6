@@ -529,6 +529,9 @@ int mhi_init_mmio(struct mhi_controller *mhi_cntrl)
 	mhi_cntrl->wake_db = base + val + (8 * MHI_DEV_WAKE_DB);
 	mhi_cntrl->wake_set = false;
 
+	/* Setup edl db */
+	mhi_cntrl->edl_db = base + val + (8 * MHI_EDL_DB);
+
 	/* Setup channel db address for each channel in tre_ring */
 	mhi_chan = mhi_cntrl->mhi_chan;
 	for (i = 0; i < mhi_cntrl->max_chan; i++, val += 8, mhi_chan++)
