@@ -997,6 +997,8 @@ static int qusb2_phy_probe(struct platform_device *pdev)
 	qphy = devm_kzalloc(dev, sizeof(*qphy), GFP_KERNEL);
 	if (!qphy)
 		return -ENOMEM;
+
+	dev_set_drvdata(dev, qphy);
 	or = &qphy->overrides;
 
 	qphy->base = devm_platform_ioremap_resource(pdev, 0);
@@ -1109,7 +1111,6 @@ static int qusb2_phy_probe(struct platform_device *pdev)
 	}
 	qphy->phy = generic_phy;
 
-	dev_set_drvdata(dev, qphy);
 	phy_set_drvdata(generic_phy, qphy);
 
 	phy_provider = devm_of_phy_provider_register(dev, of_phy_simple_xlate);
