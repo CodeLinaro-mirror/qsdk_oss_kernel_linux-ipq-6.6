@@ -2941,7 +2941,7 @@ static int nl80211_send_wiphy(struct cfg80211_registered_device *rdev,
 			struct cfg80211_txq_stats txqstats = {};
 			int res;
 
-			res = rdev_get_txq_stats(rdev, NULL, &txqstats);
+			res = rdev_get_txq_stats(rdev, NULL, 0, &txqstats);
 			if (!res &&
 			    !nl80211_put_txq_stats(msg, &txqstats,
 						   NL80211_ATTR_TXQ_STATS))
@@ -3915,16 +3915,6 @@ static int nl80211_send_iface(struct sk_buff *msg, u32 portid, u32 seq, int flag
 	}
 	wdev_unlock(wdev);
 
-	if (rdev->ops->get_txq_stats) {
-		struct cfg80211_txq_stats txqstats = {};
-		int ret = rdev_get_txq_stats(rdev, wdev, &txqstats);
-
-		if (ret == 0 &&
-		    !nl80211_put_txq_stats(msg, &txqstats,
-					   NL80211_ATTR_TXQ_STATS))
-			goto nla_put_failure;
-	}
-
 	if (wdev->valid_links) {
 		unsigned int link_id;
 		struct nlattr *links = nla_nest_start(msg,
@@ -3957,6 +3947,16 @@ static int nl80211_send_iface(struct sk_buff *msg, u32 portid, u32 seq, int flag
 				if (ret == 0 &&
 				    nla_put_u32(msg, NL80211_ATTR_WIPHY_TX_POWER_LEVEL,
 				    DBM_TO_MBM(dbm)))
+					goto nla_put_failure;
+			}
+
+			if (rdev->ops->get_txq_stats) {
+				struct cfg80211_txq_stats txqstats = {};
+				int ret = rdev_get_txq_stats(rdev, wdev, link_id, &txqstats);
+
+				if (ret == 0 &&
+					!nl80211_put_txq_stats(msg, &txqstats,
+							NL80211_ATTR_TXQ_STATS))
 					goto nla_put_failure;
 			}
 			nla_nest_end(msg, link);
@@ -4015,6 +4015,16 @@ static int nl80211_send_iface(struct sk_buff *msg, u32 portid, u32 seq, int flag
 			    nla_put_u32(msg, NL80211_ATTR_WIPHY_TX_POWER_LEVEL,
 			    DBM_TO_MBM(dbm)))
 				goto nla_put_failure;
+		}
+		if (rdev->ops->get_txq_stats) {
+			struct cfg80211_txq_stats txqstats = {};
+			int ret = rdev_get_txq_stats(rdev, wdev,
+						     0, &txqstats);
+
+			if (ret == 0 &&
+			    !nl80211_put_txq_stats(msg, &txqstats,
+						   NL80211_ATTR_TXQ_STATS))
+			goto nla_put_failure;
 		}
 	}
 
