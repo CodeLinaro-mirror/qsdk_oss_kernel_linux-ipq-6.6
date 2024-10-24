@@ -398,6 +398,16 @@ config QCOM_TMEL_LOG
 	  sysfs entry will send the Get TMEL log IPC call to the TMEL and store
 	  the response to the bin file
 
+config QCOM_QDSS_BRIDGE
+	bool "Configure bridge driver for QTI/Qualcomm Technologies, Inc. MDM"
+	depends on MHI_BUS
+	default n
+	help
+	  The driver will help route diag traffic from modem side over the QDSS
+	  sub-system to USB on APSS side. The driver acts as a bridge between the
+	  MHI and USB interface.
+	  If unsure, say N.
+
 source "drivers/soc/qcom/tmelcom/Kconfig"
 
 endmenu
