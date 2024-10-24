@@ -735,7 +735,7 @@ static void mhi_pci_status_cb(struct mhi_controller *mhi_cntrl,
 		pm_runtime_forbid(&pdev->dev);
 		break;
 	case MHI_CB_EE_MISSION_MODE:
-		pm_runtime_allow(&pdev->dev);
+		pm_runtime_forbid(&pdev->dev);
 		break;
 	default:
 		break;
