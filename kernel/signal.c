@@ -1301,6 +1301,14 @@ static int __init setup_print_fatal_signals(char *str)
 
 __setup("print-fatal-signals=", setup_print_fatal_signals);
 
+static bool sig_debug;
+static int __init sig_debug_setup(char *__unused)
+{
+	sig_debug = true;
+	return 1;
+}
+__setup("sig_debug", sig_debug_setup);
+
 int do_send_sig_info(int sig, struct kernel_siginfo *info, struct task_struct *p,
 			enum pid_type type)
 {
@@ -1308,6 +1316,11 @@ int do_send_sig_info(int sig, struct kernel_siginfo *info, struct task_struct *p
 	int ret = -ESRCH;
 
 	if (lock_task_sighand(p, &flags)) {
+		if ((sig_debug && (sig == SIGKILL || sig == SIGTERM ||
+				   sig == SIGINT)))
+			pr_info("The process %d: %s sending signal %d to the process %d: %s\n",
+				task_pid_nr(current), current->comm, sig,
+				p->pid, p->comm);
 		ret = send_signal_locked(sig, info, p, type);
 		unlock_task_sighand(p, &flags);
 	}
