@@ -9,6 +9,7 @@
 #include <linux/netdevice.h>
 #include <net/dsa.h>
 #include <linux/if_bridge.h>
+#include <linux/dsa/8021q.h>
 
 #include "qca8k.h"
 
@@ -446,6 +447,135 @@ out:
 	mutex_unlock(&priv->reg_mutex);
 
 	return ret;
+}
+
+static int qca8k_8021q_vlan_add(struct qca8k_priv *priv, int port,
+				u16 vid, u16 flags)
+{
+	bool untagged = flags & BRIDGE_VLAN_INFO_UNTAGGED;
+	bool pvid = flags & BRIDGE_VLAN_INFO_PVID;
+	int ret;
+
+	ret = qca8k_vlan_add(priv, port, vid, untagged);
+	if (ret) {
+		dev_err(priv->dev, "Failed to add VLAN to port %d (%d)", port, ret);
+		return ret;
+	}
+
+	if (pvid) {
+		qca8k_rmw(priv, QCA8K_EGRESS_VLAN(port),
+				QCA8K_EGREES_VLAN_PORT_MASK(port),
+				QCA8K_EGREES_VLAN_PORT(port, vid));
+
+		qca8k_write(priv, QCA8K_REG_PORT_VLAN_CTRL0(port),
+				  QCA8K_PORT_VLAN_CVID(vid) |
+				  QCA8K_PORT_VLAN_SVID(vid));
+	}
+
+	return 0;
+}
+
+static void qca8k_8021q_vlan_del(struct qca8k_priv *priv, int port, u16 vid)
+{
+	int ret;
+
+	ret = qca8k_vlan_del(priv, port, vid);
+	if (ret)
+		dev_err(priv->dev, "Failed to delete VLAN from port %d (%d)", port, ret);
+
+	ret = qca8k_rmw(priv, QCA8K_EGRESS_VLAN(port),
+			QCA8K_EGREES_VLAN_PORT_MASK(port),
+			QCA8K_EGREES_VLAN_PORT(port, QCA8K_PORT_VID_DEF));
+
+	ret |= qca8k_write(priv, QCA8K_REG_PORT_VLAN_CTRL0(port),
+			  QCA8K_PORT_VLAN_CVID(QCA8K_PORT_VID_DEF) |
+			  QCA8K_PORT_VLAN_SVID(QCA8K_PORT_VID_DEF));
+	if (ret)
+		dev_err(priv->dev, "Failed to recover PVID on port %d (%d)", port, ret);
+}
+
+void qca8k_tag_8021q_setup(struct dsa_switch *ds)
+{
+	struct qca8k_priv *priv = ds->priv;
+	struct dsa_port *dp = NULL, *dpcpu = NULL;
+	u16 vid;
+
+	/* Set switch as stag mode and svid as 0x8100*/
+	qca8k_rmw(priv, QCA8K_SERVICE_TAG_CTL,
+		  QCA8K_SERVICE_TAG_MASK | QCA8K_SERVICE_TAG_STAG,
+		  DSA_TAG_8021Q_VLAN_PROTO | QCA8K_SERVICE_TAG_STAG);
+
+	dsa_switch_for_each_port(dp, ds) {
+		if (dsa_port_is_user(dp) || dsa_port_is_cpu(dp))
+			/* Set secure mode for user ports and cpu ports */
+			qca8k_rmw(priv, QCA8K_PORT_LOOKUP_CTRL(dp->index),
+				  QCA8K_PORT_LOOKUP_VLAN_MODE_MASK,
+				  QCA8K_PORT_LOOKUP_VLAN_MODE_SECURE);
+
+		if (dsa_port_is_cpu(dp))
+			/* Set cpu port as core port */
+			qca8k_rmw(priv, QCA8K_REG_PORT_VLAN_CTRL1(dp->index),
+				  QCA8K_PORT_VLAN_CORE_PORT_EN,
+				  QCA8K_PORT_VLAN_CORE_PORT_EN);
+
+		if (dsa_port_is_user(dp)) {
+			/* Add user port standalone vid */
+			vid = dsa_tag_8021q_standalone_vid(dp);
+			qca8k_8021q_vlan_add(priv, dp->index, vid,
+				BRIDGE_VLAN_INFO_UNTAGGED | BRIDGE_VLAN_INFO_PVID);
+
+			/* Add cpu port standalone vid */
+			dsa_switch_for_each_cpu_port(dpcpu, ds) {
+				qca8k_8021q_vlan_add(priv, dpcpu->index, vid, 0);
+			}
+
+			/* Set user port tlsMode enabled and vlanPropagation disabled */
+			qca8k_rmw(priv, QCA8K_REG_PORT_VLAN_CTRL1(dp->index),
+				  QCA8K_PORT_VLAN_TLS_MODE | QCA8K_PORT_VLAN_PROP_EN,
+				  QCA8K_PORT_VLAN_TLS_MODE);
+		}
+	}
+}
+
+void qca8k_tag_8021q_teardown(struct dsa_switch *ds)
+{
+	struct qca8k_priv *priv = ds->priv;
+	struct dsa_port *dp = NULL, *dpcpu = NULL;
+	u16 vid;
+
+	/* Restore switch as default ctag mode and svid  as 0x88a8*/
+	qca8k_rmw(priv, QCA8K_SERVICE_TAG_CTL,
+		  QCA8K_SERVICE_TAG_MASK | QCA8K_SERVICE_TAG_STAG,
+		  ETH_P_8021AD);
+
+	dsa_switch_for_each_port(dp, ds) {
+		if (dsa_port_is_user(dp) || dsa_port_is_cpu(dp))
+			/* Restore to none mode for user ports and cpu ports */
+			qca8k_rmw(priv, QCA8K_PORT_LOOKUP_CTRL(dp->index),
+				  QCA8K_PORT_LOOKUP_VLAN_MODE_MASK,
+				  QCA8K_PORT_LOOKUP_VLAN_MODE_NONE);
+
+		if (dsa_port_is_cpu(dp))
+			/* Set cpu port as edge port */
+			qca8k_rmw(priv, QCA8K_REG_PORT_VLAN_CTRL1(dp->index),
+				  QCA8K_PORT_VLAN_CORE_PORT_EN, 0);
+
+		if (dsa_port_is_user(dp)) {
+			/* Delete user port standalone vid */
+			vid = dsa_tag_8021q_standalone_vid(dp);
+			qca8k_8021q_vlan_del(priv, dp->index, vid);
+
+			/* Delete cpu port standalone vid */
+			dsa_switch_for_each_cpu_port(dpcpu, ds) {
+				qca8k_8021q_vlan_del(priv, dpcpu->index, vid);
+			}
+
+			/* Set user port tlsMode disabled and vlanPropagation as replace */
+			qca8k_rmw(priv, QCA8K_REG_PORT_VLAN_CTRL1(dp->index),
+				  QCA8K_PORT_VLAN_TLS_MODE | QCA8K_PORT_VLAN_PROP_EN,
+				  QCA8K_PORT_VLAN_PROP_EN);
+		}
+	}
 }
 
 int qca8k_mib_init(struct qca8k_priv *priv)

@@ -89,6 +89,10 @@
 #define   QCA8K_MDIO_MASTER_MAX_PORTS			5
 #define   QCA8K_MDIO_MASTER_MAX_REG			32
 
+#define	QCA8K_SERVICE_TAG_CTL				0x48
+#define	QCA8K_SERVICE_TAG_MASK				GENMASK(15, 0)
+#define	QCA8K_SERVICE_TAG_STAG				BIT(17)
+
 /* LED control register */
 #define QCA8K_LED_PORT_COUNT				3
 #define QCA8K_LED_COUNT					((QCA8K_NUM_PORTS - QCA8K_NUM_CPU_PORTS) * QCA8K_LED_PORT_COUNT)
@@ -199,8 +203,12 @@
 #define QCA8K_REG_PORT_VLAN_CTRL1(_i)			(0x424 + (_i * 8))
 #define   QCA8K_PORT_VLAN_EGMODE(x)			((x & 0x3) << 12)
 #define   QCA8K_PORT_VLAN_EGMODE_MASK		GENMASK(13, 12)
+#define	  QCA8K_PORT_VLAN_CORE_PORT_EN			BIT(9)
+#define	  QCA8K_PORT_VLAN_TLS_MODE				BIT(7)
+#define	  QCA8K_PORT_VLAN_PROP_EN				BIT(6)
 #define QCA8K_REG_IPV4_PRI_BASE_ADDR			0x470
 #define QCA8K_REG_IPV4_PRI_ADDR_MASK			0x474
+
 
 /* Lookup registers */
 #define QCA8K_ATU_TABLE_SIZE				3 /* 12 bytes wide table / sizeof(u32) */
@@ -597,6 +605,8 @@ int qca8k_port_vlan_add(struct dsa_switch *ds, int port,
 			struct netlink_ext_ack *extack);
 int qca8k_port_vlan_del(struct dsa_switch *ds, int port,
 			const struct switchdev_obj_port_vlan *vlan);
+void qca8k_tag_8021q_setup(struct dsa_switch *ds);
+void qca8k_tag_8021q_teardown(struct dsa_switch *ds);
 
 /* Common port LAG function */
 int qca8k_port_lag_join(struct dsa_switch *ds, int port, struct dsa_lag lag,

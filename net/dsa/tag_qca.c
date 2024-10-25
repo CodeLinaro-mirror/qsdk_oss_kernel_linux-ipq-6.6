@@ -7,11 +7,15 @@
 #include <linux/bitfield.h>
 #include <net/dsa.h>
 #include <linux/dsa/tag_qca.h>
+#include <linux/dsa/8021q.h>
+#include <linux/if_vlan.h>
 
+#include "tag_8021q.h"
 #include "tag.h"
 
 #define QCA_NAME "qca"
 #define QCA4B_NAME "qca_4b"
+#define QCA8021Q_NAME "qca_8021q"
 
 static struct sk_buff *_qca_tag_xmit(struct sk_buff *skb, struct net_device *dev,
 	uint32_t hdr_len)
@@ -132,6 +136,47 @@ static struct sk_buff *qca_4b_tag_rcv(struct sk_buff *skb, struct net_device *de
 	return _qca_tag_rcv(skb, dev, QCA_4B_HDR_LEN);
 }
 
+static struct sk_buff *qca_8021q_tag_xmit(struct sk_buff *skb, struct net_device *dev)
+{
+	struct dsa_port *dp = dsa_slave_to_port(dev);
+	u16 tx_vid = dsa_tag_8021q_standalone_vid(dp);
+	u16 queue_mapping = skb_get_queue_mapping(skb);
+	u8 pcp = netdev_txq_to_tc(dev, queue_mapping);
+
+	return dsa_8021q_xmit(skb, dev, ETH_P_8021Q,
+			      ((pcp << VLAN_PRIO_SHIFT) | tx_vid));
+}
+
+static struct sk_buff *qca_8021q_tag_rcv(struct sk_buff *skb, struct net_device *dev)
+{
+	int src_port, switch_id, qos_class;
+	u16 vid, tci;
+
+	if (skb_vlan_tag_present(skb)) {
+		tci = skb_vlan_tag_get(skb);
+		__vlan_hwaccel_clear_tag(skb);
+	} else {
+		skb_push_rcsum(skb, ETH_HLEN);
+		__skb_vlan_pop(skb, &tci);
+		skb_pull_rcsum(skb, ETH_HLEN);
+	}
+
+	vid = tci & VLAN_VID_MASK;
+	src_port = dsa_8021q_rx_source_port(vid);
+	switch_id = dsa_8021q_rx_switch_id(vid);
+	qos_class = (tci & VLAN_PRIO_MASK) >> VLAN_PRIO_SHIFT;
+
+	skb->dev = dsa_master_find_slave(dev, switch_id, src_port);
+	if (!skb->dev) {
+		netdev_warn(dev, "Couldn't decode source port\n");
+		return NULL;
+	}
+
+	skb->priority = qos_class;
+
+	return skb;
+}
+
 static int qca_tag_connect(struct dsa_switch *ds)
 {
 	struct qca_tagger_data *tagger_data;
@@ -177,9 +222,23 @@ static const struct dsa_device_ops qca_4b_netdev_ops = {
 MODULE_ALIAS_DSA_TAG_DRIVER(DSA_TAG_PROTO_4B_QCA, QCA4B_NAME);
 DSA_TAG_DRIVER(qca_4b_netdev_ops);
 
+static const struct dsa_device_ops qca_8021q_netdev_ops = {
+	.name	= QCA8021Q_NAME,
+	.proto	= DSA_TAG_PROTO_QCA_8021Q,
+	.connect = qca_tag_connect,
+	.disconnect = qca_tag_disconnect,
+	.xmit	= qca_8021q_tag_xmit,
+	.rcv	= qca_8021q_tag_rcv,
+	.needed_headroom = VLAN_HLEN,
+	.promisc_on_master = true,
+};
+MODULE_ALIAS_DSA_TAG_DRIVER(DSA_TAG_PROTO_QCA_8021Q, QCA8021Q_NAME);
+DSA_TAG_DRIVER(qca_8021q_netdev_ops);
+
 static struct dsa_tag_driver *qca_tag_drivers[] = {
 	&DSA_TAG_DRIVER_NAME(qca_netdev_ops),
 	&DSA_TAG_DRIVER_NAME(qca_4b_netdev_ops),
+	&DSA_TAG_DRIVER_NAME(qca_8021q_netdev_ops),
 };
 module_dsa_tag_drivers(qca_tag_drivers);
 
