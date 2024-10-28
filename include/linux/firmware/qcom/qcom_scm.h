@@ -39,6 +39,13 @@
 #define SECURE_BOOT_FUSE_ADDR		0xA40E0
 #define OEM_SEC_BOOT_ENABLE		BIT(7)
 
+#define SBL_MAGIC_NUM_1			0x844BDCD1
+#define SBL_MAGIC_NUM_2			0x73D71034
+#define SBL_MAGIC_NUM_3			0x7D0B435A
+#define NAND_PREAMBLE_SIZE		0x2800 /* 10KB */
+#define NAND_BLOCK_SIZE			0x20000 /* 128K */
+#define SBL_MAGIC_NUM_OFFSET		0xC /* 12 Bytes of Magic Num */
+
 struct fuse_payload {
 	uint32_t fuse_addr;
 	uint32_t lsb_val;
@@ -53,6 +60,12 @@ struct fuse_payload_ipq9574 {
 struct load_segs_info {
 	u32 start_addr;
 	u32 end_addr;
+};
+
+struct nand_codeword {
+	u32 magic_num1;
+	u32 magic_num2;
+	u32 magic_num3;
 };
 
 enum qseecom_qceos_cmd_id {
