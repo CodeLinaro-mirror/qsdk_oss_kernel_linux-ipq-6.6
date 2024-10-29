@@ -57,6 +57,7 @@
 #define LLCC_VIDVSP	 64
 #define LLCC_RXDESC 1
 #define LLCC_APSS   2
+#define LLCC_AI     3
 #define LLCC_RXFILL 5
 #define LLCC_PCIE5G 6
 #define LLCC_PCIE6G 7
