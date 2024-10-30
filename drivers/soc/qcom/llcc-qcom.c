@@ -358,10 +358,14 @@ static const struct llcc_slice_config sm8550_data[] =  {
 };
 
 static const struct llcc_slice_config ipq5424_data[] =  {
-	/* SCID 1 - Descriptors (PPE, CUMAC) */
-	{LLCC_CPUSS,     1,  768, 1, 0,  0xFFFF, 0x0,  0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, },
-	/* SCID 2 - SKB, SKB data (PPE, CUMAC, APSS Core 0,1,2) */
-	{LLCC_VIDSC0,    2,  256, 2, 1,  0xF000, 0x0,  0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, },
+	/* SCID 1 - RXDESC & TXCMPL Descriptors (PPE) */
+	{LLCC_RXDESC,     1,   128, 3, 0,  0x0FFF, 0x0,  0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, },
+	/* SCID 2 - SKB, SKB data (APSS Core 0,1,2) */
+	{LLCC_APSS,       2,   768, 1, 1,  0x0FFF, 0x0,  0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, },
+	/* SCID 5 - RXFILL, TXDESC descriptors (PPE) */
+	{LLCC_RXFILL,     5,   128, 3, 0,  0x0FFF, 0x0,  0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, },
+	{LLCC_PCIE5G,     6,   128, 3, 0,  0xC000, 0x0,  0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, },
+	{LLCC_PCIE6G,     7,   128, 3, 0,  0x3000, 0x0,  0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, },
 };
 
 static const struct llcc_edac_reg_offset llcc_v1_edac_reg_offset = {
