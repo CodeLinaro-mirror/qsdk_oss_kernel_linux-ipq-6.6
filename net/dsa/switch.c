@@ -870,6 +870,15 @@ static int dsa_switch_host_vlan_del(struct dsa_switch *ds,
 	return 0;
 }
 
+static int
+dsa_witch_change_tag_proto_notify(struct net_device *dev, enum dsa_tag_protocol proto)
+{
+	struct dsa_notifier_tag_proto_chg tag_info = {};
+
+	tag_info.proto = proto;
+	return call_dsa_blocking_notifiers(DSA_NOTIFIER_TAG_CHG, dev, &tag_info.info);
+}
+
 static int dsa_switch_change_tag_proto(struct dsa_switch *ds,
 				       struct dsa_notifier_tag_proto_info *info)
 {
@@ -900,6 +909,10 @@ static int dsa_switch_change_tag_proto(struct dsa_switch *ds,
 
 		/* rtnl_mutex is held in dsa_tree_change_tag_proto */
 		dsa_slave_change_mtu(slave, slave->mtu);
+
+		/* notify tag proto change */
+		if (dsa_witch_change_tag_proto_notify(dp->slave, tag_ops->proto))
+			return -EOPNOTSUPP;
 	}
 
 	return 0;

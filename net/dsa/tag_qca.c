@@ -17,23 +17,21 @@
 #define QCA4B_NAME "qca_4b"
 #define QCA8021Q_NAME "qca_8021q"
 
+static bool qca_skb_is_bpdu(struct sk_buff *skb)
+{
+	struct ethhdr *eth = eth_hdr(skb);
+
+	if (ether_addr_equal(eth->h_dest, eth_stp_addr))
+		return true;
+
+	return false;
+}
+
 static struct sk_buff *_qca_tag_xmit(struct sk_buff *skb, struct net_device *dev,
 	uint32_t hdr_len)
 {
 	struct dsa_port *dp = dsa_slave_to_port(dev);
-	struct dsa_switch *ds = dp->ds;
-	struct qca_tagger_data *tagger_data;
 	__be16 *phdr;
-
-	tagger_data = ds->tagger_data;
-
-	/* when holb enable, allow hw add hdr. 
-	 * also need set skb mark for holb.
-	 */
-	if (tagger_data->tx_hdr_offload == true) {
-		skb->mark = ((HOLB_MHT_VALID_TAG << HOLB_MHT_TAG_SHIFT) | dp->index);
-		return skb;
-	}
 
 	skb_push(skb, hdr_len);
 
@@ -41,15 +39,33 @@ static struct sk_buff *_qca_tag_xmit(struct sk_buff *skb, struct net_device *dev
 	phdr = dsa_etype_header_pos_tx(skb);
 
 	/* if 4 bytes len, need add hdr type value */
-	if (hdr_len == QCA_4B_HDR_LEN) {
+	if (likely(hdr_len == QCA_4B_HDR_LEN)) {
 		*phdr = QCA_HDR_TYPE_VALUE;
 		phdr = phdr + 1;
 	}
 
-	/* Set the version field, and set destination port information */
-	*phdr = FIELD_PREP(QCA_HDR_XMIT_VERSION, QCA_HDR_VERSION);
-	*phdr |= QCA_HDR_XMIT_FROM_CPU;
-	*phdr |= FIELD_PREP(QCA_HDR_XMIT_DP_BIT, BIT(dp->index));
+	/* When holb enable, ath hdr needs to take vchannel id.
+	 * VLAN based DSA needs switch VLAN entry to remove VLAN, doesn't set from_cpu.
+	 * Set skb->mark for holb per dp->index.
+	 * BPDU only has ath hdr contains from_cpu to bypass resv fdb (both VLAN/ATH base).
+	 */
+	if (unlikely(dp->ds->fc_group != NULL && hdr_len == QCA_4B_HDR_LEN)) {
+		skb->mark = ((HOLB_MHT_VALID_TAG << HOLB_MHT_TAG_SHIFT) | (dp->index - 1));
+
+		/* Set the version field, and set destination port information */
+		*phdr = FIELD_PREP(QCA_HDR_XMIT_VERSION, QCA_HDR_VERSION3);
+		*phdr |= FIELD_PREP(QCA_HDR_XMIT_VCHANNEL, dp->ds->fc_group[dp->index - 1]);
+
+		if (unlikely(dp->cpu_dp->tag_ops->proto == DSA_TAG_PROTO_4B_QCA || qca_skb_is_bpdu(skb))) {
+			*phdr |= QCA_HDR_XMIT_FROM_CPU;
+			*phdr |= FIELD_PREP(QCA_HDR_XMIT_DP_ID, dp->index);
+		}
+	} else {
+		/* Set the version field, and set destination port information */
+		*phdr = FIELD_PREP(QCA_HDR_XMIT_VERSION, QCA_HDR_VERSION);
+		*phdr |= QCA_HDR_XMIT_FROM_CPU;
+		*phdr |= FIELD_PREP(QCA_HDR_XMIT_DP_BIT, BIT(dp->index));
+	}
 
 	*phdr = htons(*phdr);
 
@@ -136,29 +152,27 @@ static struct sk_buff *qca_4b_tag_rcv(struct sk_buff *skb, struct net_device *de
 	return _qca_tag_rcv(skb, dev, QCA_4B_HDR_LEN);
 }
 
-static bool qca_skb_is_bpdu(struct sk_buff *skb)
-{
-	struct ethhdr *eth = eth_hdr(skb);
-
-	if (memcmp(eth->h_dest, eth_stp_addr, ETH_ALEN) == 0)
-		return true;
-
-	return false;
-}
-
 static struct sk_buff *qca_8021q_tag_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct dsa_port *dp = dsa_slave_to_port(dev);
 	u16 tx_vid = dsa_tag_8021q_standalone_vid(dp);
 	u16 queue_mapping = skb_get_queue_mapping(skb);
 	u8 pcp = netdev_txq_to_tc(dev, queue_mapping);
+	struct sk_buff *nskb;
 
-	/* compatible with qca rstp resv fdb */
-	if (qca_skb_is_bpdu(skb))
+	/* compatible with qca rstp resv fdb, bypass resv fdb by from_cpu = 1 */
+	if (unlikely(qca_skb_is_bpdu(skb)))
 		return qca_4b_tag_xmit(skb, dev);
 
-	return dsa_8021q_xmit(skb, dev, ETH_P_8021Q,
-			      ((pcp << VLAN_PRIO_SHIFT) | tx_vid));
+	nskb = dsa_8021q_xmit(skb, dev, ETH_P_8021Q, ((pcp << VLAN_PRIO_SHIFT) | tx_vid));
+	if (unlikely(!nskb))
+		return NULL;
+
+	if (unlikely(dp->ds->fc_group != NULL)) {
+		nskb = qca_4b_tag_xmit(nskb, dev);
+	}
+
+	return nskb;
 }
 
 static struct sk_buff *qca_8021q_tag_rcv(struct sk_buff *skb, struct net_device *dev)
@@ -226,8 +240,6 @@ DSA_TAG_DRIVER(qca_netdev_ops);
 static const struct dsa_device_ops qca_4b_netdev_ops = {
 	.name	= QCA4B_NAME,
 	.proto	= DSA_TAG_PROTO_4B_QCA,
-	.connect = qca_tag_connect,
-	.disconnect = qca_tag_disconnect,
 	.xmit	= qca_4b_tag_xmit,
 	.rcv	= qca_4b_tag_rcv,
 	.needed_headroom = QCA_4B_HDR_LEN,
@@ -239,8 +251,6 @@ DSA_TAG_DRIVER(qca_4b_netdev_ops);
 static const struct dsa_device_ops qca_8021q_netdev_ops = {
 	.name	= QCA8021Q_NAME,
 	.proto	= DSA_TAG_PROTO_QCA_8021Q,
-	.connect = qca_tag_connect,
-	.disconnect = qca_tag_disconnect,
 	.xmit	= qca_8021q_tag_xmit,
 	.rcv	= qca_8021q_tag_rcv,
 	.needed_headroom = VLAN_HLEN,

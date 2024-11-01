@@ -40,6 +40,9 @@
 
 #define QCA8K_PORT_VID_DEF				0
 
+#define QCA8K_HDR_TYPE_2B				0
+#define QCA8K_HDR_TYPE_4B				1
+
 /* Global control registers */
 #define QCA8K_REG_MASK_CTRL				0x000
 #define   QCA8K_MASK_CTRL_REV_ID_MASK			GENMASK(7, 0)
@@ -491,7 +494,10 @@ struct qca8k_priv {
 	struct qca8k_pcs pcs_port_6;
 	const struct qca8k_match_data *info;
 	struct qca8k_led ports_led[QCA8K_LED_COUNT];
+
 	bool erp_standby; /* erp standby status */
+
+	enum dsa_tag_protocol proto;
 };
 
 struct qca8k_mib_desc {

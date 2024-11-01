@@ -94,6 +94,7 @@ enum dsa_tag_protocol {
 
 enum {
 	DSA_NOTIFIER_PORT_LINK = 1,
+	DSA_NOTIFIER_TAG_CHG,
 };
 
 struct dsa_notifier_info {
@@ -105,6 +106,12 @@ struct dsa_notifier_link {
 	struct dsa_notifier_info info;
 
 	bool link;
+};
+
+struct dsa_notifier_tag_proto_chg {
+	struct dsa_notifier_info info;
+
+	enum dsa_tag_protocol proto;
 };
 
 int call_dsa_blocking_notifiers(unsigned long val, struct net_device *dev,
@@ -510,6 +517,8 @@ struct dsa_switch {
 	unsigned int		max_num_bridges;
 
 	unsigned int		num_ports;
+
+	uint8_t *fc_group;
 };
 
 static inline struct dsa_port *dsa_to_port(struct dsa_switch *ds, int p)
