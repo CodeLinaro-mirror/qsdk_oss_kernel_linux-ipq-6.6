@@ -257,6 +257,10 @@ else ifeq ($(CONFIG_IPQ_MEM_PROFILE),512)
 dtc_cpp_flags += -D __IPQ_MEM_PROFILE_512_MB__
 endif
 
+ifeq ($(CONFIG_QCOM_RPROC_DISABLE_MPD_SUPPORT),y)
+dtc_cpp_flags += -D __RPROC_DISABLE_MPD_SUPPORT__
+endif
+
 ifeq ($(CONFIG_CPU_THERMAL),y)
 dtc_cpp_flags += -D __CPU_THERMAL__
 endif

@@ -305,6 +305,12 @@ config QCOM_Q6V5_WCSS_SEC
 	  for the Hexagon V5 based WCSS remote processors on e.g. IPQ54xx.
 	  This is a TME-L based secure wireless subsystem.
 
+config QCOM_RPROC_DISABLE_MPD_SUPPORT
+	bool "Disable MPD support"
+	depends on QCOM_Q6V5_WCSS_SEC
+	help
+	   Disable MPD driver support and enable UserPD for AHB device from client driver
+
 config QCOM_SYSMON
 	tristate "Qualcomm sysmon driver"
 	depends on RPMSG
