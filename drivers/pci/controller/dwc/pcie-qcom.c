@@ -208,6 +208,7 @@
 #define PCIE_CAP_TARGET_LINK_SPD_MASK		GENMASK(3, 0)
 #define QCOM_IPQ9574_DEVICE_ID			0x1108
 #define QCOM_IPQ5332_DEVICE_ID			0x1005
+#define QCOM_IPQ5424_DEVICE_ID			0x1006
 #define PCIE20_LNK_CONTROL2_LINK_STATUS2	0xa0
 
 #define QCOM_PCIE_1_0_0_MAX_CLOCKS		4
@@ -1338,7 +1339,9 @@ int pcie_set_link_speed(struct pci_dev *dev, u16 target_link_speed)
 	struct dw_pcie *pci;
 	u32 val;
 
-	if (dev->device != QCOM_IPQ9574_DEVICE_ID && dev->device != QCOM_IPQ5332_DEVICE_ID)
+	if (dev->device != QCOM_IPQ9574_DEVICE_ID &&
+	    dev->device != QCOM_IPQ5332_DEVICE_ID &&
+	    dev->device != QCOM_IPQ5424_DEVICE_ID)
 		return -EINVAL;
 
 	if (target_link_speed < 1 || target_link_speed > 3)
@@ -1378,7 +1381,9 @@ int pcie_set_link_width(struct pci_dev *dev, u16 target_link_width)
 	struct qcom_pcie *pcie;
 	u32 val;
 
-	if (dev->device != QCOM_IPQ9574_DEVICE_ID && dev->device != QCOM_IPQ5332_DEVICE_ID)
+	if (dev->device != QCOM_IPQ9574_DEVICE_ID &&
+	    dev->device != QCOM_IPQ5332_DEVICE_ID &&
+	    dev->device != QCOM_IPQ5424_DEVICE_ID)
 		return -EINVAL;
 
 	if (target_link_width < 1 || target_link_width > 2)
