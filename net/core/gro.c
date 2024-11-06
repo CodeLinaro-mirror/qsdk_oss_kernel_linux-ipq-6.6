@@ -260,6 +260,13 @@ static void napi_gro_complete(struct napi_struct *napi, struct sk_buff *skb)
 	rcu_read_unlock();
 
 	if (err) {
+		/*
+		 * Non-standard protocol's GRO completion can forward/consume the packet
+		 * within and returns EINPROGRESS.
+		 */
+		if (err == -EINPROGRESS)
+			return;
+
 		WARN_ON(&ptype->list == head);
 		kfree_skb(skb);
 		return;
