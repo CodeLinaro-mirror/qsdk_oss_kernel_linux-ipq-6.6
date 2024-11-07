@@ -225,6 +225,34 @@ struct mhi_pci_dev_info {
 		.offload_channel = false,	\
 	}
 
+#define MHI_EVENT_CONFIG_SW_DATA_DEDICATED(ev_ring, el_count, ch_num) \
+	{					\
+		.num_elements = el_count,	\
+		.irq_moderation_ms = 5,		\
+		.irq = (ev_ring) + 1,		\
+		.priority = 1,			\
+		.mode = MHI_DB_BRST_DISABLE,	\
+		.data_type = MHI_ER_DATA,	\
+		.hardware_event = false,	\
+		.client_managed = false,	\
+		.offload_channel = false,	\
+		.channel = ch_num,		\
+	}
+
+#define MHI_EVENT_CONFIG_SW_DATA_DEDICATED_CLI_MANAGED(ev_ring, el_count, ch_num) \
+	{					\
+		.num_elements = el_count,	\
+		.irq_moderation_ms = 5,		\
+		.irq = (ev_ring) + 1,		\
+		.priority = 1,			\
+		.mode = MHI_DB_BRST_DISABLE,	\
+		.data_type = MHI_ER_DATA,	\
+		.hardware_event = false,	\
+		.client_managed = true,	\
+		.offload_channel = false,	\
+		.channel = ch_num,		\
+	}
+
 #define MHI_EVENT_CONFIG_HW_DATA(ev_ring, el_count, ch_num) \
 	{					\
 		.num_elements = el_count,	\
@@ -268,30 +296,33 @@ static const struct mhi_channel_config modem_qcom_v1_mhi_channels[] = {
 	MHI_CHANNEL_CONFIG_DL(33, "DUN", 32, 0),
 	MHI_CHANNEL_CONFIG_UL_FP(34, "FIREHOSE", 32, 0),
 	MHI_CHANNEL_CONFIG_DL_FP(35, "FIREHOSE", 32, 0),
-	MHI_CHANNEL_CONFIG_UL(46, "IP_SW0", 64, 1),
-	MHI_CHANNEL_CONFIG_DL(47, "IP_SW0", 64, 3),
-	MHI_CHANNEL_CONFIG_HW_UL(100, "IP_HW0", 512, 4),
-	MHI_CHANNEL_CONFIG_HW_DL(101, "IP_HW0", 512, 5),
-	MHI_CHANNEL_CONFIG_HW_DL(103, "IP_HW_QDSS", 128, 10),
-	MHI_CHANNEL_CONFIG_UL(105, "RMNET_CTL", 128, 6),
-	MHI_CHANNEL_CONFIG_DL(106, "RMNET_CTL", 128, 7),
+	MHI_CHANNEL_CONFIG_UL(46, "IP_SW0", 64, 4),
+	MHI_CHANNEL_CONFIG_DL(47, "IP_SW0", 64, 5),
+	MHI_CHANNEL_CONFIG_HW_UL(100, "IP_HW0", 512, 6),
+	MHI_CHANNEL_CONFIG_HW_DL(101, "IP_HW0", 512, 7),
+	MHI_CHANNEL_CONFIG_HW_DL(103, "IP_HW_QDSS", 128, 8),
+	MHI_CHANNEL_CONFIG_UL(105, "RMNET_CTL", 128, 9),
+	MHI_CHANNEL_CONFIG_DL(106, "RMNET_CTL", 128, 10),
 };
 
 static struct mhi_event_config modem_qcom_v1_mhi_events[] = {
 	/* first ring is control+data ring */
 	MHI_EVENT_CONFIG_CTRL(0, 64),
-	MHI_EVENT_CONFIG_SW_DATA(1, 64),
+
+	MHI_EVENT_CONFIG_DATA(1, 32), /* unused */
 	/* DIAG dedicated event ring */
 	MHI_EVENT_CONFIG_DATA(2, 256),
+
+	MHI_EVENT_CONFIG_DATA(3, 32), /* unused */
 	/* Software channels dedicated event ring */
-	MHI_EVENT_CONFIG_SW_DATA(3, 64),
+	MHI_EVENT_CONFIG_SW_DATA_DEDICATED(4, 64, 46),
+	MHI_EVENT_CONFIG_SW_DATA_DEDICATED_CLI_MANAGED(5, 64, 47),
 	/* Hardware channels request dedicated hardware event rings */
-	MHI_EVENT_CONFIG_HW_DATA(4, 1024, 100),
-	MHI_EVENT_CONFIG_HW_DATA_CLI_MANAGED(5, 2048, 101),
-	MHI_EVENT_CONFIG_HW_DATA(6, 1024, 105),
-	MHI_EVENT_CONFIG_HW_DATA(7, 1024, 106),
-	MHI_EVENT_CONFIG_DATA(8, 32), /* unused */
-	MHI_EVENT_CONFIG_DATA(9, 32), /* unused */
+	MHI_EVENT_CONFIG_HW_DATA(6, 1024, 100),
+	MHI_EVENT_CONFIG_HW_DATA_CLI_MANAGED(7, 2048, 101),
+	MHI_EVENT_CONFIG_HW_DATA(8, 1024, 103),
+	MHI_EVENT_CONFIG_HW_DATA(9, 1024, 105),
+	MHI_EVENT_CONFIG_HW_DATA(10, 1024, 106),
 	MHI_EVENT_CONFIG_HW_DATA(10, 1024, 103),
 
 };
