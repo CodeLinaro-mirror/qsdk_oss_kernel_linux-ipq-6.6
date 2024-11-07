@@ -1219,6 +1219,12 @@ static int nl80211_msg_put_channel(struct sk_buff *msg, struct wiphy *wiphy,
 		}
 	}
 
+	if (chan->center_freq >= 4940 && chan->center_freq <= 5090) {
+		if (nla_put_u16(msg, NL80211_FREQUENCY_ATTR_CHANNEL,
+				chan->hw_value))
+			goto nla_put_failure;
+	}
+
 	return 0;
 
  nla_put_failure:
