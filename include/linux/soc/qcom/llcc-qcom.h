@@ -55,6 +55,12 @@
 #define LLCC_DISP_WB	 53
 #define LLCC_DISP_1	 54
 #define LLCC_VIDVSP	 64
+#define LLCC_RXDESC 1
+#define LLCC_APSS   2
+#define LLCC_RXFILL 5
+#define LLCC_PCIE5G 6
+#define LLCC_PCIE6G 7
+
 
 /**
  * struct llcc_slice_desc - Cache slice descriptor
