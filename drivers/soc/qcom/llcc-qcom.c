@@ -362,6 +362,8 @@ static const struct llcc_slice_config ipq5424_data[] =  {
 	{LLCC_RXDESC,     1,   128, 3, 0,  0x0FFF, 0x0,  0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, },
 	/* SCID 2 - SKB, SKB data (APSS Core 0,1,2) */
 	{LLCC_APSS,       2,   768, 1, 1,  0x0FFF, 0x0,  0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, },
+	/* SCID 3 - LLC_AI */
+	{LLCC_AI,         3,   128, 3, 1,  0x0FFF, 0x0,  0, 0, 0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, },
 	/* SCID 5 - RXFILL, TXDESC descriptors (PPE) */
 	{LLCC_RXFILL,     5,   128, 3, 0,  0x0FFF, 0x0,  0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, },
 	{LLCC_PCIE5G,     6,   128, 3, 0,  0xC000, 0x0,  0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, },
@@ -540,7 +542,8 @@ static const struct qcom_llcc_config ipq5424_cfg = {
 };
 
 static struct llcc_drv_data *drv_data = (void *) -EPROBE_DEFER;
-
+/* AI_LLC_SLICE */
+static struct llcc_slice_desc *ai_llc_slice_desc;
 /**
  * llcc_slice_getd - get llcc slice descriptor
  * @uid: usecase_id for the client
@@ -928,6 +931,24 @@ static int qcom_llcc_cfg_program(struct platform_device *pdev,
 	return ret;
 }
 
+/*  Activate, Deactivate, Destroy Function for LLCC_AI */
+static int activate_function(void)
+{
+	int ret;
+
+	if (IS_ERR_OR_NULL(ai_llc_slice_desc)) {
+		pr_info("ai_llc_slice didn't get initialized");
+		return -1;
+	}
+
+	return llcc_slice_activate(ai_llc_slice_desc);
+}
+
+static int deactivate_function(void)
+{
+	return llcc_slice_deactivate(ai_llc_slice_desc);
+}
+
 static int qcom_llcc_remove(struct platform_device *pdev)
 {
 	/* Set the global pointer to a error code to avoid referencing it */
@@ -960,6 +981,23 @@ static struct regmap *qcom_llcc_init_mmio(struct platform_device *pdev, u8 index
 	llcc_regmap_config.name = name;
 	return devm_regmap_init_mmio(&pdev->dev, base, &llcc_regmap_config);
 }
+
+static ssize_t ai_llcc_slice_store(struct device *dev, struct device_attribute *attr, const char *buf, size_t count)
+{
+	unsigned long val;
+
+	if (kstrtoul(buf, 10, &val))
+		return -EINVAL;
+
+	if ((val == 1) && activate_function())
+		return -EIO;
+	else if ((val == 0) && deactivate_function())
+		return -EIO;
+
+	return count;
+}
+
+static DEVICE_ATTR_WO(ai_llcc_slice);
 
 static int qcom_llcc_probe(struct platform_device *pdev)
 {
@@ -1077,6 +1115,19 @@ static int qcom_llcc_probe(struct platform_device *pdev)
 
 	if (of_platform_populate(dev->of_node, NULL, NULL, dev))
 		dev_err(dev, "llcc perfmon populate failed!!\n");
+
+	/* Sysfs creation */
+	ai_llc_slice_desc = llcc_slice_getd(LLCC_AI);
+	if (IS_ERR_OR_NULL(ai_llc_slice_desc)) {
+		pr_info("ai_llc_slice didn't get initialized");
+		return -EINVAL;
+	}
+	pr_info("ai_llc_slice_desc initialized");
+	ret = device_create_file(&pdev->dev, &dev_attr_ai_llcc_slice);
+	if (ret) {
+		dev_err(&pdev->dev, "Couldn't create sysfs for %s\n", pdev->name);
+		return -EIO;
+	}
 
 	return 0;
 err:
