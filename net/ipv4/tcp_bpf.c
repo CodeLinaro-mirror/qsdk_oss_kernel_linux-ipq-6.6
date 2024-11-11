@@ -28,6 +28,7 @@ void tcp_eat_skb(struct sock *sk, struct sk_buff *skb)
 	tcp_rcv_space_adjust(sk);
 	__tcp_cleanup_rbuf(sk, skb->len);
 }
+EXPORT_SYMBOL_GPL(tcp_eat_skb);
 
 static int bpf_tcp_ingress(struct sock *sk, struct sk_psock *psock,
 			   struct sk_msg *msg, u32 apply_bytes, int flags)
