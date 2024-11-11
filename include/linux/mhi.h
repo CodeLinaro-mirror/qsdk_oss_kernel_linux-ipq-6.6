@@ -470,7 +470,6 @@ struct mhi_controller {
 	bool rddm_prealloc;
 	u32 rddm_seg_len;
 	u8 *bootargs_buf;
-	dma_addr_t bootargs_dma;
 	void *cbor_req;
 	u32 cbor_req_len;
 };
