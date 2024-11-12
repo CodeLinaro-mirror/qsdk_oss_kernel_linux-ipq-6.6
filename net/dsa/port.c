@@ -1625,6 +1625,15 @@ static int dsa_port_phylink_mac_finish(struct phylink_config *config,
 	return err;
 }
 
+static int
+dsa_port_phylink_mac_link_notify(struct net_device *dev, bool link)
+{
+	struct dsa_notifier_link link_info = {};
+
+	link_info.link = link;
+	return call_dsa_blocking_notifiers(DSA_NOTIFIER_PORT_LINK, dev, &link_info.info);
+}
+
 static void dsa_port_phylink_mac_link_down(struct phylink_config *config,
 					   unsigned int mode,
 					   phy_interface_t interface)
@@ -1632,6 +1641,9 @@ static void dsa_port_phylink_mac_link_down(struct phylink_config *config,
 	struct dsa_port *dp = container_of(config, struct dsa_port, pl_config);
 	struct phy_device *phydev = NULL;
 	struct dsa_switch *ds = dp->ds;
+
+	if (dsa_port_phylink_mac_link_notify(dp->slave, false) != NOTIFY_OK)
+		return;
 
 	if (dsa_port_is_user(dp))
 		phydev = dp->slave->phydev;
@@ -1654,6 +1666,9 @@ static void dsa_port_phylink_mac_link_up(struct phylink_config *config,
 {
 	struct dsa_port *dp = container_of(config, struct dsa_port, pl_config);
 	struct dsa_switch *ds = dp->ds;
+
+	if (dsa_port_phylink_mac_link_notify(dp->slave, true) != NOTIFY_OK)
+		return;
 
 	if (!ds->ops->phylink_mac_link_up) {
 		if (ds->ops->adjust_link && phydev)
