@@ -69,6 +69,13 @@ config NET_REDIRECT
 config SKB_EXTENSIONS
 	bool
 
+config ATHMEMDEBUG
+	bool "ath memory debug support"
+	default n
+	help
+	  This enables ath memory debug functionality.
+	  If unsure, say N.
+
 menu "Networking options"
 
 source "net/packet/Kconfig"
