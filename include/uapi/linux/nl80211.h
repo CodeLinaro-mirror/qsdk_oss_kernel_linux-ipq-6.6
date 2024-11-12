@@ -1318,6 +1318,11 @@
  *	Multi-Link reconfiguration. %NL80211_ATTR_MLO_LINKS is used to provide
  *	information about the removed STA MLD setup links.
  *
+ * @@NL80211_CMD_SET_TID_TO_LINK_MAPPING: Set the TID to Link Mapping for a
+ *       non-AP MLD station. The %NL80211_ATTR_MLO_TTLM_DLINK and
+ *       %NL80211_ATTR_MLO_TTLM_ULINK attributes are used to specify the
+ *       TID to Link mapping for downlink/uplink traffic.
+ *
  * @NL80211_CMD_LINK_REMOVAL_STARTED: Once first beacon with reconfiguration MLE
  *	is sent, userspace is notified with the TBTT and TSF value to indicate
  *	timestamp of that beacon using %NL80211_ATTR_AP_REMOVAL_COUNT and
@@ -1580,6 +1585,8 @@ enum nl80211_commands {
 	NL80211_CMD_SET_HW_TIMESTAMP,
 
 	NL80211_CMD_LINKS_REMOVED,
+
+	NL80211_CMD_SET_TID_TO_LINK_MAPPING,
 
 	NL80211_CMD_LINK_REMOVAL_STARTED,
 
@@ -2831,6 +2838,31 @@ enum nl80211_commands {
  * @NL80211_ATTR_MLO_LINK_DISABLED: Flag attribute indicating that the link is
  *	disabled.
  *
+ * @NL80211_ATTR_BSS_DUMP_INCLUDE_USE_DATA: Include BSS usage data, i.e.
+ *	include BSSes that can only be used in restricted scenarios and/or
+ *	cannot be used at all.
+ *
+ * @NL80211_ATTR_MLO_TTLM_DLINK: Binary attribute specifying the downlink TID to
+ *      link mapping. The length is 8 * sizeof(u16). For each TID the link
+ *      mapping is as defined in section 9.4.2.314 (TID-To-Link Mapping element)
+ *      in Draft P802.11be_D4.0.
+ * @NL80211_ATTR_MLO_TTLM_ULINK: Binary attribute specifying the uplink TID to
+ *      link mapping. The length is 8 * sizeof(u16). For each TID the link
+ *      mapping is as defined in section 9.4.2.314 (TID-To-Link Mapping element)
+ *      in Draft P802.11be_D4.0.
+ *
+ * @NL80211_ATTR_ASSOC_SPP_AMSDU: flag attribute used with
+ *	%NL80211_CMD_ASSOCIATE indicating the SPP A-MSDUs
+ *	are used on this connection
+ *
+ * @NL80211_ATTR_WIPHY_RADIOS: Nested attribute describing physical radios
+ *	belonging to this wiphy. See &enum nl80211_wiphy_radio_attrs.
+ *
+ * @NL80211_ATTR_WIPHY_INTERFACE_COMBINATIONS: Nested attribute listing the
+ *	supported interface combinations for all radios combined. In each
+ *	nested item, it contains attributes defined in
+ *	&enum nl80211_if_combination_attrs.
+ *
  * @NL80211_ATTR_RADIO_IFACE: radio interface name of vif
  *
  * @NL80211_ATTR_MLD_IFACE_NAME: mld interface name
@@ -3381,6 +3413,16 @@ enum nl80211_attrs {
 	NL80211_ATTR_EMA_RNR_ELEMS,
 
 	NL80211_ATTR_MLO_LINK_DISABLED,
+
+	NL80211_ATTR_BSS_DUMP_INCLUDE_USE_DATA,
+
+	NL80211_ATTR_MLO_TTLM_DLINK,
+	NL80211_ATTR_MLO_TTLM_ULINK,
+
+	NL80211_ATTR_ASSOC_SPP_AMSDU,
+
+	NL80211_ATTR_WIPHY_RADIOS,
+	NL80211_ATTR_WIPHY_INTERFACE_COMBINATIONS,
 
 	NL80211_ATTR_AP_REMOVAL_COUNT,
 	NL80211_ATTR_TSF,
