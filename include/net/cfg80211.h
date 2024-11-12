@@ -4025,6 +4025,7 @@ struct mgmt_frame_regs {
 
 #define CFG80211_PER_LINK_TX_POWER 1
 #define CFG80211_SET_PER_LINK_TX_POWER 1
+#define CFG80211_PER_LINK_TXQ_STATS 1
 
 /**
  * struct cfg80211_link_reconfig_removal_params - Contains params needed for
@@ -4764,6 +4765,7 @@ struct cfg80211_ops {
 
 	int	(*get_txq_stats)(struct wiphy *wiphy,
 				 struct wireless_dev *wdev,
+				 unsigned int link_id,
 				 struct cfg80211_txq_stats *txqstats);
 
 	int	(*set_pmk)(struct wiphy *wiphy, struct net_device *dev,

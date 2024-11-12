@@ -641,11 +641,12 @@ rdev_set_multicast_to_unicast(struct cfg80211_registered_device *rdev,
 static inline int
 rdev_get_txq_stats(struct cfg80211_registered_device *rdev,
 		   struct wireless_dev *wdev,
+		   unsigned int link_id,
 		   struct cfg80211_txq_stats *txqstats)
 {
 	int ret;
 	trace_rdev_get_txq_stats(&rdev->wiphy, wdev);
-	ret = rdev->ops->get_txq_stats(&rdev->wiphy, wdev, txqstats);
+	ret = rdev->ops->get_txq_stats(&rdev->wiphy, wdev, link_id, txqstats);
 	trace_rdev_return_int(&rdev->wiphy, ret);
 	return ret;
 }
