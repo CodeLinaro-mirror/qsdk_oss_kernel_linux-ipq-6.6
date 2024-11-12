@@ -24,6 +24,7 @@
 #include <linux/bits.h>
 #include <linux/reset-controller.h>
 #include <linux/arm-smccc.h>
+#include <linux/soc/qcom/smem.h>
 
 #include "qcom_scm.h"
 
@@ -31,6 +32,9 @@
 
 #define SDI_DISABLE		BIT(0)
 #define ABNORMAL_MAGIC		BIT(1)
+
+#define SMEM_TRYMODE_INFO	507
+#define BOOT_INFO_USE_SET_B	BIT(31)
 
 static bool download_mode = IS_ENABLED(CONFIG_QCOM_SCM_DOWNLOAD_MODE_DEFAULT);
 module_param(download_mode, bool, 0);
@@ -49,6 +53,7 @@ struct qcom_scm {
 	int scm_vote_count;
 
 	u64 dload_mode_addr;
+	u64 tcsr_boot_info_addr;
 	u32 hvc_log_cmd_id;
 	u32 smmu_state_cmd_id;
 	/* Atomic context only */
@@ -80,7 +85,7 @@ static const u8 qcom_scm_cpu_warm_bits[QCOM_SCM_BOOT_MAX_CPUS] = {
 #define QCOM_SMC_WAITQ_FLAG_WAKE_ALL	BIT(1)
 
 #define QCOM_DLOAD_MASK		GENMASK(5, 4)
-#define QCOM_MILESTONE_MASK	BIT(12)
+#define QCOM_MILESTONE_MASK	BIT(9)
 enum qcom_dload_mode {
 	QCOM_DLOAD_NODUMP	= 0,
 	QCOM_DLOAD_FULLDUMP	= 1,
@@ -1801,6 +1806,31 @@ static int qcom_scm_find_dload_address(struct device *dev, u64 *addr)
 	return 0;
 }
 
+static int qcom_scm_find_tcsr_boot_info_address(struct device *dev, u64 *addr)
+{
+	struct device_node *tcsr;
+	struct device_node *np = dev->of_node;
+	struct resource res;
+	u32 offset;
+	int ret;
+
+	tcsr = of_parse_phandle(np, "qcom,tcsr-boot-info", 0);
+	if (!tcsr)
+		return 0;
+
+	ret = of_address_to_resource(tcsr, 0, &res);
+	of_node_put(tcsr);
+	if (ret)
+		return ret;
+
+	ret = of_property_read_u32_index(np, "qcom,tcsr-boot-info", 1, &offset);
+	if (ret < 0)
+		return ret;
+
+	*addr = res.start + offset;
+	return 0;
+}
+
 /*
  * qcom_set_qcekey_sec() - Configure key securely
  */
@@ -3278,8 +3308,115 @@ static ssize_t hlos_done_store(struct device *device,
 
 static DEVICE_ATTR_RW(hlos_done);
 
+static ssize_t trymode_inprogress_show(struct device *device,
+				       struct device_attribute *attr,
+				       char *buf)
+{
+	u32 *addr;
+
+	addr = qcom_smem_get(QCOM_SMEM_HOST_ANY, SMEM_TRYMODE_INFO, NULL);
+	if (IS_ERR(addr)) {
+		dev_err(__scm->dev, "Failed to get the trymode information\n");
+		return -EINVAL;
+	}
+
+	return sysfs_emit(buf, "%x\n", *addr);
+}
+
+static ssize_t trybit_show(struct device *device,
+			   struct device_attribute *attr,
+			   char *buf)
+{
+	u32 val;
+	int ret;
+
+	ret = qcom_scm_io_readl(__scm->dload_mode_addr, &val);
+	if (ret) {
+		dev_err(__scm->dev,
+			"dload secure read failed with err: %d\n", ret);
+		return -EINVAL;
+	}
+
+	return sysfs_emit(buf, "%d\n", (val & QTI_TRYBIT) ? 1 : 0);
+}
+
+static ssize_t trybit_store(struct device *device,
+			    struct device_attribute *attr,
+			    const char *buf, size_t count)
+{
+	u32 val;
+	int ret;
+
+	if (kstrtouint(buf, 0, &val))
+		return -EINVAL;
+
+	if (val != 1)
+		return -EINVAL;
+
+	ret = qcom_scm_io_readl(__scm->dload_mode_addr, &val);
+	if (ret) {
+		dev_err(__scm->dev,
+			"dload secure read failed with err: %d\n", ret);
+		return -EINVAL;
+	}
+
+	val |= QTI_TRYBIT;
+
+	ret = qcom_scm_io_writel(__scm->dload_mode_addr, val);
+	if (ret) {
+		dev_err(__scm->dev,
+			"Enable Try mode bit failed with err: %d\n", ret);
+		return -EINVAL;
+	}
+
+	return count;
+}
+
+static ssize_t tcsr_boot_info_store(struct device *device,
+				    struct device_attribute *attr,
+				    const char *buf, size_t count)
+{
+	u32 val;
+	u32 boot_info_val;
+	int ret;
+
+	if (!of_device_is_compatible(__scm->dev->of_node, "qcom,scm-ipq5424"))
+		return -EINVAL;
+
+	if (kstrtouint(buf, 0, &val))
+		return -EINVAL;
+
+	if (val != 1 && val != 0)
+		return -EINVAL;
+
+	ret = qcom_scm_io_readl(__scm->tcsr_boot_info_addr, &boot_info_val);
+	if (ret) {
+		dev_err(__scm->dev,
+			"pbl dload secure read failed with err: %d\n", ret);
+		return -EINVAL;
+	}
+	boot_info_val = (val == 1) ? (boot_info_val | BOOT_INFO_USE_SET_B) :
+			(boot_info_val & ~BOOT_INFO_USE_SET_B);
+
+	ret = qcom_scm_io_writel(__scm->tcsr_boot_info_addr, boot_info_val);
+	if (ret) {
+		dev_err(__scm->dev,
+			"Enable Pbl Try mode bit failed with err: %d\n", ret);
+		return -EINVAL;
+	}
+
+	return count;
+}
+
+static DEVICE_ATTR_RO(trymode_inprogress);
+static DEVICE_ATTR_RW(trybit);
+static DEVICE_ATTR_WO(tcsr_boot_info);
+
 static struct attribute *qcom_firmware_attrs[] = {
 	&dev_attr_hlos_done.attr,
+	&dev_attr_trymode_inprogress.attr,
+	&dev_attr_trybit.attr,
+	&dev_attr_tcsr_boot_info.attr,
 	NULL,
 };
 
@@ -3297,6 +3434,11 @@ static int qcom_scm_probe(struct platform_device *pdev)
 
 	scm->dev = &pdev->dev;
 	ret = qcom_scm_find_dload_address(&pdev->dev, &scm->dload_mode_addr);
+	if (ret < 0)
+		return ret;
+
+	ret = qcom_scm_find_tcsr_boot_info_address(&pdev->dev,
+						   &scm->tcsr_boot_info_addr);
 	if (ret < 0)
 		return ret;
 
@@ -3399,6 +3541,7 @@ static const struct of_device_id qcom_scm_dt_match[] = {
 	{ .compatible = "qcom,scm-apq8084" },
 	{ .compatible = "qcom,scm-ipq4019" },
 	{ .compatible = "qcom,scm-ipq9574", .data = (void *)(SDI_DISABLE | ABNORMAL_MAGIC)},
+	{ .compatible = "qcom,scm-ipq5424",},
 	{ .compatible = "qcom,scm-msm8953" },
 	{ .compatible = "qcom,scm-msm8974" },
 	{ .compatible = "qcom,scm-msm8996" },
