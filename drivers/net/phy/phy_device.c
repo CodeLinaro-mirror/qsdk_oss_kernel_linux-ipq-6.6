@@ -1656,6 +1656,65 @@ bool phy_driver_is_genphy_10g(struct phy_device *phydev)
 EXPORT_SYMBOL_GPL(phy_driver_is_genphy_10g);
 
 /**
+ * of_phy_package_join - join a common PHY group in PHY package
+ * @phydev: target phy_device struct
+ * @priv_size: if non-zero allocate this amount of bytes for private data
+ *
+ * This is a variant of phy_package_join for PHY package defined in DT.
+ *
+ * The parent node of the @phydev is checked as a valid PHY package node
+ * structure (by matching the node name "ethernet-phy-package") and the
+ * base_addr for the PHY package is passed to phy_package_join.
+ *
+ * With this configuration the shared struct will also have the np value
+ * filled to use additional DT defined properties in PHY specific
+ * probe_once and config_init_once PHY package OPs.
+ *
+ * Returns < 0 on error, 0 on success. Esp. calling phy_package_join()
+ * with the same cookie but a different priv_size is an error. Or a parent
+ * node is not detected or is not valid or doesn't match the expected node
+ * name for PHY package.
+ */
+int of_phy_package_join(struct phy_device *phydev, size_t priv_size)
+{
+        struct device_node *node = phydev->mdio.dev.of_node;
+        struct device_node *package_node;
+        u32 base_addr;
+        int ret;
+
+        if (!node)
+                return -EINVAL;
+
+        package_node = of_get_parent(node);
+        if (!package_node)
+                return -EINVAL;
+
+        if (!of_node_name_eq(package_node, "ethernet-phy-package")) {
+                ret = -EINVAL;
+                goto exit;
+        }
+
+        if (of_property_read_u32(package_node, "reg", &base_addr)) {
+                ret = -EINVAL;
+                goto exit;
+        }
+
+        ret = phy_package_join(phydev, base_addr, priv_size);
+        if (ret)
+                goto exit;
+
+        phydev->shared->np = package_node;
+
+        return 0;
+exit:
+        of_node_put(package_node);
+        return ret;
+}
+EXPORT_SYMBOL_GPL(of_phy_package_join);
+
+
+
+/**
  * phy_package_join - join a common PHY group
  * @phydev: target phy_device struct
  * @addr: cookie and PHY address for global register access
@@ -1759,7 +1818,7 @@ static void devm_phy_package_leave(struct device *dev, void *res)
 }
 
 /**
- * devm_phy_package_join - resource managed phy_package_join()
+ * devm_of_phy_package_join - resource managed phy_package_join()
  * @dev: device that is registering this PHY package
  * @phydev: target phy_device struct
  * @addr: cookie and PHY address for global register access
@@ -1767,10 +1826,10 @@ static void devm_phy_package_leave(struct device *dev, void *res)
  *
  * Managed phy_package_join(). Shared storage fetched by this function,
  * phy_package_leave() is automatically called on driver detach. See
- * phy_package_join() for more information.
+ * of_phy_package_join() for more information.
  */
-int devm_phy_package_join(struct device *dev, struct phy_device *phydev,
-			  int addr, size_t priv_size)
+int devm_of_phy_package_join(struct device *dev, struct phy_device *phydev,
+			     size_t priv_size)
 {
 	struct phy_device **ptr;
 	int ret;
@@ -1780,7 +1839,7 @@ int devm_phy_package_join(struct device *dev, struct phy_device *phydev,
 	if (!ptr)
 		return -ENOMEM;
 
-	ret = phy_package_join(phydev, addr, priv_size);
+	ret = of_phy_package_join(phydev, priv_size);
 
 	if (!ret) {
 		*ptr = phydev;
@@ -1791,7 +1850,44 @@ int devm_phy_package_join(struct device *dev, struct phy_device *phydev,
 
 	return ret;
 }
+EXPORT_SYMBOL_GPL(devm_of_phy_package_join);
+
+/**
+ * devm_phy_package_join - resource managed phy_package_join()
+ * @dev: device that is registering this PHY package
+ * @phydev: target phy_device struct
+ * @base_addr: cookie and base PHY address of PHY package for offset
+ *   calculation of global register access
+ * @priv_size: if non-zero allocate this amount of bytes for private data
+ *
+ * Managed phy_package_join(). Shared storage fetched by this function,
+ * phy_package_leave() is automatically called on driver detach. See
+ * phy_package_join() for more information.
+ */
+int devm_phy_package_join(struct device *dev, struct phy_device *phydev,
+                          int base_addr, size_t priv_size)
+{
+        struct phy_device **ptr;
+        int ret;
+
+        ptr = devres_alloc(devm_phy_package_leave, sizeof(*ptr),
+                           GFP_KERNEL);
+        if (!ptr)
+                return -ENOMEM;
+
+        ret = phy_package_join(phydev, base_addr, priv_size);
+
+        if (!ret) {
+                *ptr = phydev;
+                devres_add(dev, ptr);
+        } else {
+                devres_free(ptr);
+        }
+
+        return ret;
+}
 EXPORT_SYMBOL_GPL(devm_phy_package_join);
+
 
 /**
  * phy_detach - detach a PHY device from its network device
