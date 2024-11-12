@@ -10380,6 +10380,8 @@ skip_beacons:
 	}
 
 	wdev_lock(wdev);
+
+	params.link_id = link_id;
 	err = rdev_channel_switch(rdev, dev, &params);
 	wdev_unlock(wdev);
 
