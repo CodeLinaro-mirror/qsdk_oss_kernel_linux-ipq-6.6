@@ -6143,7 +6143,6 @@ struct wireless_dev {
 		};
 	} links[IEEE80211_MLD_MAX_NUM_LINKS];
 	u16 valid_links;
-	u16 fallback_valid_links;
 };
 
 static inline const u8 *wdev_address(struct wireless_dev *wdev)
@@ -6189,14 +6188,6 @@ static inline void WARN_INVALID_LINK_ID(struct wireless_dev *wdev,
 	WARN_ON(wdev->valid_links &&
 		!(wdev->valid_links & BIT(link_id)));
 }
-
-#define for_each_fallback_valid_link(link_info, link_id)		\
-	for ((link_id) = 0;						\
-	     (link_id) < ((link_info)->fallback_valid_links ?		\
-			ARRAY_SIZE((link_info)->links) : 1);		\
-	     (link_id)++)							\
-		if (!(link_info)->fallback_valid_links ||		\
-		    ((link_info)->fallback_valid_links & BIT(link_id)))
 
 #define for_each_valid_link(link_info, link_id)			\
 	for (link_id = 0;					\
@@ -7847,7 +7838,6 @@ struct cfg80211_connect_resp_params {
 
 	const u8 *ap_mld_addr;
 	u16 valid_links;
-	u16 fallback_valid_links;
 	struct {
 		const u8 *addr;
 		const u8 *bssid;

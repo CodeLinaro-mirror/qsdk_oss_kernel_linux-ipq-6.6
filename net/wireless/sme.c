@@ -872,7 +872,6 @@ void __cfg80211_connect_result(struct net_device *dev,
 		cfg80211_put_bss(wdev->wiphy, cr->links[link].bss);
 	}
 	wdev->valid_links = cr->valid_links;
-	wdev->fallback_valid_links = cr->fallback_valid_links;
 	for_each_valid_link(cr, link)
 		wdev->links[link].client.current_bss =
 			bss_from_pub(cr->links[link].bss);
@@ -994,11 +993,6 @@ void cfg80211_connect_done(struct net_device *dev,
 		link_info_size += params->links[link].addr ? ETH_ALEN : 0;
 	}
 
-	for_each_fallback_valid_link(params, link) {
-		cfg80211_update_link_bss(wdev, &params->links[0].bss);
-		link_info_size += params->links[0].bssid ? ETH_ALEN : 0;
-	}
-
 	ev = kzalloc(sizeof(*ev) + (params->ap_mld_addr ? ETH_ALEN : 0) +
 		     params->req_ie_len + params->resp_ie_len +
 		     params->fils.kek_len + params->fils.pmk_len +
@@ -1058,8 +1052,6 @@ void cfg80211_connect_done(struct net_device *dev,
 	if (params->fils.update_erp_next_seq_num)
 		ev->cr.fils.erp_next_seq_num = params->fils.erp_next_seq_num;
 	ev->cr.valid_links = params->valid_links;
-	ev->cr.fallback_valid_links = params->fallback_valid_links;
-
 	for_each_valid_link(params, link) {
 		if (params->links[link].bss)
 			cfg80211_hold_bss(
@@ -1077,19 +1069,6 @@ void cfg80211_connect_done(struct net_device *dev,
 			ev->cr.links[link].bssid = next;
 			memcpy((void *)ev->cr.links[link].bssid,
 			       params->links[link].bssid,
-			       ETH_ALEN);
-			next += ETH_ALEN;
-		}
-	}
-
-	for_each_fallback_valid_link(params, link) {
-		if (params->links[0].bss)
-			cfg80211_hold_bss(bss_from_pub(params->links[0].bss));
-		ev->cr.links[link].bss = params->links[0].bss;
-		if (params->links[0].bssid) {
-			ev->cr.links[link].bssid = next;
-			memcpy((void *)ev->cr.links[link].bssid,
-			       params->links[0].bssid,
 			       ETH_ALEN);
 			next += ETH_ALEN;
 		}
