@@ -273,6 +273,10 @@ ifeq ($(CONFIG_MHI_BUS_RESERVED_DMA_POOL),y)
 dtc_cpp_flags += -D __MHI_BUS_RESERVED_DMA_POOL__
 endif
 
+ifeq ($(CONFIG_IO_COHERENCY),y)
+dtc_cpp_flags += -D __CONFIG_IO_COHERENCY__
+endif
+
 ifdef CONFIG_OBJTOOL
 
 objtool := $(objtree)/tools/objtool/objtool
