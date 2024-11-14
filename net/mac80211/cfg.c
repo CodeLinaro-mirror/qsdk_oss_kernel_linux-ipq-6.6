@@ -4938,7 +4938,6 @@ static void ieee80211_del_intf_link(struct wiphy *wiphy,
 
 	mutex_lock(&sdata->local->mtx);
 	ieee80211_vif_set_links(sdata, wdev->valid_links, 0);
-	ieee80211_vif_set_links(sdata, wdev->fallback_valid_links, 0);
 	mutex_unlock(&sdata->local->mtx);
 }
 

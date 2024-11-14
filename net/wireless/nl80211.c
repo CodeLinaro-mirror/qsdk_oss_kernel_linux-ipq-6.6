@@ -3963,41 +3963,6 @@ static int nl80211_send_iface(struct sk_buff *msg, u32 portid, u32 seq, int flag
 		}
 
 		nla_nest_end(msg, links);
-	} else if (wdev->fallback_valid_links) {
-		unsigned int link_id;
-		struct nlattr *links = nla_nest_start(msg,
-						      NL80211_ATTR_MLO_LINKS);
-
-		if (!links)
-			goto nla_put_failure;
-
-		for_each_fallback_valid_link(wdev, link_id) {
-			struct nlattr *link = nla_nest_start(msg, link_id + 1);
-			struct cfg80211_chan_def chandef = {};
-			int ret;
-
-			if (!link)
-				goto nla_put_failure;
-
-			if (nla_put_u8(msg, NL80211_ATTR_MLO_LINK_ID, link_id))
-				goto nla_put_failure;
-			ret = rdev_get_channel(rdev, wdev, link_id, &chandef);
-			if (ret == 0 && nl80211_send_chandef(msg, &chandef))
-				goto nla_put_failure;
-
-			if (rdev->ops->get_tx_power) {
-				int dbm, ret;
-
-				ret = rdev_get_tx_power(rdev, wdev, link_id, &dbm);
-				if (ret == 0 &&
-				    nla_put_u32(msg, NL80211_ATTR_WIPHY_TX_POWER_LEVEL,
-						DBM_TO_MBM(dbm)))
-					goto nla_put_failure;
-			}
-			nla_nest_end(msg, link);
-		}
-
-		nla_nest_end(msg, links);
 	} else {
 		if (rdev->ops->get_channel) {
 			struct cfg80211_chan_def chandef = {};
@@ -16774,27 +16739,18 @@ static int nl80211_pre_doit(const struct genl_split_ops *ops,
 			goto out_unlock;
 		}
 
-		/* MLO fallback to DBDC association */
-		if (wdev->fallback_valid_links &&
+		/* MLO -> require valid link ID */
+		if (wdev->valid_links &&
 		    (!link_id ||
-		     !(wdev->fallback_valid_links & BIT(nla_get_u8(link_id))))) {
+		     !(wdev->valid_links & BIT(nla_get_u8(link_id))))) {
 			err = -EINVAL;
 			goto out_unlock;
-		} else {
-			/* MLO -> require valid link ID */
-			if (wdev->valid_links &&
-			    (!link_id ||
-			     !(wdev->valid_links & BIT(nla_get_u8(link_id))))) {
-				err = -EINVAL;
-				goto out_unlock;
-			}
+		}
 
-			/* non-MLO -> no link ID attribute accepted */
-			if (!wdev->fallback_valid_links &&
-			    !wdev->valid_links && link_id) {
-				err = -EINVAL;
-				goto out_unlock;
-			}
+		/* non-MLO -> no link ID attribute accepted */
+		if (!wdev->valid_links && link_id) {
+			err = -EINVAL;
+			goto out_unlock;
 		}
 	}
 
