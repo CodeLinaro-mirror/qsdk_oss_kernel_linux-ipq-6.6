@@ -266,4 +266,8 @@ static inline int qcom_scm_remap_error(int err)
 	return -EINVAL;
 }
 
+struct scm_priv_data {
+	u32 flag;
+	u32 milestone_mask;
+};
 #endif
