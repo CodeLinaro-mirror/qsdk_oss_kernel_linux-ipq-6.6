@@ -934,8 +934,6 @@ static int qcom_llcc_cfg_program(struct platform_device *pdev,
 /*  Activate, Deactivate, Destroy Function for LLCC_AI */
 static int activate_function(void)
 {
-	int ret;
-
 	if (IS_ERR_OR_NULL(ai_llc_slice_desc)) {
 		pr_info("ai_llc_slice didn't get initialized");
 		return -1;
