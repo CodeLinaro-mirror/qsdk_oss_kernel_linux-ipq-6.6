@@ -3277,7 +3277,7 @@ static int crypt_ctr_cipher(struct dm_target *ti, char *cipher_in, char *key)
 }
 
 #ifdef CONFIG_BLK_INLINE_ENCRYPTION
-static int qcom_set_ice_context(struct dm_target *ti, char **argv)
+static int qcom_set_ice_context(struct dm_target *ti, u32 argc, char **argv)
 {
 	struct crypt_config *cc = ti->private;
 	uint8_t *hex_data_context = NULL, *hex_salt_context = NULL;
@@ -3309,7 +3309,7 @@ static int qcom_set_ice_context(struct dm_target *ti, char **argv)
 		return -EINVAL;
 	}
 
-	if (argv[8] != NULL && !strcmp(argv[8], "oemseed")) {
+	if (argc > 8 && argv[8] != NULL && !strcmp(argv[8], "oemseed")) {
 		seedtype = OEM_SEED_TYPE;
 	} else {
 		ret = qcom_context_ice_sec(seedtype, key_size, algo_mode,
@@ -3555,7 +3555,7 @@ static int crypt_ctr(struct dm_target *ti, unsigned int argc, char **argv)
 
 #ifdef CONFIG_BLK_INLINE_ENCRYPTION
 	if (test_bit(DM_CRYPT_INLINE_ENCRYPTION_USE_HWKEY, &cc->flags)) {
-		ret = qcom_set_ice_context(ti, argv);
+		ret = qcom_set_ice_context(ti, argc, argv);
 		if (ret < 0)
 			goto bad;
 	}
