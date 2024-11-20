@@ -1082,16 +1082,25 @@ void ___cfg80211_scan_done(struct cfg80211_registered_device *rdev,
 
 	dev_put(wdev->netdev);
 
+	/* If scan aborted due to netdev down completed after scan_done
+	 * work queue scheduled, hold the scan_msg.
+	 * If scan_done work queue not scheduled but netdev_down completed
+	 * consume skb as this is expected scenario due to rdev_abort_scan
+	 * in cfg80211_remove_links.
+	 * If send_message is set, send the scan msg over nl
+	 */
+	if (!send_message && rdev->scan_req->notified)
+		rdev->scan_msg = msg;
+	else if (!send_message)
+		consume_skb(msg);
+	else
+		nl80211_send_scan_msg(rdev, msg);
+
 	kfree(rdev->int_scan_req);
 	rdev->int_scan_req = NULL;
 
 	kfree(rdev->scan_req);
 	rdev->scan_req = NULL;
-
-	if (!send_message)
-		rdev->scan_msg = msg;
-	else
-		nl80211_send_scan_msg(rdev, msg);
 }
 
 void __cfg80211_scan_done(struct wiphy *wiphy, struct wiphy_work *wk)
