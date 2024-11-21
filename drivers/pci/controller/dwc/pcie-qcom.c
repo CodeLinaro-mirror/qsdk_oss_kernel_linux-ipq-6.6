@@ -1862,7 +1862,7 @@ static int qcom_pcie_probe(struct platform_device *pdev)
 		ret = devm_request_threaded_irq(&pdev->dev, pcie->global_irq,
 					NULL,
 					qcom_pcie_global_irq_thread_fn,
-					IRQF_TRIGGER_RISING | IRQF_ONESHOT,
+					IRQF_TRIGGER_HIGH | IRQF_ONESHOT,
 					"pcie-global", pcie);
 		if (ret) {
 			dev_err(&pdev->dev, "Unable to request global irq\n");
