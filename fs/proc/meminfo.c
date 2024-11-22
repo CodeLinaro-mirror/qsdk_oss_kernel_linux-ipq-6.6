@@ -13,6 +13,7 @@
 #include <linux/swap.h>
 #include <linux/vmstat.h>
 #include <linux/atomic.h>
+#include <linux/cpuset.h>
 #include <linux/vmalloc.h>
 #ifdef CONFIG_CMA
 #include <linux/cma.h>
@@ -20,6 +21,8 @@
 #include <linux/zswap.h>
 #include <asm/page.h>
 #include "internal.h"
+
+#define MEM_INFO_FILTER_NODES (0x0001u)
 
 void __attribute__((weak)) arch_report_meminfo(struct seq_file *m)
 {
@@ -31,6 +34,26 @@ static void show_val_kb(struct seq_file *m, const char *s, unsigned long num)
 	seq_write(m, " kB\n", 4);
 }
 
+/*
+ * Determine whether the node should be displayed or not, depending on whether
+ * SHOW_MEM_FILTER_NODES was passed to show_free_areas().
+ */
+static bool show_mem_node_skip(unsigned int flags, int nid, nodemask_t *nodemask)
+{
+	if (!(flags & MEM_INFO_FILTER_NODES))
+		return false;
+
+	/*
+	 * no node mask - aka implicit memory numa policy. Do not bother with
+	 * the synchronization - read_mems_allowed_begin - because we do not
+	 * have to be precise here.
+	 */
+	if (!nodemask)
+		nodemask = &cpuset_current_mems_allowed;
+
+	return !node_isset(nid, *nodemask);
+}
+
 static int meminfo_proc_show(struct seq_file *m, void *v)
 {
 	struct sysinfo i;
@@ -40,6 +63,9 @@ static int meminfo_proc_show(struct seq_file *m, void *v)
 	unsigned long pages[NR_LRU_LISTS];
 	unsigned long sreclaimable, sunreclaim;
 	int lru;
+	unsigned long free_pcp = 0;
+	struct zone *zone;
+	int cpu;
 
 	si_meminfo(&i);
 	si_swapinfo(&i);
@@ -56,6 +82,16 @@ static int meminfo_proc_show(struct seq_file *m, void *v)
 	available = si_mem_available();
 	sreclaimable = global_node_page_state_pages(NR_SLAB_RECLAIMABLE_B);
 	sunreclaim = global_node_page_state_pages(NR_SLAB_UNRECLAIMABLE_B);
+
+	for_each_populated_zone(zone) {
+		if (zone_idx(zone) > MAX_NR_ZONES - 1)
+			continue;
+		if (show_mem_node_skip(0, zone_to_nid(zone), NULL))
+			continue;
+
+		for_each_online_cpu(cpu)
+			free_pcp += per_cpu_ptr(zone->per_cpu_pageset, cpu)->count;
+	}
 
 	show_val_kb(m, "MemTotal:       ", i.totalram);
 	show_val_kb(m, "MemFree:        ", i.freeram);
@@ -132,6 +168,8 @@ static int meminfo_proc_show(struct seq_file *m, void *v)
 	show_val_kb(m, "VmallocUsed:    ", vmalloc_nr_pages());
 	show_val_kb(m, "VmallocChunk:   ", 0ul);
 	show_val_kb(m, "Percpu:         ", pcpu_nr_pages());
+	show_val_kb(m, "FreePCP:        ", free_pcp);
+	show_val_kb(m, "MemFree+FreePCP ", i.freeram + free_pcp);
 
 	memtest_report_meminfo(m);
 
