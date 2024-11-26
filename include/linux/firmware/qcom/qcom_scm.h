@@ -152,14 +152,24 @@ struct qsee_reg_log_buf_req {
 	uint64_t len;
 };
 
-struct tzdbg_log_pos_t {
+struct tzdbg_log_v1_pos_t {
 	uint16_t wrap;
 	uint16_t offset;
 };
 
-struct qtidbg_log_t {
-	struct tzdbg_log_pos_t log_pos;
+struct qtidbg_log_v1_t {
+	struct tzdbg_log_v1_pos_t log_pos;
 	uint8_t log_buf[];
+};
+
+struct tzdbg_log_v2_pos_t {
+	u32 wrap;
+	u32 offset;
+};
+
+struct qtidbg_log_v2_t {
+	struct tzdbg_log_v2_pos_t log_pos;
+	u8 log_buf[];
 };
 
 struct qcom_scm_hdcp_req {
