@@ -37,11 +37,18 @@ static int ___cfg80211_stop_ap(struct cfg80211_registered_device *rdev,
 
 	err = rdev_stop_ap(rdev, dev, link_id, &params);
 	if (!err) {
-		wdev->conn_owner_nlportid = 0;
 		wdev->links[link_id].ap.beacon_interval = 0;
 		memset(&wdev->links[link_id].ap.chandef, 0,
 		       sizeof(wdev->links[link_id].ap.chandef));
-		wdev->u.ap.ssid_len = 0;
+
+		if (hweight16(wdev->valid_links) <= 1) {
+			/* Clear this only when there is one or lesser valid
+			 * link, otherwise consider that some link is present
+			 */
+			wdev->conn_owner_nlportid = 0;
+			wdev->u.ap.ssid_len = 0;
+		}
+
 		rdev_set_qos_map(rdev, dev, NULL);
 		if (notify)
 			nl80211_send_ap_stopped(wdev, link_id);
