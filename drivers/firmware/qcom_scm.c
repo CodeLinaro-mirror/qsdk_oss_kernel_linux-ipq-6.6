@@ -3541,7 +3541,6 @@ struct scm_priv_data ipq9574_data = {
 };
 
 struct scm_priv_data ipq5424_data = {
-	.flag = (SDI_DISABLE | ABNORMAL_MAGIC),
 	.milestone_mask = BIT(12)
 };
 
