@@ -90,6 +90,26 @@ enum dsa_tag_protocol {
 	DSA_TAG_PROTO_4B_QCA		= DSA_TAG_PROTO_QCA_4B_VALUE,
 };
 
+enum {
+	DSA_NOTIFIER_PORT_LINK = 1,
+};
+
+struct dsa_notifier_info {
+	struct net_device *dev;
+
+};
+
+struct dsa_notifier_link {
+	struct dsa_notifier_info info;
+
+	bool link;
+};
+
+int call_dsa_blocking_notifiers(unsigned long val, struct net_device *dev,
+				      struct dsa_notifier_info *info);
+int register_dsa_blocking_notifier(struct notifier_block *nb);
+int unregister_dsa_blocking_notifier(struct notifier_block *nb);
+
 struct dsa_switch;
 
 struct dsa_device_ops {
