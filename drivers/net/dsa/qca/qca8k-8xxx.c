@@ -450,7 +450,7 @@ qca8k_read_mii(struct qca8k_priv *priv, uint32_t reg, uint32_t *val)
 {
 	struct mii_bus *bus = priv->bus;
 	u16 r1, r2, page;
-	int ret;
+	int ret = 0;
 
 	if (priv->switch_id == QCA8K_ID_QCA8386) {
 		u16 switch_phy_id, lo, hi;
@@ -462,8 +462,9 @@ qca8k_read_mii(struct qca8k_priv *priv, uint32_t reg, uint32_t *val)
 		lo = bus->read(bus, 0x10 | r2, r1);
 		hi = bus->read(bus, 0x10 | r2, r1 + 2);
 		mutex_unlock(&bus->mdio_lock);
+		*val = (hi << 16) | lo;
 
-		return (hi << 16) | lo;
+		return ret;
 	}
 
 	qca8k_split_addr(reg, &r1, &r2, &page);
@@ -1866,6 +1867,7 @@ static int qca8k_change_tag_protocol(struct dsa_switch *ds,
 					 enum dsa_tag_protocol proto)
 {
 	struct qca8k_priv *priv = ds->priv;
+	struct dsa_port *dp = NULL;
 
 	switch (proto) {
 	case DSA_TAG_PROTO_QCA:
@@ -1881,6 +1883,22 @@ static int qca8k_change_tag_protocol(struct dsa_switch *ds,
 			QCA8K_HEADER_LENGTH_SEL_VAL(1) |
 			QCA8K_HEADER_TYPE_VAL_VAL(QCA_HDR_TYPE_VALUE)))
 			goto fail;
+		break;
+	case DSA_TAG_PROTO_QCA_8021Q:
+		/* Disable QCA header mode on all cpu ports */
+		dsa_switch_for_each_cpu_port(dp, ds) {
+			if (qca8k_write(priv, QCA8K_REG_PORT_HDR_CTRL(dp->index),
+				  FIELD_PREP(QCA8K_PORT_HDR_CTRL_TX_MASK, QCA8K_PORT_HDR_CTRL_NONE) |
+				  FIELD_PREP(QCA8K_PORT_HDR_CTRL_RX_MASK, QCA8K_PORT_HDR_CTRL_NONE))) {
+				dev_err(priv->dev, "failed disabling QCA header mode on port %d", dp->index);
+				goto fail;
+			}
+		}
+
+		/* Setup 802.1q tag proto */
+		qca8k_tag_8021q_setup(ds);
+
+		dev_info(ds->dev, "Tag proto changed to qca 8021q.\n");
 		break;
 	default:
 		return -EPROTONOSUPPORT;
@@ -1928,6 +1946,11 @@ static int qca8k_connect_tag_protocol(struct dsa_switch *ds,
 
 		break;
 	case DSA_TAG_PROTO_4B_QCA:
+		tagger_data = ds->tagger_data;
+		tagger_data->tx_hdr_offload = tx_hdr_offload;
+
+		break;
+	case DSA_TAG_PROTO_QCA_8021Q:
 		tagger_data = ds->tagger_data;
 		tagger_data->tx_hdr_offload = tx_hdr_offload;
 
@@ -2193,7 +2216,7 @@ static void
 qca8k_teardown(struct dsa_switch *ds)
 {
 	struct qca8k_priv *priv = ds->priv;
-	int i = 0, shift = 0, port_mask = 0;
+	int i = 0, port_mask = 0;
 	u16 reg = 0;
 	struct dsa_port *dp;
 
@@ -2239,12 +2262,13 @@ qca8k_teardown(struct dsa_switch *ds)
 				  QCA8K_PORT_LOOKUP_MEMBER, port_mask);
 
 			/* resume slave portvlan default vid */
-			shift = 16 * (i % 2);
 			qca8k_rmw(priv, QCA8K_EGRESS_VLAN(i),
-				  0xffff << shift, 0 << shift);
+						QCA8K_EGREES_VLAN_PORT_MASK(i),
+						QCA8K_EGREES_VLAN_PORT(i, QCA8K_PORT_VID_DEF));
+
 			qca8k_write(priv, QCA8K_REG_PORT_VLAN_CTRL0(i),
-				    QCA8K_PORT_VLAN_CVID(0) |
-				    QCA8K_PORT_VLAN_SVID(0));
+					  QCA8K_PORT_VLAN_CVID(QCA8K_PORT_VID_DEF) |
+					  QCA8K_PORT_VLAN_SVID(QCA8K_PORT_VID_DEF));
 
 			/* resume phy status by external mdio */
 			reg = qca8k_phy_external_mdio_read(priv, i, MII_BMCR);
@@ -2269,6 +2293,10 @@ qca8k_teardown(struct dsa_switch *ds)
 			}
 		}
 	}
+
+	/* 802.1q tag teardown */
+	if (ds->dst->tag_ops->proto == DSA_TAG_PROTO_QCA_8021Q)
+		qca8k_tag_8021q_teardown(ds);
 
 	/* Flush the FDB table */
 	qca8k_fdb_flush(priv);

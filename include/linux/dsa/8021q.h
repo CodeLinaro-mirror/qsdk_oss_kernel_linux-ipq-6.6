@@ -8,6 +8,8 @@
 #include <net/dsa.h>
 #include <linux/types.h>
 
+#define DSA_TAG_8021Q_VLAN_PROTO ETH_P_8021Q
+
 int dsa_tag_8021q_register(struct dsa_switch *ds, __be16 proto);
 
 void dsa_tag_8021q_unregister(struct dsa_switch *ds);
