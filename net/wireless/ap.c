@@ -41,9 +41,10 @@ static int ___cfg80211_stop_ap(struct cfg80211_registered_device *rdev,
 		memset(&wdev->links[link_id].ap.chandef, 0,
 		       sizeof(wdev->links[link_id].ap.chandef));
 
-		if (hweight16(wdev->valid_links) <= 1) {
-			/* Clear this only when there is one or lesser valid
-			 * link, otherwise consider that some link is present
+		if (!params.reconfig) {
+			/* Clear this only when the stop is NOT received for
+			 * MLO Reconfig link removal as other link(s) will
+			 * still be active.
 			 */
 			wdev->conn_owner_nlportid = 0;
 			wdev->u.ap.ssid_len = 0;
