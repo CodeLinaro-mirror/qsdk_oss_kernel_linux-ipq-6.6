@@ -1395,6 +1395,23 @@ static inline bool dsa_slave_dev_check(const struct net_device *dev)
 }
 #endif
 
+/* Update the DSA device with statistics from network offload engines */
+static inline void __dsa_dev_update_accel_stats(struct net_device *dev,
+				   struct rtnl_link_stats64 *nlstats)
+{
+	if (!dsa_slave_dev_check(dev))
+		return;
+
+	struct pcpu_sw_netstats *tstats = this_cpu_ptr(dev->tstats);
+
+	u64_stats_update_begin(&tstats->syncp);
+	u64_stats_add(&tstats->rx_packets, nlstats->rx_packets);
+	u64_stats_add(&tstats->rx_bytes, nlstats->rx_bytes);
+	u64_stats_add(&tstats->tx_packets, nlstats->tx_packets);
+	u64_stats_add(&tstats->tx_bytes, nlstats->tx_bytes);
+	u64_stats_update_end(&tstats->syncp);
+}
+
 netdev_tx_t dsa_enqueue_skb(struct sk_buff *skb, struct net_device *dev);
 void dsa_port_phylink_mac_change(struct dsa_switch *ds, int port, bool up);
 
