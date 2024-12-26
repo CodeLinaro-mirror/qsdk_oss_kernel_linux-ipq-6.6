@@ -32,6 +32,7 @@ struct gre_protocol {
 int gre_add_protocol(const struct gre_protocol *proto, u8 version);
 int gre_del_protocol(const struct gre_protocol *proto, u8 version);
 bool gre_tunnel_is_fallback_dev(struct net_device *dev);
+bool gre6_tunnel_is_fallback_dev(struct net_device *dev);
 
 struct net_device *gretap_fb_dev_create(struct net *net, const char *name,
 				       u8 name_assign_type);

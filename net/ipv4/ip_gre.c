@@ -462,14 +462,20 @@ drop:
 bool gre_tunnel_is_fallback_dev(struct net_device *dev)
 {
 	struct net *net;
-	struct ip_tunnel_net *itn;
-	struct net_device *fb_tunnel_dev;
+	struct ip_tunnel_net *itn = NULL;
+	struct net_device *fb_tunnel_dev = NULL;
 
 	net = dev_net(dev);
 	if (!net)
 		return false;
 
-	itn  = net_generic(net, gre_tap_net_id);
+	if (dev->rtnl_link_ops) {
+		if (!strcmp(dev->rtnl_link_ops->kind, "gretap"))
+			itn = net_generic(net, gre_tap_net_id);
+		else if (!strcmp(dev->rtnl_link_ops->kind, "gre"))
+			itn = net_generic(net, ipgre_net_id);
+	}
+
 	if (!itn)
 		return false;
 
