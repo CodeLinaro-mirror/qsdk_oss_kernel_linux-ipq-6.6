@@ -2411,7 +2411,8 @@ int qcom_sec_upgrade_auth(unsigned int scm_cmd_id, unsigned int sw_type,
 }
 EXPORT_SYMBOL_GPL(qcom_sec_upgrade_auth);
 
-int qti_scm_get_encrypted_tz_log(void *ker_buf, u32 buf_len, u32 log_id)
+int qti_scm_get_encrypted_tz_log(void *ker_buf, u32 buf_len, u32 log_id,
+				 u32 seg_id)
 {
 	int ret;
 	dma_addr_t log_buf;
@@ -2432,7 +2433,15 @@ int qti_scm_get_encrypted_tz_log(void *ker_buf, u32 buf_len, u32 log_id)
 	desc.args[0] = log_buf;
 	desc.args[1] = buf_len;
 	desc.args[2] = log_id;
-	desc.arginfo = QCOM_SCM_ARGS(3, QCOM_SCM_RW, QCOM_SCM_VAL, QCOM_SCM_VAL);
+
+	if (seg_id) {
+		desc.args[3] = seg_id;
+		desc.arginfo = QCOM_SCM_ARGS(4, QCOM_SCM_RW, QCOM_SCM_VAL,
+					     QCOM_SCM_VAL, QCOM_SCM_VAL);
+	} else {
+		desc.arginfo = QCOM_SCM_ARGS(3, QCOM_SCM_RW, QCOM_SCM_VAL,
+					     QCOM_SCM_VAL);
+	}
 
 	ret = qcom_scm_call(__scm->dev, &desc, &res);
 	dma_unmap_single(__scm->dev, log_buf, buf_len, DMA_FROM_DEVICE);
