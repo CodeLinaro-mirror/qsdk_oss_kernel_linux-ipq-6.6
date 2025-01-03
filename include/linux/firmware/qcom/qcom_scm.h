@@ -227,7 +227,6 @@ enum qcom_scm_ice_cipher {
 #define FUSEPROV_SUCCESS           0x0
 #define QCOM_SCM_SVC_FUSE          0x8
 #define FUSEPROV_INVALID_HASH      0x9
-#define FUSEPROV_SECDAT_LOCK_BLOWN 0xB
 #define IMAGE_AUTH_FAILURE         0x101
 #define QCOM_KERNEL_AUTH_CMD       0x15
 #define TZ_BLOW_FUSE_SECDAT        0x20
