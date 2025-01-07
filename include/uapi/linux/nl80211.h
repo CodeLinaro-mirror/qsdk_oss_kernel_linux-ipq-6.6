@@ -2855,14 +2855,6 @@ enum nl80211_commands {
  *	%NL80211_CMD_ASSOCIATE indicating the SPP A-MSDUs
  *	are used on this connection
  *
- * @NL80211_ATTR_WIPHY_RADIOS: Nested attribute describing physical radios
- *	belonging to this wiphy. See &enum nl80211_wiphy_radio_attrs.
- *
- * @NL80211_ATTR_WIPHY_INTERFACE_COMBINATIONS: Nested attribute listing the
- *	supported interface combinations for all radios combined. In each
- *	nested item, it contains attributes defined in
- *	&enum nl80211_if_combination_attrs.
- *
  * @NL80211_ATTR_RADIO_IFACE: radio interface name of vif
  *
  * @NL80211_ATTR_MLD_IFACE_NAME: mld interface name
@@ -3420,9 +3412,6 @@ enum nl80211_attrs {
 	NL80211_ATTR_MLO_TTLM_ULINK,
 
 	NL80211_ATTR_ASSOC_SPP_AMSDU,
-
-	NL80211_ATTR_WIPHY_RADIOS,
-	NL80211_ATTR_WIPHY_INTERFACE_COMBINATIONS,
 
 	NL80211_ATTR_AP_REMOVAL_COUNT,
 	NL80211_ATTR_TSF,
