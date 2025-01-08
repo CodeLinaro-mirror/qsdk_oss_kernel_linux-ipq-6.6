@@ -660,6 +660,7 @@ static void qcom_geni_serial_start_tx_fifo(struct uart_port *uport)
 {
 	unsigned char c;
 	u32 irq_en;
+	struct circ_buf *xmit = &uport->state->xmit;
 
 	/*
 	 * Start a new transfer in case the previous command was cancelled and
@@ -668,7 +669,8 @@ static void qcom_geni_serial_start_tx_fifo(struct uart_port *uport)
 	 */
 	if (!qcom_geni_serial_main_active(uport) &&
 	    !qcom_geni_serial_tx_empty(uport)) {
-		if (uart_fifo_out(uport, &c, 1) == 1) {
+		if (uart_circ_chars_pending(xmit)) {
+			WARN_ON(1);
 			writel(M_CMD_DONE_EN, uport->membase + SE_GENI_M_IRQ_CLEAR);
 			qcom_geni_serial_setup_tx(uport, 1);
 			writel(c, uport->membase + SE_GENI_TX_FIFOn);
