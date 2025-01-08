@@ -417,6 +417,4 @@ extern int qti_scm_tls_hardening(uint32_t req_addr, uint32_t req_size,
 				 u32 cmd_id);
 extern int qti_scm_aes(uint32_t req_addr, uint32_t req_size, u32 cmd_id);
 extern int qti_scm_aes_clear_key_handle(uint32_t key_handle, u32 cmd_id);
-extern int qcom_scm_is_atf_enabled(u32 *val);
-extern bool qcom_qfprom_secure_state_cmd_available(void);
 #endif

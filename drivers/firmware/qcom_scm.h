@@ -170,7 +170,6 @@ extern int __qti_scm_tz_hvc_log(struct device *dev, u32 svc_id, u32 cmd_id,
 #define QCOM_SCM_SVC_WAITQ			0x24
 #define QCOM_SCM_WAITQ_RESUME			0x02
 #define QCOM_SCM_WAITQ_GET_WQ_CTX		0x03
-#define QCOM_GET_SECURE_STATE_CMD		0x04
 
 /*
  * QCOM_SCM_QCE_SVC - commands related to secure key for secure nand
