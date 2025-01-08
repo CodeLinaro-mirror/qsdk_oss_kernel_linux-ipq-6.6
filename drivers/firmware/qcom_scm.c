@@ -35,7 +35,6 @@
 
 #define SMEM_TRYMODE_INFO	507
 #define BOOT_INFO_USE_SET_B	BIT(31)
-#define ATF_FUSE_ENABLED	BIT(7)
 
 static bool download_mode = IS_ENABLED(CONFIG_QCOM_SCM_DOWNLOAD_MODE_DEFAULT);
 module_param(download_mode, bool, 0);
@@ -1529,19 +1528,6 @@ bool qcom_qfrom_fuse_row_read_available(void)
 					    QCOM_QFPROM_ROW_READ_CMD);
 }
 EXPORT_SYMBOL_GPL(qcom_qfrom_fuse_row_read_available);
-
-/**
- * qcom_qfprom_secure_state_cmd_available() - Check if the SCM call to verify
- *                                            atf enablement is supported?
- *
- * Return: true if the SCM call is supported
- */
-bool qcom_qfprom_secure_state_cmd_available(void)
-{
-	return __qcom_scm_is_call_available(__scm->dev, QCOM_SCM_SVC_INFO,
-					    QCOM_GET_SECURE_STATE_CMD);
-}
-EXPORT_SYMBOL_GPL(qcom_qfprom_secure_state_cmd_available);
 
 /**
  * qcom_scm_ice_invalidate_key() - Invalidate an inline encryption key
@@ -3278,25 +3264,6 @@ int qcom_scm_sdi_disable(struct device *dev)
 	return ret ? : res.result[0];
 }
 EXPORT_SYMBOL_GPL(qcom_scm_sdi_disable);
-
-int qcom_scm_is_atf_enabled(u32 *val)
-{
-	int ret;
-	struct qcom_scm_res res;
-	struct qcom_scm_desc desc = {
-		.svc = QCOM_SCM_SVC_INFO,
-		.cmd = QCOM_GET_SECURE_STATE_CMD,
-		.arginfo = QCOM_SCM_ARGS(0),
-		.owner = ARM_SMCCC_OWNER_SIP,
-	};
-
-	ret = qcom_scm_call(__scm->dev, &desc, &res);
-	if (ret >= 0)
-		*val = res.result[0] & ATF_FUSE_ENABLED;
-
-	return ret < 0 ? ret : 0;
-}
-EXPORT_SYMBOL_GPL(qcom_scm_is_atf_enabled);
 
 static ssize_t hlos_done_show(struct device *device,
 			      struct device_attribute *attr,
