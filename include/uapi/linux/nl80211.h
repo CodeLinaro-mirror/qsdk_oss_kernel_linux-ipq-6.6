@@ -3433,6 +3433,7 @@ enum nl80211_attrs {
 
 	NL80211_ATTR_RADIO_IFACE = 350,
 	NL80211_ATTR_MLO_AP_RECONFIG,
+	NL80211_ATTR_MLO_AP_AFC,
 
 	/* add attributes here, update the policy in nl80211.c */
 

@@ -35,6 +35,10 @@ static int ___cfg80211_stop_ap(struct cfg80211_registered_device *rdev,
 		params.reconfig =
 			nla_get_flag(info->attrs[NL80211_ATTR_MLO_AP_RECONFIG]);
 
+	if (info && info->attrs[NL80211_ATTR_MLO_AP_AFC])
+		params.afc =
+			nla_get_flag(info->attrs[NL80211_ATTR_MLO_AP_AFC]);
+
 	err = rdev_stop_ap(rdev, dev, link_id, &params);
 	if (!err) {
 		wdev->links[link_id].ap.beacon_interval = 0;
