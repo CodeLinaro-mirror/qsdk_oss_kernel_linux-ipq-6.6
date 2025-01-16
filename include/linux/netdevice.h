@@ -3322,6 +3322,9 @@ struct softnet_data {
 		u8  skip_txqueue;
 #endif
 	} xmit;
+
+	struct list_head	napi_notifier_list;	/* Flush notification after each NAPI Execution */
+
 #ifdef CONFIG_RPS
 	/* input_queue_head should be written by cpu owning this struct,
 	 * and only read by other cpus. Worth using a cache line.
@@ -3384,6 +3387,55 @@ static inline void dev_xmit_recursion_inc(void)
 static inline void dev_xmit_recursion_dec(void)
 {
 	__this_cpu_dec(softnet_data.xmit.recursion);
+}
+
+/*
+ * Notification setup information.
+ */
+struct napi_notifier_info {
+	struct list_head node;		/* Node in softnet_data.napi_notifier_list */
+	bool is_sched;			/* Node scheduled for callback */
+	void (*func)(void *info);	/* Notification callback */
+	void *opaque;			/* Opaque passed to callback */
+};
+
+/**
+ * napi_notifier_info_init - Initialize object for @dev_napi_notify_completion
+ * @info: Pre-allocated and setup data structure.
+ * @func: Callback function.
+ * @opaque: opqaue passed to callback function.
+ */
+static inline void napi_notifier_info_init(struct napi_notifier_info *info, void (*func)(void *), void *opaque)
+{
+	INIT_LIST_HEAD(&info->node);
+	info->func = func;
+	info->opaque = opaque;
+	info->is_sched = false;
+}
+
+/**
+ * dev_napi_notify_completion - Run an asynchronous function at the end of current NAPI execution.
+ * @info: Pre-allocated and setup data structure. Function must be fast and non-blocking.
+ *
+ * Return: true on success or false on error
+ */
+static inline bool dev_napi_notify_completion(struct napi_notifier_info *info)
+{
+	struct softnet_data *sd = &per_cpu(softnet_data, smp_processor_id());
+
+	/*
+	 * Don't register if,
+	 *	No NAPI is scheduled/executing,
+	 *	or node is already registered with us.
+	 *	or we are not in BH.
+	 */
+	if (!sd->in_net_rx_action || info->is_sched || !in_softirq())
+		return false;
+
+	info->is_sched = true;
+
+	list_add_tail(&info->node, &sd->napi_notifier_list);
+	return true;
 }
 
 void __netif_schedule(struct Qdisc *q);

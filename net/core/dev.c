@@ -252,6 +252,25 @@ static inline void rps_unlock_irq_enable(struct softnet_data *sd)
 		local_irq_enable();
 }
 
+static void napi_poll_comp_notify(void)
+{
+	struct softnet_data *sd = this_cpu_ptr(&softnet_data);
+	struct napi_notifier_info *info, *tmp;
+	LIST_HEAD(list);
+
+	if (likely(list_empty(&sd->napi_notifier_list))) {
+		return;
+	}
+
+	list_splice_init(&sd->napi_notifier_list, &list);
+
+	list_for_each_entry_safe(info, tmp, &list, node) {
+		list_del_init(&info->node);
+		info->func(info->opaque);
+		info->is_sched = 0;
+	}
+}
+
 static struct netdev_name_node *netdev_name_node_alloc(struct net_device *dev,
 						       const char *name)
 {
@@ -6846,6 +6865,7 @@ static void busy_poll_stop(struct napi_struct *napi, void *have_poll_lock, bool 
 	 * already be running on another CPU.
 	 */
 	trace_napi_poll(napi, rc, budget);
+	napi_poll_comp_notify();
 	netpoll_poll_unlock(have_poll_lock);
 	if (rc == budget)
 		__busy_poll_stop(napi, skip_schedule);
@@ -6900,6 +6920,7 @@ restart:
 		}
 		work = napi_poll(napi, budget);
 		trace_napi_poll(napi, work, budget);
+		napi_poll_comp_notify();
 		gro_normal_list(napi);
 count:
 		if (work > 0)
@@ -7167,6 +7188,7 @@ static int __napi_poll(struct napi_struct *n, bool *repoll)
 	if (test_bit(NAPI_STATE_SCHED, &n->state)) {
 		work = n->poll(n, weight);
 		trace_napi_poll(n, work, weight);
+		napi_poll_comp_notify();
 	}
 
 	if (unlikely(work > weight))
@@ -12274,6 +12296,7 @@ static int __init net_dev_init(void)
 		skb_queue_head_init(&sd->xfrm_backlog);
 #endif
 		INIT_LIST_HEAD(&sd->poll_list);
+		INIT_LIST_HEAD(&sd->napi_notifier_list);
 		sd->output_queue_tailp = &sd->output_queue;
 #ifdef CONFIG_RPS
 		INIT_CSD(&sd->csd, rps_trigger_softirq, sd);
