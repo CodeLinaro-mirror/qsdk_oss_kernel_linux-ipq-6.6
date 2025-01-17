@@ -205,6 +205,10 @@ static int sdhci_msm_ice_set_hwkey_config(struct qcom_ice *ice,
 	}
 	ret = qcom_config_sec_ice(ice_settings, sizeof(struct ice_config_sec));
 	kfree(ice_settings);
+
+	if (ret)
+		dev_err(dev, "Failed to program ICE HW key: %d", ret);
+
 	return ret;
 }
 
@@ -252,10 +256,10 @@ static int qcom_ice_get_algo_mode(struct qcom_ice *ice, u8 algorithm_id,
 			return -EINVAL;
 		}
 		if (key_size == QCOM_ICE_CRYPTO_KEY_SIZE_256) {
-			*cipher = QCOM_SCM_ICE_CIPHER_AES_128_ECB;
+			*cipher = QCOM_SCM_ICE_CIPHER_AES_256_ECB;
 			*key_len = AES_256_CBC_KEY_SIZE;
 		} else {
-			*cipher = QCOM_SCM_ICE_CIPHER_AES_256_ECB;
+			*cipher = QCOM_SCM_ICE_CIPHER_AES_128_ECB;
 			*key_len = AES_128_CBC_KEY_SIZE;
 		}
 		break;
