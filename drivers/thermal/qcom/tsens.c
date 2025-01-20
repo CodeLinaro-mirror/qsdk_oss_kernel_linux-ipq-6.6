@@ -721,6 +721,7 @@ static int tsens_panic_notify(struct thermal_zone_device *tz)
 	unsigned int try = 0;
 	u32 trdy, valid;
 	unsigned int reg_val = 0;
+	int temp_idx, temp;
 
 	if (tsens_version(priv) < VER_0_1) {
 		/* Pre v0.1 IP had a single register for each type of interrupt
@@ -745,7 +746,10 @@ static int tsens_panic_notify(struct thermal_zone_device *tz)
 			continue;
 
 		regmap_read(priv->tm_map, priv->fields[VALID_0 + hw_id].reg, &reg_val);
-		pr_emerg("The reading for sensor %d is 0x%08x\n", s->hw_id, reg_val);
+		temp_idx = LAST_TEMP_0 + hw_id;
+		temp = tsens_hw_to_mC(s, temp_idx);
+		pr_emerg("The reading for sensor %d is 0x%08x, temp = %dmC\n",
+			  s->hw_id, reg_val, temp);
 		return 0;
 	}
 
