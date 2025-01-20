@@ -1621,8 +1621,12 @@ void dsa_switch_shutdown(struct dsa_switch *ds)
 	/* Disconnect from further netdevice notifiers on the master,
 	 * since netdev_uses_dsa() will now return false.
 	 */
-	dsa_switch_for_each_cpu_port(dp, ds)
+	dsa_switch_for_each_cpu_port(dp, ds) {
+		dp->master->ethtool_ops = dp->orig_ethtool_ops;
+		dp->orig_ethtool_ops = NULL;
+
 		dp->master->dsa_ptr = NULL;
+	}
 
 	rtnl_unlock();
 out:
