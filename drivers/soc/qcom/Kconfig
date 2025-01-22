@@ -390,6 +390,12 @@ config QTI_LICENSE_MANAGER
 	  running to communicate the license termination mode and license
 	  files to the attached PCIe device.
 
+config QTI_HW_KEY
+	bool "QTI HW Key driver"
+	select KEYS
+	help
+	  This driver requests HW Key and stores in kernel keyring
+
 config QCOM_TMEL_LOG
 	tristate "QCOM TMEL Log driver"
 	help

@@ -3245,6 +3245,67 @@ int qcom_scm_sdi_disable(struct device *dev)
 }
 EXPORT_SYMBOL_GPL(qcom_scm_sdi_disable);
 
+int qcom_scm_derive_and_share_key(u32 key_len, uint8_t *sw_context,
+				  u32 sw_context_len, uint8_t *derived_key,
+				  uint32_t derived_key_len)
+{
+	dma_addr_t dma_sw_context_buf;
+	dma_addr_t dma_derived_key_buf;
+	char *sw_context_buf, *derived_key_buf;
+	int ret = -ENOMEM;
+	struct qcom_scm_res res;
+	struct qcom_scm_desc desc = {
+		.svc = QTI_SCM_DERIVE_KEY,
+		.cmd = QTI_SCM_DERIVE_KEY_PARAM_ID,
+		.arginfo = QCOM_SCM_ARGS(5, QCOM_SCM_VAL, QCOM_SCM_RO,
+					 QCOM_SCM_VAL, QCOM_SCM_RW,
+					 QCOM_SCM_VAL),
+		.owner = ARM_SMCCC_OWNER_SIP,
+	};
+
+	if (sw_context_len) {
+		sw_context_buf = dma_alloc_coherent(__scm->dev, PAGE_SIZE,
+						    &dma_sw_context_buf,
+						    GFP_KERNEL);
+		if (!sw_context_buf) {
+			pr_err("DMA Allocation failed for sw_context_buf\n");
+			return ret;
+		}
+		memcpy(sw_context_buf, sw_context, sw_context_len);
+	}
+
+	derived_key_buf = dma_alloc_coherent(__scm->dev, PAGE_SIZE,
+					     &dma_derived_key_buf, GFP_KERNEL);
+	if (!derived_key_buf) {
+		pr_err("DMA Allocation failed for derived_key_buf\n");
+		goto dma_unmap_sw_context_buf;
+	}
+
+	desc.args[0] = key_len;
+	desc.args[1] = dma_sw_context_buf;
+	desc.args[2] = sw_context_len;
+	desc.args[3] = dma_derived_key_buf;
+	desc.args[4] = derived_key_len;
+
+	ret = qcom_scm_call(__scm->dev, &desc, &res);
+	if (ret) {
+		pr_err("%s: Response error code is : 0x%x\n", __func__,
+		       (unsigned int)res.result[0]);
+	}
+
+	memcpy(derived_key, derived_key_buf, derived_key_len);
+	dma_free_coherent(__scm->dev, PAGE_SIZE, derived_key_buf,
+			  dma_derived_key_buf);
+
+dma_unmap_sw_context_buf:
+	if (sw_context_len) {
+		dma_free_coherent(__scm->dev, PAGE_SIZE, sw_context_buf,
+				  dma_sw_context_buf);
+	}
+
+	return ret ?  : res.result[0];
+}
+
 static ssize_t hlos_done_show(struct device *device,
 			      struct device_attribute *attr,
 			      char *buf)
