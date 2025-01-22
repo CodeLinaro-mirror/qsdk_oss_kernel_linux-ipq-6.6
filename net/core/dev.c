@@ -2068,7 +2068,10 @@ static int call_netdevice_notifiers_mtu(unsigned long val,
 	return call_netdevice_notifiers_info(val, &info.info);
 }
 
-bool fast_tc_filter = false;
+/*
+ *	By default Fast TC Filter will be disabled.
+ */
+bool fast_tc_filter;
 EXPORT_SYMBOL_GPL(fast_tc_filter);
 
 #ifdef CONFIG_NET_INGRESS
