@@ -662,25 +662,6 @@ static void qcom_scm_set_abnormal_magic(bool enable)
 			val & ~(QCOM_SCM_ABNORMAL_MAGIC));
 }
 
-static void qcom_scm_clr_milestone_bit(void)
-{
-	int ret = 0;
-
-	if (!of_device_is_compatible(__scm->dev->of_node, "qcom,scm-ipq5424"))
-		return;
-
-	if (__scm->dload_mode_addr)
-		ret = qcom_scm_io_rmw(__scm->dload_mode_addr,
-				      QCOM_MILESTONE_MASK,
-				      FIELD_PREP(QCOM_MILESTONE_MASK, 0));
-	else
-		dev_err(__scm->dev,
-			"No available mechanism for clearing milestone bit\n");
-
-	if (ret)
-		dev_err(__scm->dev, "failed to clear milestone bit: %d\n", ret);
-}
-
 static void qcom_scm_set_download_mode(bool enable)
 {
 	u32 val = enable ? QCOM_DLOAD_FULLDUMP : QCOM_DLOAD_NODUMP;
@@ -3513,8 +3494,6 @@ static int qcom_scm_probe(struct platform_device *pdev)
 	}
 
 	__get_convention();
-
-	qcom_scm_clr_milestone_bit();
 
 	/*
 	 * If requested enable "download mode", from this point on warmboot
