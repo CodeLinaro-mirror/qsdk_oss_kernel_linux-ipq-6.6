@@ -248,25 +248,25 @@ static void ipmr_sync_entry_update(struct mr_table *mrt,
 	origin = cache->mfc_origin;
 	group = cache->mfc_mcastgrp;
 
-	spin_lock(&mrt_lock);
+	spin_lock_bh(&mrt_lock);
 	for (vifi = 0; vifi < cache->_c.mfc_un.res.maxvif; vifi++) {
 		if (!((cache->_c.mfc_un.res.ttls[vifi] > 0) &&
 		      (cache->_c.mfc_un.res.ttls[vifi] < 255))) {
 			continue;
 		}
 		if (dest_if_count == MAXVIFS) {
-			spin_unlock(&mrt_lock);
+			spin_unlock_bh(&mrt_lock);
 			return;
 		}
 
 		if (!VIF_EXISTS(mrt, vifi)) {
-			spin_unlock(&mrt_lock);
+			spin_unlock_bh(&mrt_lock);
 			return;
 		}
 		dest_dev[dest_if_count] = mrt->vif_table[vifi].dev->ifindex;
 		dest_if_count++;
 	}
-	spin_unlock(&mrt_lock);
+	spin_unlock_bh(&mrt_lock);
 
 	rcu_read_lock();
 	offload_update_cb_f = rcu_dereference(ipmr_mfc_event_offload_callback);
@@ -373,7 +373,7 @@ int ipmr_find_mfc_entry(struct net *net, __be32 origin, __be32 group,
 		return -ENOENT;
 	}
 
-	spin_lock(&mrt_lock);
+	spin_lock_bh(&mrt_lock);
 	for (vifi = 0; vifi < cache->_c.mfc_un.res.maxvif; vifi++) {
 		if (!((cache->_c.mfc_un.res.ttls[vifi] > 0) &&
 		      (cache->_c.mfc_un.res.ttls[vifi] < 255))) {
@@ -385,13 +385,13 @@ int ipmr_find_mfc_entry(struct net *net, __be32 origin, __be32 group,
 		 * exceeding the size of the array given to us
 		 */
 		if (dest_if_count == max_dest_cnt) {
-			spin_unlock(&mrt_lock);
+			spin_unlock_bh(&mrt_lock);
 			rcu_read_unlock();
 			return -EINVAL;
 		}
 
 		if (!VIF_EXISTS(mrt, vifi)) {
-			spin_unlock(&mrt_lock);
+			spin_unlock_bh(&mrt_lock);
 			rcu_read_unlock();
 			return -EINVAL;
 		}
@@ -399,7 +399,7 @@ int ipmr_find_mfc_entry(struct net *net, __be32 origin, __be32 group,
 		dest_dev[dest_if_count] = mrt->vif_table[vifi].dev->ifindex;
 		dest_if_count++;
 	}
-	spin_unlock(&mrt_lock);
+	spin_unlock_bh(&mrt_lock);
 	rcu_read_unlock();
 
 	return dest_if_count;
@@ -430,9 +430,9 @@ int ipmr_mfc_stats_update(struct net *net, __be32 origin, __be32 group,
 
 	vif = cache->_c.mfc_parent;
 
-	spin_lock(&mrt_lock);
+	spin_lock_bh(&mrt_lock);
 	if (!VIF_EXISTS(mrt, vif)) {
-		spin_unlock(&mrt_lock);
+		spin_unlock_bh(&mrt_lock);
 		rcu_read_unlock();
 		return -EINVAL;
 	}
@@ -447,7 +447,7 @@ int ipmr_mfc_stats_update(struct net *net, __be32 origin, __be32 group,
 		if ((cache->_c.mfc_un.res.ttls[vifi] > 0) &&
 		    (cache->_c.mfc_un.res.ttls[vifi] < 255)) {
 			if (!VIF_EXISTS(mrt, vifi)) {
-				spin_unlock(&mrt_lock);
+				spin_unlock_bh(&mrt_lock);
 				rcu_read_unlock();
 				return -EINVAL;
 			}
@@ -455,7 +455,7 @@ int ipmr_mfc_stats_update(struct net *net, __be32 origin, __be32 group,
 			mrt->vif_table[vifi].bytes_out += bytes_out;
 		}
 	}
-	spin_unlock(&mrt_lock);
+	spin_unlock_bh(&mrt_lock);
 	rcu_read_unlock();
 
 	return 0;
@@ -890,7 +890,7 @@ static int vif_delete(struct mr_table *mrt, int vifi, int notify,
 	if (!dev)
 		return -EADDRNOTAVAIL;
 
-	spin_lock(&mrt_lock);
+	spin_lock_bh(&mrt_lock);
 	call_ipmr_vif_entry_notifiers(net, FIB_EVENT_VIF_DEL, v, dev,
 				      vifi, mrt->id);
 	RCU_INIT_POINTER(v->dev, NULL);
@@ -909,7 +909,7 @@ static int vif_delete(struct mr_table *mrt, int vifi, int notify,
 		WRITE_ONCE(mrt->maxvif, tmp + 1);
 	}
 
-	spin_unlock(&mrt_lock);
+	spin_unlock_bh(&mrt_lock);
 
 	dev_set_allmulti(dev, -1);
 
@@ -1123,7 +1123,7 @@ static int vif_add(struct net *net, struct mr_table *mrt,
 	v->remote = vifc->vifc_rmt_addr.s_addr;
 
 	/* And finish update writing critical data */
-	spin_lock(&mrt_lock);
+	spin_lock_bh(&mrt_lock);
 	rcu_assign_pointer(v->dev, dev);
 	netdev_tracker_alloc(dev, &v->dev_tracker, GFP_ATOMIC);
 	if (v->flags & VIFF_REGISTER) {
@@ -1132,7 +1132,7 @@ static int vif_add(struct net *net, struct mr_table *mrt,
 	}
 	if (vifi+1 > mrt->maxvif)
 		WRITE_ONCE(mrt->maxvif, vifi + 1);
-	spin_unlock(&mrt_lock);
+	spin_unlock_bh(&mrt_lock);
 	call_ipmr_vif_entry_notifiers(net, FIB_EVENT_VIF_ADD, v, dev,
 				      vifi, mrt->id);
 	return 0;
@@ -1440,12 +1440,12 @@ static int ipmr_mfc_add(struct net *net, struct mr_table *mrt,
 				   mfc->mfcc_mcastgrp.s_addr, parent);
 	rcu_read_unlock();
 	if (c) {
-		spin_lock(&mrt_lock);
+		spin_lock_bh(&mrt_lock);
 		c->_c.mfc_parent = mfc->mfcc_parent;
 		ipmr_update_thresholds(mrt, &c->_c, mfc->mfcc_ttls);
 		if (!mrtsock)
 			c->_c.mfc_flags |= MFC_STATIC;
-		spin_unlock(&mrt_lock);
+		spin_unlock_bh(&mrt_lock);
 		call_ipmr_mfc_entry_notifiers(net, FIB_EVENT_ENTRY_REPLACE, c,
 					      mrt->id);
 		mroute_netlink_event(mrt, c, RTM_NEWROUTE);
