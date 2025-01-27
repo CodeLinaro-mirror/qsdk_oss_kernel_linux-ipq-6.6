@@ -85,7 +85,6 @@ static const u8 qcom_scm_cpu_warm_bits[QCOM_SCM_BOOT_MAX_CPUS] = {
 #define QCOM_SMC_WAITQ_FLAG_WAKE_ALL	BIT(1)
 
 #define QCOM_DLOAD_MASK		GENMASK(5, 4)
-#define QCOM_MILESTONE_MASK	BIT(9)
 enum qcom_dload_mode {
 	QCOM_DLOAD_NODUMP	= 0,
 	QCOM_DLOAD_FULLDUMP	= 1,
@@ -3550,7 +3549,7 @@ struct scm_priv_data ipq9574_data = {
 };
 
 struct scm_priv_data ipq5424_data = {
-	.milestone_mask = BIT(12)
+	.milestone_mask = BIT(8)
 };
 
 static const struct of_device_id qcom_scm_dt_match[] = {
