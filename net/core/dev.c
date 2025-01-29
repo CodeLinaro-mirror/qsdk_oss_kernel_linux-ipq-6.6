@@ -4608,26 +4608,35 @@ bool dev_fast_xmit_vp(struct sk_buff *skb,
 	txq = netdev_core_pick_tx(dev, skb, NULL);
 
 	if (likely(txq->xmit_lock_owner != cpu)) {
-#define FAST_VP_HARD_TX_LOCK(txq, cpu) {	\
+
+#define FAST_VP_HARD_TX_LOCK(features, txq, cpu) {		\
+	if ((features & NETIF_F_LLTX) == 0) {		\
 		__netif_tx_lock(txq, cpu);		\
+	} else {					\
+		__netif_tx_acquire(txq);		\
+	}						\
 }
 
-#define FAST_VP_HARD_TX_UNLOCK(txq) {		\
+#define FAST_VP_HARD_TX_UNLOCK(features, txq) {		\
+	if ((features & NETIF_F_LLTX) == 0) {		\
 		__netif_tx_unlock(txq);			\
+	} else {					\
+		__netif_tx_release(txq);		\
+	}						\
 }
 		skb->fast_xmit = 1;
-		FAST_VP_HARD_TX_LOCK(txq, cpu);
+		FAST_VP_HARD_TX_LOCK(dev->features, txq, cpu);
 		if (likely(!netif_xmit_stopped(txq))) {
 			rc = netdev_start_xmit(skb, dev, txq, 0);
 			if (unlikely(!dev_xmit_complete(rc))) {
-				FAST_VP_HARD_TX_UNLOCK(txq);
+				FAST_VP_HARD_TX_UNLOCK(dev->features, txq);
 				goto q_xmit;
 			}
-			FAST_VP_HARD_TX_UNLOCK(txq);
+			FAST_VP_HARD_TX_UNLOCK(dev->features, txq);
 			rcu_read_unlock_bh();
 			return true;
 		}
-		FAST_VP_HARD_TX_UNLOCK(txq);
+		FAST_VP_HARD_TX_UNLOCK(dev->features, txq);
 	}
 q_xmit:
 	skb->fast_xmit = 0;
