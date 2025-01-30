@@ -12131,6 +12131,41 @@ void func(const struct net_device *dev, const char *fmt, ...)	\
 }								\
 EXPORT_SYMBOL(func);
 
+/**
+ * netdev_hw_offload_ops_register - Register offload ops for a net_device
+ * @dev: The net_device to attach the ops to
+ * @ops: netdev offload operation structure
+ *
+ * Returns 0 on success or -1 on failure.
+ */
+int netdev_hw_offload_ops_register(struct net_device *dev, struct netdev_hw_offload_ops *ops, const char *owner)
+{
+	int status;
+
+	status = (cmpxchg((struct netdev_hw_offload_ops **)&dev->offload_ops, NULL, ops) == NULL) ? 0 : -1;
+	netdev_info(dev, "Registering offload ops with owner: %s, status = %s\n", owner, (!status) ? "Success":"Failed");
+
+	return status;
+}
+EXPORT_SYMBOL_GPL(netdev_hw_offload_ops_register);
+
+/**
+ * netdev_hw_offload_ops_unregister - Unregister offload ops
+ * Ensures that only the expected ops structure is removed, preventing accidental unregistration by another module.
+ *
+ * @dev: The net_device to detach the ops from
+ *
+ * Returns 0 on success or -1 on failure
+ *
+ * This function doesn't take care of the RCU reader grace period. The caller needs
+ * to make sure the sufficient grace period for existing readers is provided
+ */
+int netdev_hw_offload_ops_unregister(struct net_device *dev, struct netdev_hw_offload_ops *ops)
+{
+	return cmpxchg((struct netdev_hw_offload_ops **)&dev->offload_ops, ops, NULL) == ops ? 0 : -1;
+}
+EXPORT_SYMBOL_GPL(netdev_hw_offload_ops_unregister);
+
 define_netdev_printk_level(netdev_emerg, KERN_EMERG);
 define_netdev_printk_level(netdev_alert, KERN_ALERT);
 define_netdev_printk_level(netdev_crit, KERN_CRIT);

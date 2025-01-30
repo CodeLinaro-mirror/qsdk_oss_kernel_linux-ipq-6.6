@@ -1812,6 +1812,24 @@ enum netdev_stat_type {
 };
 
 /**
+ * This structure defines the hardware offload methods for network devices.
+ *
+ * bool (*xmit)(struct net_device *dev, struct sk_buff *skb);
+ *	This method can be used when we need to offload the processing
+ *	of a Tx packet to supported hardware.
+ * bool (*recv)(struct net_device *dev, struct sk_buff *skb);
+ * 	This method can be used when we need to offload the processing
+ * 	of Rx packet to supported hardware.
+ *
+ * Use netdev_hw_offload_ops_register() function to register the offload ops
+ * and netdev_hw_offload_ops_unregister() function to unregister offload ops.
+ */
+struct netdev_hw_offload_ops {
+	bool (*xmit)(struct net_device *dev, struct sk_buff *skb);
+	bool (*recv)(struct net_device *dev, struct sk_buff *skb);
+};
+
+/**
  *	struct net_device - The DEVICE structure.
  *
  *	Actually, this whole structure is a big mistake.  It mixes I/O
@@ -2094,6 +2112,8 @@ enum netdev_stat_type {
  *			Assigned by a driver before netdev registration using
  *			SET_NETDEV_DEVLINK_PORT macro. This pointer is static
  *			during the time netdevice is registered.
+ *
+ *	@offload_ops: Includes methods to offload packets to hardware for processing
  *
  *	FIXME: cleanup struct net_device such that network protocol info
  *	moves out.
@@ -2464,6 +2484,7 @@ struct net_device {
 	struct rtnl_hw_stats64	*offload_xstats_l3;
 
 	struct devlink_port	*devlink_port;
+	struct netdev_hw_offload_ops __rcu *offload_ops;
 };
 #define to_net_dev(d) container_of(d, struct net_device, dev)
 
@@ -5391,6 +5412,12 @@ extern struct list_head ptype_all __read_mostly;
 extern struct list_head ptype_base[PTYPE_HASH_SIZE] __read_mostly;
 
 extern struct net_device *blackhole_netdev;
+
+/* Note: It is the caller's responsibility to ensure RCU grace period handling
+ * (e.g., using synchronize_rcu() or call_rcu()) when unregistering the ops.
+ */
+int netdev_hw_offload_ops_register(struct net_device *dev, struct netdev_hw_offload_ops *ops, const char *owner);
+int netdev_hw_offload_ops_unregister(struct net_device *dev, struct netdev_hw_offload_ops *ops);
 
 /* Note: Avoid these macros in fast path, prefer per-cpu or per-queue counters. */
 #define DEV_STATS_INC(DEV, FIELD) atomic_long_inc(&(DEV)->stats.__##FIELD)
