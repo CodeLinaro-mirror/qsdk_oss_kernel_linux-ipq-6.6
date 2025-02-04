@@ -355,7 +355,10 @@ static const struct testvec_config default_cipher_testvec_configs[] = {
 		.iv_offset_relative_to_alignmask = true,
 		.key_offset = 1,
 		.key_offset_relative_to_alignmask = true,
-	}, {
+	},
+#ifndef CONFIG_CRYPTO_DISABLE_AUTH_SPLIT_TESTS
+	/* HW requires authentication data not be to be split between scatters */
+	{
 		.name = "two even aligned splits",
 		.src_divs = {
 			{ .proportion_of_total = 5000 },
@@ -392,14 +395,19 @@ static const struct testvec_config default_cipher_testvec_configs[] = {
 			},
 		},
 	}
+#endif
 };
 
 static const struct testvec_config default_hash_testvec_configs[] = {
+#ifndef CONFIG_CRYPTO_DISABLE_AHASH_TYPE1_TESTS
+	 /* Update in testmgr requires the result back whereas HW hides result from the user */
 	{
 		.name = "init+update+final aligned buffer",
 		.src_divs = { { .proportion_of_total = 10000 } },
 		.finalization_type = FINALIZATION_TYPE_FINAL,
-	}, {
+	},
+#endif
+	{
 		.name = "init+finup aligned buffer",
 		.src_divs = { { .proportion_of_total = 10000 } },
 		.finalization_type = FINALIZATION_TYPE_FINUP,
@@ -407,12 +415,16 @@ static const struct testvec_config default_hash_testvec_configs[] = {
 		.name = "digest aligned buffer",
 		.src_divs = { { .proportion_of_total = 10000 } },
 		.finalization_type = FINALIZATION_TYPE_DIGEST,
-	}, {
+	},
+#ifndef CONFIG_CRYPTO_DISABLE_AHASH_TYPE1_TESTS
+	{
 		.name = "init+update+final misaligned buffer",
 		.src_divs = { { .proportion_of_total = 10000, .offset = 1 } },
 		.finalization_type = FINALIZATION_TYPE_FINAL,
 		.key_offset = 1,
-	}, {
+	},
+#endif
+	{
 		.name = "digest buffer aligned only to alignmask",
 		.src_divs = {
 			{
@@ -5966,7 +5978,7 @@ test_done:
 	return rc;
 
 notest:
-	printk(KERN_INFO "alg: No test for %s (%s)\n", alg, driver);
+	pr_debug(KERN_INFO "alg: No test for %s (%s)\n", alg, driver);
 
 	if (type & CRYPTO_ALG_FIPS_INTERNAL)
 		return alg_fips_disabled(driver, alg);
