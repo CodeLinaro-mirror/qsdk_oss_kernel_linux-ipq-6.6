@@ -92,6 +92,7 @@ static ssize_t enable_store(struct device *dev,
 			disable_eud(chip);
 	} else {
 		disable_eud(chip);
+		chip->enabled = enable;
 	}
 
 	return count;
