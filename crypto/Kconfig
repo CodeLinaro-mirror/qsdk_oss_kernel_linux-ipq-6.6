@@ -248,6 +248,18 @@ config CRYPTO_NO_AES_XTS_ZERO_KEY_SUPPORT
 	help
 	  Disable support for zero key test cases
 
+config CRYPTO_DISABLE_AHASH_TYPE1_TESTS
+	bool "Disable AHASH type 1 test cases"
+	default y
+	help
+	  Disable AHASH type 1 tests
+
+config CRYPTO_DISABLE_AHASH_TYPE2_TESTS
+	bool "Disable AHASH type 2 test cases"
+	default y
+	help
+	  Disable AHASH type 2 tests
+
 config CRYPTO_DISABLE_AHASH_TYPE3_TESTS
 	bool "Disable AHASH type 3 test cases"
 	default y
@@ -259,6 +271,18 @@ config CRYPTO_DISABLE_AHASH_LARGE_KEY_TEST
 	default y
 	help
 	  Disable large key ahash tests
+
+config CRYPTO_DISABLE_AUTH_SPLIT_TESTS
+	bool "Disable test cases where authentication data is split between buffers"
+	default y
+	help
+	  Disable authentication split tests
+
+config CRYPTO_DISABLE_HW_UNSUPPORTED_TESTS
+	bool "Disable test cases not supported by HW"
+	default y
+	help
+	  Disable hw unsupported test cases
 
 config CRYPTO_SIMD
 	tristate
