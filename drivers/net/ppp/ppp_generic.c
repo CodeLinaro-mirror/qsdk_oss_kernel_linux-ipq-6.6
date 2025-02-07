@@ -53,6 +53,7 @@
 #include <linux/nsproxy.h>
 #include <net/net_namespace.h>
 #include <net/netns/generic.h>
+#include <net/gso.h>
 
 #define PPP_VERSION	"2.4.2"
 
@@ -1651,6 +1652,8 @@ static void ppp_setup(struct net_device *dev)
 	SET_NETDEV_DEVTYPE(dev, &ppp_type);
 
 	dev->features |= NETIF_F_LLTX;
+	dev->hw_features |= (NETIF_F_FRAGLIST | NETIF_F_SG | NETIF_F_TSO | NETIF_F_GSO);
+	dev->hw_features |= (NETIF_F_TSO6 | NETIF_F_TSO_MANGLEID | NETIF_F_HW_CSUM);
 
 	dev->hard_header_len = PPP_HDRLEN;
 	dev->mtu = PPP_MRU;

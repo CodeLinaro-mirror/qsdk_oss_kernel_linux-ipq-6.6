@@ -73,17 +73,21 @@
 #include <linux/file.h>
 #include <linux/proc_fs.h>
 #include <linux/seq_file.h>
+#include <linux/ipv6.h>
 
 #include <linux/nsproxy.h>
 #include <net/net_namespace.h>
 #include <net/netns/generic.h>
 #include <net/sock.h>
+#include <net/gso.h>
 
 #include <linux/uaccess.h>
 
 #define PPPOE_HASH_BITS CONFIG_PPPOE_HASH_BITS
 #define PPPOE_HASH_SIZE (1 << PPPOE_HASH_BITS)
 #define PPPOE_HASH_MASK	(PPPOE_HASH_SIZE - 1)
+
+#define PPP_PROTO_LEN   2
 
 static int __pppoe_xmit(struct sock *sk, struct sk_buff *skb);
 
@@ -513,6 +517,71 @@ out:
 	return NET_RX_SUCCESS; /* Lies... :-) */
 }
 
+static struct sk_buff *pppoe_gso_segment(struct sk_buff *skb, netdev_features_t features)
+{
+	struct sk_buff *segs = ERR_PTR(-EINVAL);
+	__be16 protocol = skb->protocol;
+	u16 mac_len = skb->mac_len;
+	__be16 inner_protocol;
+
+	skb->mac_len = 0;
+	__skb_pull(skb, sizeof(struct pppoe_hdr));
+	memcpy(&inner_protocol, skb->data, sizeof(protocol));
+	switch (ntohs(inner_protocol)) {
+	case PPP_IP:
+		skb->protocol = htons(ETH_P_IP);
+		break;
+	case PPP_IPV6:
+		skb->protocol = htons(ETH_P_IPV6);
+		break;
+	default:
+		goto out;
+	}
+
+	__skb_pull(skb, PPP_PROTO_LEN);
+	skb_reset_network_header(skb);
+
+	segs = skb_mac_gso_segment(skb, features);
+	if (IS_ERR_OR_NULL(segs)) {
+		pr_warn_ratelimited("%p: pppoe segmentation failed\n", skb);
+		goto out;
+	}
+
+	skb = segs;
+
+	/* Reset back headers to original skb */
+	do {
+		struct pppoe_hdr *ph;
+		u8 len = 0;
+
+		skb->mac_len = mac_len;
+		skb->protocol = protocol;
+		skb_reset_mac_header(skb);
+		skb_set_network_header(skb, ETH_HLEN);
+
+		/* Set this based on protocol v4 or v6 */
+		ph = pppoe_hdr(skb);
+
+		if (ntohs(inner_protocol) == PPP_IP) {
+			struct iphdr *iph;
+
+			iph = (struct iphdr *)((uint8_t *)ph + sizeof(*ph) + PPP_PROTO_LEN);
+			len = iph->tot_len;
+		} else if (ntohs(inner_protocol == PPP_IPV6)) {
+			struct ipv6hdr *ip6h;
+
+			ip6h = (struct ipv6hdr *)((uint8_t *)ph + sizeof(*ph) + PPP_PROTO_LEN);
+			len = ip6h->payload_len + sizeof(*ip6h);
+		}
+
+		/* Adjust the header length as per segment */
+		ph->length = (len + PPP_PROTO_LEN);
+	} while ((skb = skb->next));
+
+out:
+	return segs;
+}
+
 static struct packet_type pppoes_ptype __read_mostly = {
 	.type	= cpu_to_be16(ETH_P_PPP_SES),
 	.func	= pppoe_rcv,
@@ -527,6 +596,13 @@ static struct proto pppoe_sk_proto __read_mostly = {
 	.name	  = "PPPOE",
 	.owner	  = THIS_MODULE,
 	.obj_size = sizeof(struct pppox_sock),
+};
+
+static struct packet_offload pppoe_poffload __read_mostly = {
+	.type = cpu_to_be16(ETH_P_PPP_SES),
+	.callbacks = {
+		.gso_segment = pppoe_gso_segment,
+	},
 };
 
 /***********************************************************************
@@ -1263,6 +1339,7 @@ static int __init pppoe_init(void)
 
 	dev_add_pack(&pppoes_ptype);
 	dev_add_pack(&pppoed_ptype);
+	dev_add_offload(&pppoe_poffload);
 	register_netdevice_notifier(&pppoe_notifier);
 
 	return 0;
