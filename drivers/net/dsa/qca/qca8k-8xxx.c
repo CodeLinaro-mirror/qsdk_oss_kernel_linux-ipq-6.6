@@ -457,6 +457,10 @@ qca8k_read_mii(struct qca8k_priv *priv, uint32_t reg, uint32_t *val)
 		mht_split_addr(reg, &r1, &r2, &page, &switch_phy_id);
 
 		mutex_lock_nested(&bus->mdio_lock, MDIO_MUTEX_NESTED);
+		if (priv->erp_standby) {
+			mutex_unlock(&bus->mdio_lock);
+			return -EIO;
+		}
 		bus->write(bus, 0x18 | (switch_phy_id >> 5), switch_phy_id & 0x1f, page);
 		udelay(100);
 		lo = bus->read(bus, 0x10 | r2, r1);
@@ -496,6 +500,10 @@ qca8k_write_mii(struct qca8k_priv *priv, uint32_t reg, uint32_t val)
 		hi = (u16) (val >> 16);
 
 		mutex_lock_nested(&bus->mdio_lock, MDIO_MUTEX_NESTED);
+		if (priv->erp_standby) {
+			mutex_unlock(&bus->mdio_lock);
+			return -EIO;
+		}
 		bus->write(bus, 0x18 | (switch_phy_id >> 5), switch_phy_id & 0x1f, page);
 		udelay(100);
 		bus->write(bus, 0x10 | r2, r1, lo);
@@ -534,6 +542,10 @@ qca8k_regmap_update_bits_mii(struct qca8k_priv *priv, uint32_t reg,
 		mht_split_addr(reg, &r1, &r2, &page, &switch_phy_id);
 
 		mutex_lock_nested(&bus->mdio_lock, MDIO_MUTEX_NESTED);
+		if (priv->erp_standby) {
+			mutex_unlock(&bus->mdio_lock);
+			return -EIO;
+		}
 		bus->write(bus, 0x18 | (switch_phy_id >> 5), switch_phy_id & 0x1f, page);
 		udelay(100);
 		lo = bus->read(bus, 0x10 | r2, r1);
@@ -1962,6 +1974,30 @@ static int qca8k_connect_tag_protocol(struct dsa_switch *ds,
 	return 0;
 }
 
+static int qca8k_switch_suspend(struct dsa_switch *ds)
+{
+	struct qca8k_priv *priv = ds->priv;
+	struct mii_bus *bus = priv->bus;
+
+	mutex_lock_nested(&bus->mdio_lock, MDIO_MUTEX_NESTED);
+	priv->erp_standby = true;
+	mutex_unlock(&bus->mdio_lock);
+
+	return 0;
+}
+
+static int qca8k_switch_resume(struct dsa_switch *ds)
+{
+	struct qca8k_priv *priv = ds->priv;
+	struct mii_bus *bus = priv->bus;
+
+	mutex_lock_nested(&bus->mdio_lock, MDIO_MUTEX_NESTED);
+	priv->erp_standby = false;
+	mutex_unlock(&bus->mdio_lock);
+
+	return 0;
+}
+
 static void qca8k_setup_hol_fixup(struct qca8k_priv *priv, int port)
 {
 	u32 mask;
@@ -2343,6 +2379,8 @@ static const struct dsa_switch_ops qca8k_switch_ops = {
 	.port_lag_leave		= qca8k_port_lag_leave,
 	.master_state_change	= qca8k_master_change,
 	.connect_tag_protocol	= qca8k_connect_tag_protocol,
+	.suspend		= qca8k_switch_suspend,
+	.resume			= qca8k_switch_resume,
 };
 
 static int
