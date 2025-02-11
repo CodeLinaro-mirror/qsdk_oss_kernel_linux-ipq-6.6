@@ -136,12 +136,26 @@ static struct sk_buff *qca_4b_tag_rcv(struct sk_buff *skb, struct net_device *de
 	return _qca_tag_rcv(skb, dev, QCA_4B_HDR_LEN);
 }
 
+static bool qca_skb_is_bpdu(struct sk_buff *skb)
+{
+	struct ethhdr *eth = eth_hdr(skb);
+
+	if (memcmp(eth->h_dest, eth_stp_addr, ETH_ALEN) == 0)
+		return true;
+
+	return false;
+}
+
 static struct sk_buff *qca_8021q_tag_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct dsa_port *dp = dsa_slave_to_port(dev);
 	u16 tx_vid = dsa_tag_8021q_standalone_vid(dp);
 	u16 queue_mapping = skb_get_queue_mapping(skb);
 	u8 pcp = netdev_txq_to_tc(dev, queue_mapping);
+
+	/* compatible with qca rstp resv fdb */
+	if (qca_skb_is_bpdu(skb))
+		return qca_4b_tag_xmit(skb, dev);
 
 	return dsa_8021q_xmit(skb, dev, ETH_P_8021Q,
 			      ((pcp << VLAN_PRIO_SHIFT) | tx_vid));
