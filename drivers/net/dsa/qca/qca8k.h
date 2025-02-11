@@ -488,6 +488,7 @@ struct qca8k_priv {
 	struct qca8k_pcs pcs_port_6;
 	const struct qca8k_match_data *info;
 	struct qca8k_led ports_led[QCA8K_LED_COUNT];
+	bool erp_standby; /* erp standby status */
 };
 
 struct qca8k_mib_desc {

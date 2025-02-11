@@ -1642,7 +1642,7 @@ static void dsa_port_phylink_mac_link_down(struct phylink_config *config,
 	struct phy_device *phydev = NULL;
 	struct dsa_switch *ds = dp->ds;
 
-	if (dsa_port_phylink_mac_link_notify(dp->slave, false) != NOTIFY_OK)
+	if (dsa_port_phylink_mac_link_notify(dp->slave, false) == NOTIFY_OK)
 		return;
 
 	if (dsa_port_is_user(dp))
@@ -1667,7 +1667,7 @@ static void dsa_port_phylink_mac_link_up(struct phylink_config *config,
 	struct dsa_port *dp = container_of(config, struct dsa_port, pl_config);
 	struct dsa_switch *ds = dp->ds;
 
-	if (dsa_port_phylink_mac_link_notify(dp->slave, true) != NOTIFY_OK)
+	if (dsa_port_phylink_mac_link_notify(dp->slave, true) == NOTIFY_OK)
 		return;
 
 	if (!ds->ops->phylink_mac_link_up) {
