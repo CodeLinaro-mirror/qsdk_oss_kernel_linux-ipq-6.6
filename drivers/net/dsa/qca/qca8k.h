@@ -337,6 +337,9 @@
 #define   QCA8K_PORT_HOL_CTRL1_EG_MIRROR_EN		BIT(16)
 
 /* Pkt edit registers */
+#define QCA8K_PKT_EDIT_CTRL				0x0c00
+#define   QCA8K_PKT_EDIT_TO_CPU_VID_CHG_EN		BIT(1)
+
 #define QCA8K_EGREES_VLAN_PORT_SHIFT(_i)		(16 * ((_i) % 2))
 #define QCA8K_EGREES_VLAN_PORT_MASK(_i)			(GENMASK(11, 0) << QCA8K_EGREES_VLAN_PORT_SHIFT(_i))
 #define QCA8K_EGREES_VLAN_PORT(_i, x)			((x) << QCA8K_EGREES_VLAN_PORT_SHIFT(_i))

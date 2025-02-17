@@ -505,6 +505,10 @@ void qca8k_tag_8021q_setup(struct dsa_switch *ds)
 		  QCA8K_SERVICE_TAG_MASK | QCA8K_SERVICE_TAG_STAG,
 		  DSA_TAG_8021Q_VLAN_PROTO | QCA8K_SERVICE_TAG_STAG);
 
+	/* update CPUVID CHG bit to keep RDT CPU pkt's VLAN FMT */
+	qca8k_rmw(priv, QCA8K_PKT_EDIT_CTRL, QCA8K_PKT_EDIT_TO_CPU_VID_CHG_EN,
+		QCA8K_PKT_EDIT_TO_CPU_VID_CHG_EN);
+
 	dsa_switch_for_each_port(dp, ds) {
 		if (dsa_port_is_user(dp) || dsa_port_is_cpu(dp))
 			/* Set secure mode for user ports and cpu ports */
@@ -547,6 +551,8 @@ void qca8k_tag_8021q_teardown(struct dsa_switch *ds)
 	qca8k_rmw(priv, QCA8K_SERVICE_TAG_CTL,
 		  QCA8K_SERVICE_TAG_MASK | QCA8K_SERVICE_TAG_STAG,
 		  ETH_P_8021AD);
+
+	qca8k_rmw(priv, QCA8K_PKT_EDIT_CTRL, QCA8K_PKT_EDIT_TO_CPU_VID_CHG_EN, 0);
 
 	dsa_switch_for_each_port(dp, ds) {
 		if (dsa_port_is_user(dp) || dsa_port_is_cpu(dp))

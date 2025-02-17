@@ -1889,7 +1889,7 @@ static int qca8k_change_tag_protocol(struct dsa_switch *ds,
 		dsa_switch_for_each_cpu_port(dp, ds) {
 			if (qca8k_write(priv, QCA8K_REG_PORT_HDR_CTRL(dp->index),
 				  FIELD_PREP(QCA8K_PORT_HDR_CTRL_TX_MASK, QCA8K_PORT_HDR_CTRL_NONE) |
-				  FIELD_PREP(QCA8K_PORT_HDR_CTRL_RX_MASK, QCA8K_PORT_HDR_CTRL_NONE))) {
+				  FIELD_PREP(QCA8K_PORT_HDR_CTRL_RX_MASK, QCA8K_PORT_HDR_CTRL_MGMT))) {
 				dev_err(priv->dev, "failed disabling QCA header mode on port %d", dp->index);
 				goto fail;
 			}
