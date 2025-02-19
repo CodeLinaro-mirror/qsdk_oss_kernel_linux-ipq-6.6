@@ -53,6 +53,7 @@ struct bam_desc_hw {
 
 #define BAM_DMA_AUTOSUSPEND_DELAY 100
 #define PIPE_TRUST_REG_MASK 0xFFFFFFF8
+#define BAM_TRUST_LOCK_EE_CTRL BIT(13)
 
 #define DESC_FLAG_INT BIT(15)
 #define DESC_FLAG_EOT BIT(14)
@@ -107,6 +108,7 @@ enum bam_reg {
 	BAM_P_DESC_FIFO_ADDR,
 	BAM_P_EVNT_GEN_TRSHLD,
 	BAM_P_FIFO_SIZES,
+	BAM_TRUST_REG,
 	BAM_P_TRUST_REG,
 };
 
@@ -202,6 +204,7 @@ static const struct reg_offset_data bam_v1_7_reg_info[] = {
 	[BAM_P_DESC_FIFO_ADDR]	= { 0x1381C, 0x00, 0x1000, 0x00 },
 	[BAM_P_EVNT_GEN_TRSHLD]	= { 0x13828, 0x00, 0x1000, 0x00 },
 	[BAM_P_FIFO_SIZES]	= { 0x13820, 0x00, 0x1000, 0x00 },
+	[BAM_TRUST_REG]		= { 0x02000, 0x04, 0x00, 0x00 },
 	[BAM_P_TRUST_REG]	= { 0x02020, 0x04, 0x00, 0x00 },
 };
 
@@ -397,7 +400,7 @@ struct bam_device {
 	bool controlled_remotely;
 	bool powered_remotely;
 	u32 active_channels;
-	bool config_pipe_trust_reg;
+	u32 config_pipe_trust_reg;
 
 	const struct reg_offset_data *layout;
 
@@ -526,7 +529,7 @@ static void bam_chan_init_hw(struct bam_chan *bchan,
 	/* BAM Trusted configurations: set the configuration of the
 	 * pipe interrupt to the EE configured in the dts
 	 */
-	if (bdev->config_pipe_trust_reg && !bdev->controlled_remotely) {
+	if ((bdev->config_pipe_trust_reg == 1) && !bdev->controlled_remotely) {
 		val = readl_relaxed(bam_addr(bdev, bchan->id, BAM_P_TRUST_REG));
 		val &= PIPE_TRUST_REG_MASK;
 		val |= bdev->ee;
@@ -1217,7 +1220,7 @@ static struct dma_chan *bam_dma_xlate(struct of_phandle_args *dma_spec,
  */
 static int bam_init(struct bam_device *bdev)
 {
-	u32 val;
+	u32 val, i, ee;
 
 	/* read revision and configuration information */
 	if (!bdev->num_ees) {
@@ -1238,6 +1241,27 @@ static int bam_init(struct bam_device *bdev)
 	if (!bdev->controlled_remotely && !bdev->powered_remotely)
 		bam_reset(bdev);
 
+	if (bdev->config_pipe_trust_reg == 2) {
+		ee = bdev->ee;
+		val = readl_relaxed(bam_addr(bdev, 0, BAM_TRUST_REG));
+		val |= BAM_TRUST_LOCK_EE_CTRL;
+		writel_relaxed(val, bam_addr(bdev, 0, BAM_TRUST_REG));
+
+		for (i = 2; i < 8; i+=2) {
+			val = readl_relaxed(bam_addr(bdev, i, BAM_P_TRUST_REG));
+			val &= PIPE_TRUST_REG_MASK;
+			val |= ee;
+			writel_relaxed(val,
+					bam_addr(bdev, i, BAM_P_TRUST_REG));
+
+			val = readl_relaxed(bam_addr(bdev, i+1, BAM_P_TRUST_REG));
+			val &= PIPE_TRUST_REG_MASK;
+			val |= ee;
+			writel_relaxed(val,
+					bam_addr(bdev, i+1, BAM_P_TRUST_REG));
+			++ee;
+		}
+	}
 	return 0;
 }
 
@@ -1329,8 +1353,8 @@ static int bam_dma_probe(struct platform_device *pdev)
 	bdev->is_bam_lite = of_property_read_bool(pdev->dev.of_node,
 						  "qcom,bam-lite");
 
-	bdev->config_pipe_trust_reg = of_property_read_bool(pdev->dev.of_node,
-						"qti,config-pipe-trust-reg");
+	ret = of_property_read_u32(pdev->dev.of_node, "qti,config-pipe-trust-reg",
+				   &bdev->config_pipe_trust_reg);
 
 	ret = bam_init(bdev);
 	if (ret)
