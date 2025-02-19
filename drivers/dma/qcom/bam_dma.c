@@ -1327,7 +1327,7 @@ static int bam_dma_probe(struct platform_device *pdev)
 	if (bdev->controlled_remotely || bdev->powered_remotely)
 		bdev->bamclk = devm_clk_get_optional(bdev->dev, "bam_clk");
 	else
-		bdev->bamclk = devm_clk_get(bdev->dev, "bam_clk");
+		bdev->bamclk = devm_clk_get_optional(bdev->dev, "bam_clk");
 
 	if (IS_ERR(bdev->bamclk))
 		return PTR_ERR(bdev->bamclk);
