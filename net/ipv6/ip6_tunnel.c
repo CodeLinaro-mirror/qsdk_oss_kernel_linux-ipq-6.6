@@ -1033,8 +1033,10 @@ static int __ip6_tnl_rcv(struct ip6_tnl *tunnel, struct sk_buff *skb,
 						tunnel->parms.draft03);
 
 			if (!ipv6_addr_equal(&ipv6h->saddr, &expected)) {
-				rcu_read_unlock();
-				goto drop;
+				/*
+				 * SKB needs be freed by the Caller (ipxip6_rcv) since RCU Read lock is taken by the caller.
+				 */
+				return -1;
 			}
 	}
 
@@ -1139,6 +1141,11 @@ static int ipxip6_rcv(struct sk_buff *skb, u8 ipproto,
 		}
 		ret = __ip6_tnl_rcv(t, skb, tpi, tun_dst, dscp_ecn_decapsulate,
 				    log_ecn_error);
+
+		if (ret) {
+			dst_release((struct dst_entry *)tun_dst);
+			goto drop;
+		}
 	}
 
 	rcu_read_unlock();
