@@ -666,7 +666,8 @@ static void qcom_geni_serial_start_tx_fifo(struct uart_port *uport)
 	if (!qcom_geni_serial_main_active(uport) &&
 	    !qcom_geni_serial_tx_empty(uport)) {
 		if (uart_circ_chars_pending(xmit)) {
-			WARN_ON(1);
+			c = xmit->buf[xmit->tail];
+			uart_xmit_advance(uport, 1);
 			writel(M_CMD_DONE_EN, uport->membase + SE_GENI_M_IRQ_CLEAR);
 			qcom_geni_serial_setup_tx(uport, 1);
 			writel(c, uport->membase + SE_GENI_TX_FIFOn);
