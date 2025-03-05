@@ -32,6 +32,7 @@
 #include <linux/major.h>
 
 char parent_mtd_name[80];
+char custom_label[80];
 
 /* Maximum number of comma-separated items in the 'block2mtd=' parameter */
 #define BLOCK2MTD_PARAM_MAX_COUNT 5
@@ -483,6 +484,7 @@ static int block2mtd_setup2(const char *val)
 
 	if (token[2]) {
 		label = token[2];
+		strlcpy(custom_label, token[2], sizeof(custom_label));
 		pr_info("Using custom MTD label '%s' for dev %s\n", label, name);
 	}
 
@@ -555,7 +557,7 @@ static void block2mtd_exit(void)
 		mtd_device_unregister(&dev->mtd);
 		mutex_destroy(&dev->write_mutex);
 		pr_info("mtd%d: [%s] removed\n",
-			dev->mtd.index,
+			dev->mtd.index, custom_label[0]  ? custom_label :
 			dev->mtd.name + strlen("block2mtd: "));
 		list_del(&dev->list);
 		block2mtd_free_device(dev);
