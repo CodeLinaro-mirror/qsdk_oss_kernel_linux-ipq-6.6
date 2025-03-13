@@ -1144,7 +1144,7 @@ static void __armv8pmu_probe_pmu(void *info)
 	struct arm_pmu *cpu_pmu = probe->pmu;
 	struct platform_device *pdev = cpu_pmu->plat_device;
 	u64 pmceid_raw[2];
-	u32 pmceid[4];
+	u32 pmceid[8];
 	int pmuver;
 	const char *compatible;
 
