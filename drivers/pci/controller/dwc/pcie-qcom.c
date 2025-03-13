@@ -1814,6 +1814,12 @@ static int qcom_pcie_probe(struct platform_device *pdev)
 				&num_lanes);
 	pcie->num_lanes = num_lanes;
 
+	of_property_read_u32(pdev->dev.of_node, "link_retries_count",
+			     &pci->link_retries_count);
+	if (pci->link_retries_count)
+		dev_info(dev, "pcie link_retries_count set to %d",
+			 pci->link_retries_count);
+
 	/* MHI region is optional */
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "mhi");
 	if (res) {

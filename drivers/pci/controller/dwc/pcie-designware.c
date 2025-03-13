@@ -664,10 +664,15 @@ void dw_pcie_disable_atu(struct dw_pcie *pci, u32 dir, int index)
 int dw_pcie_wait_for_link(struct dw_pcie *pci)
 {
 	u32 offset, val;
-	int retries;
+	int retries, max_link_retries;
+
+	if (pci->link_retries_count)
+		max_link_retries = pci->link_retries_count;
+	else
+		max_link_retries = LINK_WAIT_MAX_RETRIES;
 
 	/* Check if the link is up or not */
-	for (retries = 0; retries < LINK_WAIT_MAX_RETRIES; retries++) {
+	for (retries = 0; retries < max_link_retries; retries++) {
 		if (dw_pcie_link_up(pci))
 			break;
 
