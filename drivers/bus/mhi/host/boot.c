@@ -662,7 +662,7 @@ int mhi_download_amss_image(struct mhi_controller *mhi_cntrl)
 		return ret;
 	}
 
-	if (IS_QCN9224_DEV(mhi_cntrl)) {
+	if (IS_LICENSE_DOWN_REQ(mhi_cntrl)) {
 		/* Download the License */
 		mhi_download_fw_license(mhi_cntrl);
 	}
