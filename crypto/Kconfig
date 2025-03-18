@@ -256,7 +256,7 @@ config CRYPTO_DISABLE_AHASH_TYPE1_TESTS
 
 config CRYPTO_DISABLE_AHASH_TYPE2_TESTS
 	bool "Disable AHASH type 2 test cases"
-	default y
+	default n
 	help
 	  Disable AHASH type 2 tests
 
