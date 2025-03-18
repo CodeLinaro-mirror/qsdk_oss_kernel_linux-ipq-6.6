@@ -389,6 +389,7 @@ struct dw_pcie {
 	void __iomem		*dbi_base2;
 	void __iomem		*atu_base;
 	size_t			atu_size;
+	u32			link_retries_count;
 	u32			num_ib_windows;
 	u32			num_ob_windows;
 	u32			region_align;
