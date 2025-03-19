@@ -13,6 +13,7 @@
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
+#include <linux/clk.h>
 #include <linux/sysfs.h>
 #include <linux/usb/role.h>
 
@@ -42,6 +43,7 @@ struct eud_chip {
 	int				irq;
 	bool				enabled;
 	bool				usb_attached;
+	struct clk                      *eud_ahb2phy_clk;
 };
 
 static int enable_eud(struct eud_chip *priv)
@@ -213,6 +215,13 @@ static int eud_probe(struct platform_device *pdev)
 	if (IS_ERR(chip->mode_mgr))
 		return PTR_ERR(chip->mode_mgr);
 
+	chip->eud_ahb2phy_clk = devm_clk_get_enabled(&pdev->dev,
+					     "eud_ahb2phy_clk");
+	if (IS_ERR(chip->eud_ahb2phy_clk)) {
+		ret = PTR_ERR(chip->eud_ahb2phy_clk);
+		return dev_err_probe(chip->dev, ret, "failed to get eud-phy clk\n");
+	}
+
 	chip->irq = platform_get_irq(pdev, 0);
 	ret = devm_request_threaded_irq(&pdev->dev, chip->irq, handle_eud_irq,
 			handle_eud_irq_thread, IRQF_ONESHOT, NULL, chip);
@@ -222,6 +231,10 @@ static int eud_probe(struct platform_device *pdev)
 	enable_irq_wake(chip->irq);
 
 	platform_set_drvdata(pdev, chip);
+
+	ret = enable_eud(chip);
+	if (!ret)
+		chip->enabled = true;
 
 	return 0;
 }
