@@ -294,6 +294,13 @@ config VGA_ARB_MAX_GPUS
 	  Reserves space in the kernel to maintain resource locking for
 	  multiple GPUS.  The overhead for each GPU is very small.
 
+config QCOM_FPGA_PCI
+	tristate "Qualcomm FPGA PCIe driver"
+	depends on PCI
+	help
+	  Say Y here to enable Qualcomm FPGA PCIe driver.
+	  This driver enables the support to access the FPGA via PCI
+
 source "drivers/pci/hotplug/Kconfig"
 source "drivers/pci/controller/Kconfig"
 source "drivers/pci/endpoint/Kconfig"

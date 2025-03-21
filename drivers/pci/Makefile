@@ -41,3 +41,4 @@ obj-y				+= controller/
 obj-y				+= switch/
 
 subdir-ccflags-$(CONFIG_PCI_DEBUG) := -DDEBUG
+obj-$(CONFIG_QCOM_FPGA_PCI)	+= qcom-fpga-pci.o
