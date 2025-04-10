@@ -3477,6 +3477,42 @@ static void qmp_pcie_init_registers(struct qmp_pcie *qmp, const struct qmp_phy_c
 	qmp_pcie_configure(ln_shrd, tbls->ln_shrd, tbls->ln_shrd_num);
 }
 
+static int qmp_pcie_serdes_reg_update(struct qmp_pcie *qmp)
+{
+	u32 addr, val;
+	int i = 0, num_elem, ret;
+
+	num_elem = of_property_count_elems_of_size(qmp->dev->of_node,
+						   "serdes-reg-update",
+						   sizeof(u32));
+	if (num_elem < 0 || num_elem % 2) {
+		dev_err(qmp->dev, "Invalid phy-reg-update values");
+		return -EINVAL;
+	}
+
+	while (i < num_elem) {
+		ret = of_property_read_u32_index(qmp->dev->of_node,
+						 "serdes-reg-update",
+						 i++, &addr);
+		if (ret) {
+			dev_err(qmp->dev, "Failed to get the phy-reg offset\n");
+			return -EINVAL;
+		}
+
+		ret = of_property_read_u32_index(qmp->dev->of_node,
+						 "serdes-reg-update",
+						 i++, &val);
+		if (ret) {
+			dev_err(qmp->dev, "Failed to get the phy-reg value\n");
+			return -EINVAL;
+		}
+
+		writel(val, qmp->serdes + addr);
+	}
+
+	return 0;
+}
+
 static int qmp_pcie_init(struct phy *phy)
 {
 	struct qmp_pcie *qmp = phy_get_drvdata(phy);
@@ -3557,6 +3593,12 @@ static int qmp_pcie_power_on(struct phy *phy)
 
 	qmp_pcie_init_registers(qmp, &cfg->tbls);
 	qmp_pcie_init_registers(qmp, mode_tbls);
+
+	if (of_find_property(qmp->dev->of_node, "serdes-reg-update", NULL)) {
+		ret = qmp_pcie_serdes_reg_update(qmp);
+		if (ret)
+			return ret;
+	}
 
 	ret = clk_bulk_prepare_enable(qmp->num_pipe_clks, qmp->pipe_clks);
 	if (ret)
