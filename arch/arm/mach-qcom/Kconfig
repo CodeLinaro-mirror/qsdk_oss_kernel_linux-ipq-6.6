@@ -74,4 +74,11 @@ config IO_COHERENCY
 	help
 	  Enable/Disable IO Coherency for kernel modules.
 
+config IPQ_PROFILE_MINENT
+	bool "Select minent build profile"
+	default n
+	help
+	  Enable/Disable MINENT profile. Based on this UBI is enabled
+	  or disabled in device tree.
+
 endif

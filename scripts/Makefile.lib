@@ -285,6 +285,10 @@ ifeq ($(CONFIG_PCIE_QCOM_EARLY_CAL_SUPPORT),y)
 dtc_cpp_flags += -D __PCIE_QCOM_EARLY_CAL_SUPPORT__
 endif
 
+ifeq ($(CONFIG_IPQ_PROFILE_MINENT),y)
+dtc_cpp_flags += -D __IPQ_PROFILE_MINENT__
+endif
+
 ifdef CONFIG_OBJTOOL
 
 objtool := $(objtree)/tools/objtool/objtool
