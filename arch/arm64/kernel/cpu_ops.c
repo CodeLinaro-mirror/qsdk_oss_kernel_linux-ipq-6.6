@@ -21,6 +21,7 @@ extern const struct cpu_operations acpi_parking_protocol_ops;
 extern const struct cpu_operations cpu_psci_ops;
 #ifdef CONFIG_QTI_EMULATION_APSS_ACC
 extern const struct cpu_operations smp_a55ss_ops;
+extern const struct cpu_operations smp_a53ss_ops;
 #endif
 
 static const struct cpu_operations *cpu_ops[NR_CPUS] __ro_after_init;
@@ -30,6 +31,7 @@ static const struct cpu_operations *const dt_supported_cpu_ops[] __initconst = {
 	&cpu_psci_ops,
 #ifdef CONFIG_QTI_EMULATION_APSS_ACC
 	&smp_a55ss_ops,
+	&smp_a53ss_ops,
 #endif
 	NULL,
 };

@@ -48,6 +48,9 @@
 #define CPU_SEQ_FORCE_PWR_CTL_VAL 0x20
 #define CPU_PCHANNEL_FSM_CTL 0x44
 
+#define CPU_PWR_CTL		0x04
+#define CPU_PWR_GATE_CTL	0x14
+
 extern void secondary_startup_arm(void);
 
 #ifdef CONFIG_HOTPLUG_CPU
@@ -162,6 +165,79 @@ static int a55ss_release_secondary(unsigned int cpu)
 	iounmap(el_mem_base);
 
 	a55ss_unclamp_cpu(reg);
+
+	/* Secondary CPU-N is now alive */
+	iounmap(reg);
+
+out_acc_reg:
+	of_node_put(acc_node);
+out_acc:
+	of_node_put(cpu_node);
+
+	return ret;
+}
+
+inline void a53ss_unclamp_cpu(void __iomem *reg)
+{
+	writel_relaxed(0x00000033, reg + CPU_PWR_CTL);
+	mb();
+
+	writel_relaxed(0x10000001, reg + CPU_PWR_GATE_CTL);
+	mb();
+	mdelay(1);
+
+	writel_relaxed(0x00000031, reg + CPU_PWR_CTL);
+	mb();
+
+	writel_relaxed(0x00000039, reg + CPU_PWR_CTL);
+	mb();
+	mdelay(1);
+
+	writel_relaxed(0x00000239, reg + CPU_PWR_CTL);
+	mb();
+	mdelay(1);
+
+	writel_relaxed(0x00004239, reg + CPU_PWR_CTL);
+	mb();
+	mdelay(1);
+
+	writel_relaxed(0x00000239, reg + CPU_PWR_CTL);
+	mb();
+
+	writel_relaxed(0x00000238, reg + CPU_PWR_CTL);
+	mb();
+	mdelay(1);
+
+	writel_relaxed(0x00000208, reg + CPU_PWR_CTL);
+	mb();
+
+	writel_relaxed(0x00000288, reg + CPU_PWR_CTL);
+	mb();
+}
+
+static int a53ss_release_secondary(unsigned int cpu)
+{
+	int ret = 0;
+	struct device_node *cpu_node, *acc_node;
+	void __iomem *reg;
+
+	cpu_node = of_get_cpu_node(cpu, NULL);
+	if (!cpu_node)
+		return -ENODEV;
+
+	acc_node = of_parse_phandle(cpu_node, "qcom,acc", 0);
+	if (!acc_node) {
+		ret = -ENODEV;
+		goto out_acc;
+	}
+
+	reg = of_iomap(acc_node, 0);
+	if (!reg) {
+		ret = -ENOMEM;
+		goto out_acc_reg;
+	}
+
+	a53ss_unclamp_cpu(reg);
 
 	/* Secondary CPU-N is now alive */
 	iounmap(reg);
@@ -461,6 +537,11 @@ static int a55ss_boot_secondary(unsigned int cpu, struct task_struct *idle)
 	return qcom_boot_secondary(cpu, a55ss_release_secondary);
 }
 
+static int a53ss_boot_secondary(unsigned int cpu, struct task_struct *idle)
+{
+	return qcom_boot_secondary(cpu, a53ss_release_secondary);
+}
+
 static int msm8660_boot_secondary(unsigned int cpu, struct task_struct *idle)
 {
 	return qcom_boot_secondary(cpu, scss_release_secondary);
@@ -494,6 +575,16 @@ static void __init qcom_smp_prepare_cpus(unsigned int max_cpus)
 		pr_warn("Failed to set CPU boot address, disabling SMP\n");
 	}
 }
+
+static const struct smp_operations smp_a53ss_ops __initconst = {
+	.smp_prepare_cpus	= qcom_smp_prepare_cpus,
+	.smp_boot_secondary	= a53ss_boot_secondary,
+#ifdef CONFIG_HOTPLUG_CPU
+	.cpu_die		= qcom_cpu_die,
+#endif
+};
+
+CPU_METHOD_OF_DECLARE(qcom_smp_a53ss, "qcom,a53-cortex-acc", &smp_a53ss_ops);
 
 static const struct smp_operations smp_a55ss_ops __initconst = {
 	.smp_prepare_cpus	= qcom_smp_prepare_cpus,
