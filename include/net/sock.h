@@ -71,6 +71,20 @@
 #include <uapi/linux/socket.h>
 
 /*
+ * Socket Offload Notification Events.
+ */
+enum sock_offload_notify  {
+        SOCK_OFFLOAD_NOTIFY  = 1,
+};
+
+struct sock_notify {
+    struct mutex mutex;
+    struct raw_notifier_head notify;
+};
+
+extern struct sock_notify sock_notifier;
+
+/*
  * This structure really needs to be cleaned up.
  * Most of it is for TCP, and not used by any of
  * the other protocols.
@@ -3035,4 +3049,8 @@ static inline bool sk_is_readable(struct sock *sk)
 		return sk->sk_prot->sock_is_readable(sk);
 	return false;
 }
+
+/* Socket Offload Registration APIs */
+extern int sock_notify_unregister(struct notifier_block *nb);
+extern int sock_notify_register(struct notifier_block *nb);
 #endif	/* _SOCK_H */

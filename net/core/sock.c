@@ -156,6 +156,48 @@ DEFINE_COOKIE(sock_cookie);
 static void sock_def_write_space_wfree(struct sock *sk);
 static void sock_def_write_space(struct sock *sk);
 
+/*
+ * Socket Notifier Initialization
+ */
+struct sock_notify sock_notifier = {
+    .mutex = __MUTEX_INITIALIZER(sock_notifier.mutex),
+    .notify = RAW_NOTIFIER_INIT(sock_notifier.notify),
+};
+
+/**
+ * sock_notify_unregister - Unregister from socket notifier
+ * @nb: Notifier block to be unregistered
+ *
+ */
+int sock_notify_unregister(struct notifier_block *nb)
+{
+	int ret;
+
+	mutex_lock(&sock_notifier.mutex);
+	ret = raw_notifier_chain_unregister(&sock_notifier.notify, nb);
+	mutex_unlock(&sock_notifier.mutex);
+
+	return ret;
+}
+EXPORT_SYMBOL(sock_notify_unregister);
+
+/**
+ * sock_notify_register - Register to socket notifier
+ * @nb: Notifier block to be registered
+ *
+ */
+int sock_notify_register(struct notifier_block *nb)
+{
+	int ret;
+
+	mutex_lock(&sock_notifier.mutex);
+	ret = raw_notifier_chain_register(&sock_notifier.notify, nb);
+	mutex_unlock(&sock_notifier.mutex);
+
+	return ret;
+}
+EXPORT_SYMBOL(sock_notify_register);
+
 /**
  * sk_ns_capable - General socket capability test
  * @sk: Socket to use a capability on or through
@@ -1570,10 +1612,20 @@ set_sndbuf:
 			break;
 		}
 
+		if (val == sk->offload_appid) {
+			ret = -EPERM;
+			break;
+		}
+
 		if (val)
 			sk->offload_appid = val;
 
 		sk->offload = val ? 1 : 0;
+
+		mutex_lock(&sock_notifier.mutex);
+		ret = raw_notifier_call_chain(&sock_notifier.notify,
+			SOCK_OFFLOAD_NOTIFY, (void *)sk);
+		mutex_unlock(&sock_notifier.mutex);
 		break;
 
 	default:
