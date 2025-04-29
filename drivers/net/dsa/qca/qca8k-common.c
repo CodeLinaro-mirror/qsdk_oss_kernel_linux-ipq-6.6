@@ -488,8 +488,8 @@ static void qca8k_8021q_vlan_del(struct qca8k_priv *priv, int port, u16 vid)
 			QCA8K_EGREES_VLAN_PORT(port, QCA8K_PORT_VID_DEF));
 
 	ret |= qca8k_write(priv, QCA8K_REG_PORT_VLAN_CTRL0(port),
-			  QCA8K_PORT_VLAN_CVID(QCA8K_PORT_VID_DEF) |
-			  QCA8K_PORT_VLAN_SVID(QCA8K_PORT_VID_DEF));
+			QCA8K_PORT_VLAN_CVID(QCA8K_PORT_VID_DEF) |
+			QCA8K_PORT_VLAN_SVID(QCA8K_PORT_VID_DEF));
 	if (ret)
 		dev_err(priv->dev, "Failed to recover PVID on port %d (%d)", port, ret);
 }
@@ -718,6 +718,11 @@ static int qca8k_port_configure_learning(struct dsa_switch *ds, int port,
 {
 	struct qca8k_priv *priv = ds->priv;
 
+	/* switch forward is not allowed for traffic accelerated in PPE/SFE */
+	if (priv->proto == DSA_TAG_PROTO_4B_QCA || priv->proto == DSA_TAG_PROTO_QCA_8021Q) {
+		return 0;
+	}
+
 	if (learning)
 		return regmap_set_bits(priv->regmap,
 				       QCA8K_PORT_LOOKUP_CTRL(port),
@@ -798,6 +803,10 @@ int qca8k_port_bridge_join(struct dsa_switch *ds, int port,
 	int port_mask, cpu_port;
 	int i, ret;
 
+	/* switch forward is not allowed for traffic accelerated in PPE/SFE */
+	if (priv->proto == DSA_TAG_PROTO_4B_QCA || priv->proto == DSA_TAG_PROTO_QCA_8021Q)
+		return 0;
+
 	cpu_port = dsa_to_port(ds, port)->cpu_dp->index;
 	port_mask = BIT(cpu_port);
 
@@ -830,6 +839,9 @@ void qca8k_port_bridge_leave(struct dsa_switch *ds, int port,
 {
 	struct qca8k_priv *priv = ds->priv;
 	int cpu_port, i;
+
+	if (priv->proto == DSA_TAG_PROTO_4B_QCA || priv->proto == DSA_TAG_PROTO_QCA_8021Q)
+		return;
 
 	cpu_port = dsa_to_port(ds, port)->cpu_dp->index;
 
@@ -908,6 +920,10 @@ int qca8k_port_change_mtu(struct dsa_switch *ds, int port, int new_mtu)
 {
 	struct qca8k_priv *priv = ds->priv;
 	int ret;
+
+	/* mtu config offloaded in PPE VP */
+	if (priv->proto == DSA_TAG_PROTO_4B_QCA || priv->proto == DSA_TAG_PROTO_QCA_8021Q)
+		return 0;
 
 	/* We have only have a general MTU setting.
 	 * DSA always set the CPU port's MTU to the largest MTU of the slave

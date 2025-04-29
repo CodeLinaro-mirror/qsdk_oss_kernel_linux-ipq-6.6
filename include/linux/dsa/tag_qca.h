@@ -11,6 +11,7 @@ struct sk_buff;
 #define QCA_HDR_LEN	2
 #define QCA_4B_HDR_LEN	4
 #define QCA_HDR_VERSION	0x2
+#define QCA_HDR_VERSION3 0x3
 
 /* 4bytes HDR type value, need sync with reg 0x0098 low 16 bits */
 #define QCA_HDR_TYPE_VALUE	0xAAAA
@@ -36,7 +37,14 @@ struct sk_buff;
 #define QCA_HDR_XMIT_PRIORITY		GENMASK(13, 11)
 #define QCA_HDR_XMIT_CONTROL		GENMASK(10, 8)
 #define QCA_HDR_XMIT_FROM_CPU		BIT(7)
+
+/* ver2 */
 #define QCA_HDR_XMIT_DP_BIT		GENMASK(6, 0)
+
+/* ver3 */
+#define QCA_HDR_XMIT_VCHANNEL		GENMASK(6, 4)
+#define QCA_HDR_XMIT_DISABLE_HDR	BIT(3)
+#define QCA_HDR_XMIT_DP_ID		GENMASK(2, 0)
 
 /* Packet type for xmit */
 #define QCA_HDR_XMIT_TYPE_NORMAL	0x0
@@ -92,7 +100,6 @@ struct qca_tagger_data {
 				   struct sk_buff *skb);
 	void (*mib_autocast_handler)(struct dsa_switch *ds,
 				     struct sk_buff *skb);
-	bool tx_hdr_offload;
 };
 
 #endif /* __TAG_QCA_H */

@@ -77,7 +77,10 @@ static int dsa_switch_rcv(struct sk_buff *skb, struct net_device *dev,
 
 		skb->dev = dsa_master_find_slave(dev, 0, port);
 		if (likely(skb->dev)) {
-			dsa_default_offload_fwd_mark(skb);
+			/* for qca ecm offloading, bridge traffic offloading in PPE/SFE */
+			if (cpu_dp->tag_ops->proto != DSA_TAG_PROTO_4B_QCA &&
+				cpu_dp->tag_ops->proto != DSA_TAG_PROTO_QCA_8021Q)
+				dsa_default_offload_fwd_mark(skb);
 			nskb = skb;
 		}
 	} else {

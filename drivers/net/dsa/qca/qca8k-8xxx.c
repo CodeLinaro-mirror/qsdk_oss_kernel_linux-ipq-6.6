@@ -24,9 +24,9 @@
 #include "qca8k.h"
 #include "qca8k_leds.h"
 
-bool tx_hdr_offload = false;
-module_param(tx_hdr_offload, bool, S_IRUGO);
-MODULE_PARM_DESC(tx_hdr_offload, "Offload adding ath hdr process in Tx direction");
+uint8_t fc_group_arr[QCA8K_NUM_PORTS] = {0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff};
+module_param_array(fc_group_arr, byte, NULL, S_IRUGO);
+MODULE_PARM_DESC(fc_group_arr, "PPE EDMA fc_group id bind with each QCA8386 ports");
 
 static void
 qca8k_split_addr(u32 regaddr, u16 *r1, u16 *r2, u16 *page)
@@ -1875,42 +1875,76 @@ qca8k_get_tag_protocol(struct dsa_switch *ds, int port,
 	return DSA_TAG_PROTO_QCA;
 }
 
+static int qca_8k_config_hdr_by_tag_proto(struct dsa_switch *ds,
+					 enum dsa_tag_protocol proto)
+{
+	uint32_t hdr_type = QCA8K_HDR_TYPE_4B, hdr_val = QCA_HDR_TYPE_VALUE;
+	uint32_t rx_mode = QCA8K_PORT_HDR_CTRL_MGMT, tx_mode = QCA8K_PORT_HDR_CTRL_NONE;
+
+	struct qca8k_priv *priv = ds->priv;
+	struct dsa_port *dp = NULL;
+
+	if (proto == DSA_TAG_PROTO_QCA) {
+		hdr_type = QCA8K_HDR_TYPE_2B;
+		hdr_val = 0;
+		rx_mode = QCA8K_PORT_HDR_CTRL_ALL;
+		tx_mode = QCA8K_PORT_HDR_CTRL_ALL;
+	}
+
+	if (proto == DSA_TAG_PROTO_4B_QCA) {
+		tx_mode = QCA8K_PORT_HDR_CTRL_ALL;
+	}
+
+	if (qca8k_write(priv, QCA8K_HEADER_CTL, QCA8K_HEADER_LENGTH_SEL_VAL(hdr_type) |
+			QCA8K_HEADER_TYPE_VAL_VAL(hdr_val))) {
+		dev_err(priv->dev, "failed setting header type for proto: %d", proto);
+		return -1;
+	}
+
+	dsa_switch_for_each_cpu_port(dp, ds) {
+		if (qca8k_write(priv, QCA8K_REG_PORT_HDR_CTRL(dp->index),
+				FIELD_PREP(QCA8K_PORT_HDR_CTRL_TX_MASK, tx_mode) |
+				FIELD_PREP(QCA8K_PORT_HDR_CTRL_RX_MASK, rx_mode))) {
+			dev_err(priv->dev, "failed setting header mode for proto: %d", proto);
+			return -1;
+		}
+	}
+
+	if (priv->proto != DSA_TAG_PROTO_QCA_8021Q && proto == DSA_TAG_PROTO_QCA_8021Q)
+		qca8k_tag_8021q_setup(ds);
+
+	if (priv->proto == DSA_TAG_PROTO_QCA_8021Q && proto != DSA_TAG_PROTO_QCA_8021Q)
+		qca8k_tag_8021q_teardown(ds);
+
+	priv->proto = proto;
+
+	return 0;
+}
+
 static int qca8k_change_tag_protocol(struct dsa_switch *ds,
 					 enum dsa_tag_protocol proto)
 {
 	struct qca8k_priv *priv = ds->priv;
-	struct dsa_port *dp = NULL;
 
 	switch (proto) {
 	case DSA_TAG_PROTO_QCA:
-		/* using 2 bytes ath header */
-		if (qca8k_write(priv, QCA8K_HEADER_CTL,
-			QCA8K_HEADER_LENGTH_SEL_VAL(0) |
-			QCA8K_HEADER_TYPE_VAL_VAL(0)))
+		if (qca_8k_config_hdr_by_tag_proto(ds, proto))
 			goto fail;
+		dev_info(ds->dev, "Tag proto changed to qca.\n");
 		break;
 	case DSA_TAG_PROTO_4B_QCA:
-		/* using 4 bytes ath header */
-		if (qca8k_write(priv, QCA8K_HEADER_CTL,
-			QCA8K_HEADER_LENGTH_SEL_VAL(1) |
-			QCA8K_HEADER_TYPE_VAL_VAL(QCA_HDR_TYPE_VALUE)))
+		if (qca_8k_config_hdr_by_tag_proto(ds, proto))
 			goto fail;
+		if (fc_group_arr[0] != 0xff)
+			ds->fc_group = fc_group_arr;
+		dev_info(ds->dev, "Tag proto changed to qca_4b.\n");
 		break;
 	case DSA_TAG_PROTO_QCA_8021Q:
-		/* Disable QCA header mode on all cpu ports */
-		dsa_switch_for_each_cpu_port(dp, ds) {
-			if (qca8k_write(priv, QCA8K_REG_PORT_HDR_CTRL(dp->index),
-				  FIELD_PREP(QCA8K_PORT_HDR_CTRL_TX_MASK, QCA8K_PORT_HDR_CTRL_NONE) |
-				  FIELD_PREP(QCA8K_PORT_HDR_CTRL_RX_MASK, QCA8K_PORT_HDR_CTRL_MGMT))) {
-				dev_err(priv->dev, "failed disabling QCA header mode on port %d", dp->index);
-				goto fail;
-			}
-		}
-
-		/* Setup 802.1q tag proto */
-		qca8k_tag_8021q_setup(ds);
-
-		dev_info(ds->dev, "Tag proto changed to qca 8021q.\n");
+		if (qca_8k_config_hdr_by_tag_proto(ds, proto))
+			goto fail;
+		if (fc_group_arr[0] != 0xff)
+			ds->fc_group = fc_group_arr;
+		dev_info(ds->dev, "Tag proto changed to qca_8021q.\n");
 		break;
 	default:
 		return -EPROTONOSUPPORT;
@@ -1954,18 +1988,10 @@ static int qca8k_connect_tag_protocol(struct dsa_switch *ds,
 
 		tagger_data->rw_reg_ack_handler = qca8k_rw_reg_ack_handler;
 		tagger_data->mib_autocast_handler = qca8k_mib_autocast_handler;
-		tagger_data->tx_hdr_offload = tx_hdr_offload;
 
 		break;
 	case DSA_TAG_PROTO_4B_QCA:
-		tagger_data = ds->tagger_data;
-		tagger_data->tx_hdr_offload = tx_hdr_offload;
-
-		break;
 	case DSA_TAG_PROTO_QCA_8021Q:
-		tagger_data = ds->tagger_data;
-		tagger_data->tx_hdr_offload = tx_hdr_offload;
-
 		break;
 	default:
 		return -EOPNOTSUPP;
@@ -2204,36 +2230,9 @@ qca8k_setup(struct dsa_switch *ds)
 	}
 
 	/* Setup our port MTUs to match power on defaults */
-	ret = qca8k_write(priv, QCA8K_MAX_FRAME_SIZE, ETH_FRAME_LEN + ETH_FCS_LEN);
+	ret = qca8k_write(priv, QCA8K_MAX_FRAME_SIZE, QCA8K_MAX_MTU + ETH_HLEN + ETH_FCS_LEN);
 	if (ret)
 		dev_warn(priv->dev, "failed setting MTU settings");
-
-	if (priv->switch_id == QCA8K_ID_QCA8386) {
-		/* using 4 bytes ath header in default */
-		qca8k_write(priv, QCA8K_HEADER_CTL,
-			QCA8K_HEADER_LENGTH_SEL_VAL(1) | QCA8K_HEADER_TYPE_VAL_VAL(QCA_HDR_TYPE_VALUE));
-
-		/* config on cpu port */
-		dsa_switch_for_each_cpu_port(dp, ds) {
-			/* recover mht rx mode */
-			ret = qca8k_rmw(priv, QCA8K_REG_PORT_HDR_CTRL(dp->index), QCA8K_PORT_HDR_CTRL_RX_MASK,
-				FIELD_PREP(QCA8K_PORT_HDR_CTRL_RX_MASK, QCA8K_PORT_HDR_CTRL_MGMT));
-			if (ret) {
-				dev_err(priv->dev, "failed enabling QCA header mode on port %d", dp->index);
-				return ret;
-			}
-
-			/* tx_hdr_offload control for MHT holb */
-			if (tx_hdr_offload) {
-				ret = regmap_clear_bits(priv->regmap, QCA8K_PORT_LOOKUP_CTRL(dp->index),
-							QCA8K_PORT_LOOKUP_LEARN);
-				if (ret) {
-					dev_err(priv->dev, "failed disable fdb learning on port %d", dp->index);
-					return ret;
-				}
-			}
-		}
-	}
 
 	/* Flush the FDB table */
 	qca8k_fdb_flush(priv);
@@ -2254,7 +2253,9 @@ qca8k_teardown(struct dsa_switch *ds)
 	struct qca8k_priv *priv = ds->priv;
 	int i = 0, port_mask = 0;
 	u16 reg = 0;
-	struct dsa_port *dp;
+
+	uint32_t rx_mode = (priv->switch_id == QCA8K_ID_QCA8386) ?
+		QCA8K_PORT_HDR_CTRL_MGMT : QCA8K_PORT_HDR_CTRL_NONE;
 
 	for (i = 0; i < QCA8K_NUM_PORTS; i++) {
 		/* resume stp status */
@@ -2278,7 +2279,7 @@ qca8k_teardown(struct dsa_switch *ds)
 			/* dsiable QCA header mode on the cpu port */
 			qca8k_write(priv, QCA8K_REG_PORT_HDR_CTRL(i),
 				FIELD_PREP(QCA8K_PORT_HDR_CTRL_TX_MASK, QCA8K_PORT_HDR_CTRL_NONE)|
-				FIELD_PREP(QCA8K_PORT_HDR_CTRL_RX_MASK, QCA8K_PORT_HDR_CTRL_NONE));
+				FIELD_PREP(QCA8K_PORT_HDR_CTRL_RX_MASK, rx_mode));
 
 			/* Recover unknown frames forwarding config */
 			port_mask = BIT(i) | dsa_user_ports(ds);
@@ -2310,23 +2311,6 @@ qca8k_teardown(struct dsa_switch *ds)
 			reg = qca8k_phy_external_mdio_read(priv, i, MII_BMCR);
 			reg &= ~BMCR_PDOWN;
 			qca8k_phy_external_mdio_write(priv, i, MII_BMCR, reg);
-		}
-	}
-
-	if (priv->switch_id == QCA8K_ID_QCA8386) {
-		/* config on cpu port */
-		dsa_switch_for_each_cpu_port(dp, ds) {
-			/* recover mht rx mode */
-			if (qca8k_rmw(priv, QCA8K_REG_PORT_HDR_CTRL(dp->index), QCA8K_PORT_HDR_CTRL_RX_MASK,
-			  		FIELD_PREP(QCA8K_PORT_HDR_CTRL_RX_MASK, QCA8K_PORT_HDR_CTRL_MGMT))) 
-				dev_err(priv->dev, "failed enabling QCA header mode on port %d", dp->index);
-
-			/* tx_hdr_offload control for MHT holb */
-			if (tx_hdr_offload) {
-				if (regmap_set_bits(priv->regmap, QCA8K_PORT_LOOKUP_CTRL(dp->index),
-						QCA8K_PORT_LOOKUP_LEARN)) 
-					dev_err(priv->dev, "failed enable fdb learning on port %d", dp->index);
-			}
 		}
 	}
 
