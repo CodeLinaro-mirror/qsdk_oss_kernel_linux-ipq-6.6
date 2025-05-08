@@ -648,10 +648,6 @@ void qca8k_get_ethtool_stats(struct dsa_switch *ds, int port,
 	u32 hi = 0;
 	int ret;
 
-	if (priv->mgmt_master && priv->info->ops->autocast_mib &&
-	    priv->info->ops->autocast_mib(ds, port, data) > 0)
-		return;
-
 	for (i = 0; i < priv->info->mib_count; i++) {
 		mib = &ar8327_mib[i];
 		reg = QCA8K_PORT_MIB_COUNTER(port) + mib->offset;

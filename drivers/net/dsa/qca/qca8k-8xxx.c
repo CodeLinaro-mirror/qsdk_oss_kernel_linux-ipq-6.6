@@ -329,122 +329,6 @@ static void qca8k_mdio_header_fill_seq_num(struct sk_buff *skb, u32 seq_num)
 	put_unaligned_le32(seq, &mgmt_ethhdr->seq);
 }
 
-static int qca8k_read_eth(struct qca8k_priv *priv, u32 reg, u32 *val, int len)
-{
-	struct qca8k_mgmt_eth_data *mgmt_eth_data = &priv->mgmt_eth_data;
-	struct sk_buff *skb;
-	bool ack;
-	int ret;
-
-	skb = qca8k_alloc_mdio_header(MDIO_READ, reg, NULL,
-				      QCA8K_ETHERNET_MDIO_PRIORITY, len);
-	if (!skb)
-		return -ENOMEM;
-
-	mutex_lock(&mgmt_eth_data->mutex);
-
-	/* Check mgmt_master if is operational */
-	if (!priv->mgmt_master) {
-		kfree_skb(skb);
-		mutex_unlock(&mgmt_eth_data->mutex);
-		return -EINVAL;
-	}
-
-	skb->dev = priv->mgmt_master;
-
-	reinit_completion(&mgmt_eth_data->rw_done);
-
-	/* Increment seq_num and set it in the mdio pkt */
-	mgmt_eth_data->seq++;
-	qca8k_mdio_header_fill_seq_num(skb, mgmt_eth_data->seq);
-	mgmt_eth_data->ack = false;
-
-	dev_queue_xmit(skb);
-
-	ret = wait_for_completion_timeout(&mgmt_eth_data->rw_done,
-					  msecs_to_jiffies(QCA8K_ETHERNET_TIMEOUT));
-
-	*val = mgmt_eth_data->data[0];
-	if (len > QCA_HDR_MGMT_DATA1_LEN)
-		memcpy(val + 1, mgmt_eth_data->data + 1, len - QCA_HDR_MGMT_DATA1_LEN);
-
-	ack = mgmt_eth_data->ack;
-
-	mutex_unlock(&mgmt_eth_data->mutex);
-
-	if (ret <= 0)
-		return -ETIMEDOUT;
-
-	if (!ack)
-		return -EINVAL;
-
-	return 0;
-}
-
-static int qca8k_write_eth(struct qca8k_priv *priv, u32 reg, u32 *val, int len)
-{
-	struct qca8k_mgmt_eth_data *mgmt_eth_data = &priv->mgmt_eth_data;
-	struct sk_buff *skb;
-	bool ack;
-	int ret;
-
-	skb = qca8k_alloc_mdio_header(MDIO_WRITE, reg, val,
-				      QCA8K_ETHERNET_MDIO_PRIORITY, len);
-	if (!skb)
-		return -ENOMEM;
-
-	mutex_lock(&mgmt_eth_data->mutex);
-
-	/* Check mgmt_master if is operational */
-	if (!priv->mgmt_master) {
-		kfree_skb(skb);
-		mutex_unlock(&mgmt_eth_data->mutex);
-		return -EINVAL;
-	}
-
-	skb->dev = priv->mgmt_master;
-
-	reinit_completion(&mgmt_eth_data->rw_done);
-
-	/* Increment seq_num and set it in the mdio pkt */
-	mgmt_eth_data->seq++;
-	qca8k_mdio_header_fill_seq_num(skb, mgmt_eth_data->seq);
-	mgmt_eth_data->ack = false;
-
-	dev_queue_xmit(skb);
-
-	ret = wait_for_completion_timeout(&mgmt_eth_data->rw_done,
-					  msecs_to_jiffies(QCA8K_ETHERNET_TIMEOUT));
-
-	ack = mgmt_eth_data->ack;
-
-	mutex_unlock(&mgmt_eth_data->mutex);
-
-	if (ret <= 0)
-		return -ETIMEDOUT;
-
-	if (!ack)
-		return -EINVAL;
-
-	return 0;
-}
-
-static int
-qca8k_regmap_update_bits_eth(struct qca8k_priv *priv, u32 reg, u32 mask, u32 write_val)
-{
-	u32 val = 0;
-	int ret;
-
-	ret = qca8k_read_eth(priv, reg, &val, sizeof(val));
-	if (ret)
-		return ret;
-
-	val &= ~mask;
-	val |= write_val;
-
-	return qca8k_write_eth(priv, reg, &val, sizeof(val));
-}
-
 static int
 qca8k_read_mii(struct qca8k_priv *priv, uint32_t reg, uint32_t *val)
 {
@@ -597,11 +481,6 @@ qca8k_bulk_read(void *ctx, const void *reg_buf, size_t reg_len,
 	struct qca8k_priv *priv = ctx;
 	u32 reg = *(u16 *)reg_buf;
 
-	if (priv->switch_id != QCA8K_ID_QCA8386 &&
-		priv->mgmt_master &&
-	    !qca8k_read_eth(priv, reg, val_buf, val_len))
-		return 0;
-
 	/* loop count times and increment reg of 4 */
 	for (i = 0; i < count; i++, reg += sizeof(u32)) {
 		ret = qca8k_read_mii(priv, reg, val_buf + i);
@@ -620,11 +499,6 @@ qca8k_bulk_gather_write(void *ctx, const void *reg_buf, size_t reg_len,
 	struct qca8k_priv *priv = ctx;
 	u32 reg = *(u16 *)reg_buf;
 	u32 *val = (u32 *)val_buf;
-
-	if (priv->switch_id != QCA8K_ID_QCA8386 &&
-		priv->mgmt_master &&
-	    !qca8k_write_eth(priv, reg, val, val_len))
-		return 0;
 
 	/* loop count times, increment reg of 4 and increment val ptr to
 	 * the next value
@@ -649,10 +523,6 @@ static int
 qca8k_regmap_update_bits(void *ctx, uint32_t reg, uint32_t mask, uint32_t write_val)
 {
 	struct qca8k_priv *priv = ctx;
-
-	if (priv->switch_id != QCA8K_ID_QCA8386 &&
-		!qca8k_regmap_update_bits_eth(priv, reg, mask, write_val))
-		return 0;
 
 	return qca8k_regmap_update_bits_mii(priv, reg, mask, write_val);
 }
