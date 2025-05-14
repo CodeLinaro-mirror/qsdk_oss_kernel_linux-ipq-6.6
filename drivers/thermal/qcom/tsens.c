@@ -19,6 +19,7 @@
 #include <linux/slab.h>
 #include <linux/thermal.h>
 #include "../thermal_hwmon.h"
+#include <soc/qcom/ipq-debug.h>
 #include "tsens.h"
 
 #define MAX_TEMP	204000 /* milliCelcius */
@@ -713,6 +714,22 @@ static void notify_uspace_tsens_fn(struct work_struct *work)
 	sysfs_notify(&s->tzd->device.kobj, NULL, "type");
 }
 
+static void tsens_critical(struct thermal_zone_device *tz)
+{
+	struct tsens_sensor *s = thermal_zone_device_priv(tz);
+	struct tsens_priv *priv = s->priv;
+	int ret;
+
+	/* Update TSENS SW reset reason */
+	ret = debug_log_reset_reason(IPQ5424_TSENS_SW_RESET);
+
+	if (ret && ret != -EOPNOTSUPP)
+		dev_err(priv->dev, "Failed to log TSENS SW reset in IMEM\n");
+
+	/* Reboot using the thremal framework critical ops */
+	thermal_zone_device_critical(tz);
+}
+
 static int tsens_panic_notify(struct thermal_zone_device *tz)
 {
 	struct tsens_sensor *s = tz->devdata;
@@ -1337,6 +1354,7 @@ MODULE_DEVICE_TABLE(of, tsens_table);
 static const struct thermal_zone_device_ops tsens_of_ops = {
 	.get_temp = tsens_get_temp,
 	.panic_notify = tsens_panic_notify,
+	.critical = tsens_critical,
 #ifdef CONFIG_CPU_THERMAL
 	.set_trips = tsens_set_trips,
 #else
