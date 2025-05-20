@@ -221,6 +221,16 @@ struct qcom_pcie_resources_1_0_0 {
 #define QCOM_PCIE_2_1_0_MAX_CLOCKS		5
 #define QCOM_PCIE_2_1_0_MAX_RESETS		6
 #define QCOM_PCIE_2_1_0_MAX_SUPPLY		3
+
+#define PCIE_IATU_REGION_CTRL_1_OFF_INBOUND_0		0x100
+#define PCIE_IATU_REGION_CTRL_2_OFF_INBOUND_0		0x104
+#define PCIE_IATU_LWR_BASE_ADDR_OFF_INBOUND_0		0x108
+#define PCIE_IATU_UPPER_BASE_ADDR_OFF_INBOUND_0		0x10c
+#define PCIE_IATU_LIMIT_ADDR_OFF_INBOUND_0		0x110
+#define PCIE_IATU_LWR_TARGET_ADDR_OFF_INBOUND_0		0x114
+#define PCIE_IATU_UPPER_TARGET_ADDR_OFF_INBOUND_0	0x118
+#define PCIE_IATU_UPPR_LIMIT_ADDR_OFF_INBOUND_0		0x120
+
 struct qcom_pcie_resources_2_1_0 {
 	struct clk_bulk_data clks[QCOM_PCIE_2_1_0_MAX_CLOCKS];
 	struct reset_control_bulk_data resets[QCOM_PCIE_2_1_0_MAX_RESETS];
@@ -312,6 +322,9 @@ struct qcom_pcie {
 	uint32_t num_lanes;
 	int global_irq;
 	bool enable_vc;
+	bool enable_iatu;
+	u32 iatu_ib0_base_addr[3];	/* Low , High, Limit */
+	u32 iatu_ib0_target_addr[3];	/* Low , High, Limit */
 };
 
 #define to_qcom_pcie(x)		dev_get_drvdata((x)->dev)
@@ -1260,6 +1273,40 @@ static int qcom_pcie_post_init(struct qcom_pcie *pcie)
 	for (i = 0; i < 256; i++)
 		writel(0, pcie->parf + PARF_BDF_TO_SID_TABLE_N + (4 * i));
 
+	if (pcie->enable_iatu) {
+		/* Configure IATU Inbound 0 */
+		writel(0x0, pci->atu_base +
+		       PCIE_IATU_REGION_CTRL_1_OFF_INBOUND_0);
+
+		/* Enable the region */
+		writel(0x80000000, pci->atu_base +
+		       PCIE_IATU_REGION_CTRL_2_OFF_INBOUND_0);
+
+		/* base low address */
+		writel(pcie->iatu_ib0_base_addr[0], pci->atu_base +
+		       PCIE_IATU_LWR_BASE_ADDR_OFF_INBOUND_0);
+
+		/* base high address */
+		writel(pcie->iatu_ib0_base_addr[1], pci->atu_base +
+		       PCIE_IATU_UPPER_BASE_ADDR_OFF_INBOUND_0);
+
+		/* base limit address */
+		writel(pcie->iatu_ib0_base_addr[2], pci->atu_base +
+		       PCIE_IATU_LIMIT_ADDR_OFF_INBOUND_0);
+
+		/* target low address */
+		writel(pcie->iatu_ib0_target_addr[0], pci->atu_base +
+		       PCIE_IATU_LWR_TARGET_ADDR_OFF_INBOUND_0);
+
+		/* target high address */
+		writel(pcie->iatu_ib0_target_addr[1], pci->atu_base +
+		       PCIE_IATU_UPPER_TARGET_ADDR_OFF_INBOUND_0);
+
+		/* target limit address */
+		writel(pcie->iatu_ib0_target_addr[2], pci->atu_base +
+		       PCIE_IATU_UPPR_LIMIT_ADDR_OFF_INBOUND_0);
+	}
+
 	return 0;
 }
 
@@ -1810,6 +1857,9 @@ static int qcom_pcie_probe(struct platform_device *pdev)
 	pcie->enable_vc = of_property_read_bool(pdev->dev.of_node,
 					"enable-virtual-channel");
 
+	pcie->enable_iatu = of_property_read_bool(pdev->dev.of_node,
+						  "enable-iatu");
+
 	of_property_read_u32(pdev->dev.of_node, "num-lanes",
 				&num_lanes);
 	pcie->num_lanes = num_lanes;
@@ -1819,6 +1869,20 @@ static int qcom_pcie_probe(struct platform_device *pdev)
 	if (pci->link_retries_count)
 		dev_info(dev, "pcie link_retries_count set to %d",
 			 pci->link_retries_count);
+
+	if (pcie->enable_iatu) {
+		of_property_read_u32_array(pdev->dev.of_node,
+					   "iatu-ib0-base-addr-cfg",
+					   pcie->iatu_ib0_base_addr,
+					   sizeof(pcie->iatu_ib0_base_addr) /
+					   sizeof(u32));
+
+		of_property_read_u32_array(pdev->dev.of_node,
+					   "iatu-ib0-target-addr-cfg",
+					   pcie->iatu_ib0_target_addr,
+					   sizeof(pcie->iatu_ib0_target_addr) /
+					   sizeof(u32));
+	};
 
 	/* MHI region is optional */
 	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "mhi");
