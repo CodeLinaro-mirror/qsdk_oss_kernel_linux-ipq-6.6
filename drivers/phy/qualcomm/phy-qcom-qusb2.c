@@ -917,6 +917,9 @@ static const struct of_device_id qusb2_phy_of_match_table[] = {
 		.compatible	= "qcom,ipq5424-qusb2-phy",
 		.data		= &ipq6018_phy_cfg,
 	}, {
+		.compatible	= "qcom,ipq5200-qusb2-phy",
+		.data		= &ipq6018_phy_cfg,
+	}, {
 		.compatible	= "qcom,msm8953-qusb2-phy",
 		.data		= &msm8996_phy_cfg,
 	}, {
