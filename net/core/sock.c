@@ -1564,6 +1564,18 @@ set_sndbuf:
 		WRITE_ONCE(sk->sk_txrehash, (u8)val);
 		break;
 
+	case SO_OFFLOAD:
+		if (val < 0 || val > 7) {
+			ret = -EPERM;
+			break;
+		}
+
+		if (val)
+			sk->offload_appid = val;
+
+		sk->offload = val ? 1 : 0;
+		break;
+
 	default:
 		ret = -ENOPROTOOPT;
 		break;
@@ -2017,6 +2029,10 @@ int sk_getsockopt(struct sock *sk, int level, int optname,
 	case SO_TXREHASH:
 		/* Paired with WRITE_ONCE() in sk_setsockopt() */
 		v.val = READ_ONCE(sk->sk_txrehash);
+		break;
+
+	case SO_OFFLOAD:
+		v.val = sk->offload ? sk->offload_appid : 0;
 		break;
 
 	default:

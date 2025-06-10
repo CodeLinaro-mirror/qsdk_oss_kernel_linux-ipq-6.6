@@ -517,6 +517,9 @@ struct sock {
 	u8			sk_txtime_deadline_mode : 1,
 				sk_txtime_report_errors : 1,
 				sk_txtime_unused : 6;
+	u8			offload : 1,
+				offload_appid : 3,
+				reserved : 4;
 	bool			sk_use_task_frag;
 
 	struct socket		*sk_socket;
