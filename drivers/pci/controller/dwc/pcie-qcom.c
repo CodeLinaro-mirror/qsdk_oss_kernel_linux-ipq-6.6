@@ -211,6 +211,14 @@
 #define QCOM_IPQ5424_DEVICE_ID			0x1006
 #define PCIE20_LNK_CONTROL2_LINK_STATUS2	0xa0
 
+/* Early Cal related fields */
+#define CAL_COMPLETE_TIMEOUT_SECS		60
+#define CAL_COMPLETE_MAGIC			0xCAFECACE
+
+static bool paniconcaltimeout = true;
+module_param(paniconcaltimeout, bool, 0644);
+MODULE_PARM_DESC(paniconcaltimeout, "Panic on Calibration timeout: 0,1");
+
 #define QCOM_PCIE_1_0_0_MAX_CLOCKS		4
 struct qcom_pcie_resources_1_0_0 {
 	struct clk_bulk_data clks[QCOM_PCIE_1_0_0_MAX_CLOCKS];
@@ -1747,7 +1755,7 @@ static void qcom_pcie_init_debugfs(struct qcom_pcie *pcie)
 				    qcom_pcie_link_transition_count);
 }
 
-static int qcom_pcie_probe(struct platform_device *pdev)
+static int __qcom_pcie_probe(struct platform_device *pdev)
 {
 	const struct qcom_pcie_cfg *pcie_cfg;
 	struct device *dev = &pdev->dev;
@@ -1757,26 +1765,6 @@ static int qcom_pcie_probe(struct platform_device *pdev)
 	struct dw_pcie *pci;
 	int ret;
 	uint32_t num_lanes = 0;
-	struct nvmem_cell *pcie_nvmem;
-	u8 *disable_status;
-	size_t len;
-
-	/* If nvmem-cells present on PCIe node in DTSI, then check the QFPROM
-	 * fuses for PCIe is disabled */
-	pcie_nvmem = devm_nvmem_cell_get(dev, NULL);
-	if (IS_ERR(pcie_nvmem)) {
-		if (PTR_ERR(pcie_nvmem) == -EPROBE_DEFER)
-			return -EPROBE_DEFER;
-	} else {
-		disable_status = nvmem_cell_read(pcie_nvmem, &len);
-		devm_nvmem_cell_put(dev, pcie_nvmem);
-		if ( !IS_ERR(disable_status) && ((unsigned int)(*disable_status) == 1) ) {
-			dev_info(dev,"Disabled in qfprom efuse\n");
-			kfree(disable_status);
-			return -ENODEV;
-		}
-		kfree(disable_status);
-	}
 
 	pcie_cfg = of_device_get_match_data(dev);
 	if (!pcie_cfg || !pcie_cfg->ops) {
@@ -1948,6 +1936,94 @@ err_phy_exit:
 err_pm_runtime_put:
 	pm_runtime_put(dev);
 	pm_runtime_disable(dev);
+
+	return ret;
+}
+
+static int qcom_pcie_deferred_probe(void *data)
+{
+	struct platform_device *pdev = data;
+	struct resource *res;
+	void __iomem *cal_status;
+	u32 retry = 0, val;
+
+	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "cal-status");
+	if (res) {
+		cal_status = devm_ioremap(&pdev->dev, res->start,
+					  resource_size(res));
+		if (IS_ERR(cal_status))
+			return PTR_ERR(cal_status);
+	}
+
+	while (retry < (CAL_COMPLETE_TIMEOUT_SECS * 10)) {
+		val = readl(cal_status);
+		if (val == CAL_COMPLETE_MAGIC)
+			break;
+		msleep(100);
+		retry++;
+	}
+
+	if (val == CAL_COMPLETE_MAGIC)
+		return __qcom_pcie_probe(pdev);
+
+	if (paniconcaltimeout)
+		panic("Calibration timedout for %s\n", pdev->name);
+	else
+		dev_err(&pdev->dev, "Calibration timedout for %s\n", pdev->name);
+
+	return -EINVAL;
+}
+
+static int qcom_pcie_probe(struct platform_device *pdev)
+{
+	struct device_node *rp_node, *ep_node;
+	struct device *dev = &pdev->dev;
+	struct nvmem_cell *pcie_nvmem;
+	u8 *disable_status;
+	int ret = 0;
+	size_t len;
+
+	/* If nvmem-cells present on PCIe node in DTSI, then check the QFPROM
+	 * fuses for PCIe is disabled
+	 */
+	pcie_nvmem = devm_nvmem_cell_get(dev, NULL);
+	if (IS_ERR(pcie_nvmem)) {
+		if (PTR_ERR(pcie_nvmem) == -EPROBE_DEFER)
+			return -EPROBE_DEFER;
+	} else {
+		disable_status = nvmem_cell_read(pcie_nvmem, &len);
+		devm_nvmem_cell_put(dev, pcie_nvmem);
+		if (!IS_ERR(disable_status) && ((unsigned int)(*disable_status) == 1)) {
+			dev_info(dev, "Disabled in qfprom efuse\n");
+			kfree(disable_status);
+			return -ENODEV;
+		}
+		kfree(disable_status);
+	}
+
+	rp_node = of_get_next_child(dev->of_node, NULL);
+	if (!rp_node) {
+		dev_err(dev, "Failed to get rp node\n");
+		return -ENODEV;
+	}
+
+	ep_node = of_get_next_child(rp_node, NULL);
+	if (!rp_node) {
+		dev_err(dev, "Failed to get ep node\n");
+		of_node_put(rp_node);
+		return -ENODEV;
+	}
+
+	if (of_property_match_string(ep_node, "qcom,early_cal_enabled", "okay") >= 0) {
+		dev_info(dev, "Starting kthread for %s", pdev->name);
+		kthread_run(qcom_pcie_deferred_probe, pdev,
+			    "deferred_probe_%s", pdev->name);
+	} else {
+		ret =  __qcom_pcie_probe(pdev);
+	}
+
+	of_node_put(ep_node);
+	of_node_put(rp_node);
 
 	return ret;
 }
