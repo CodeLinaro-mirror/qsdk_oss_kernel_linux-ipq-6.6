@@ -185,6 +185,12 @@ static const struct attribute_group dsu_pmu_format_attr_group = {
 static struct attribute *dsu_pmu_event_attrs[] = {
 	DSU_EVENT_ATTR(cycles, 0x11),
 	DSU_EVENT_ATTR(bus_access, 0x19),
+	DSU_EVENT_ATTR(bus_access_rd, 0x60),
+	DSU_EVENT_ATTR(bus_access_wr, 0x61),
+	DSU_EVENT_ATTR(bus_access_shared, 0x62),
+	DSU_EVENT_ATTR(bus_access_not_shared, 0x63),
+	DSU_EVENT_ATTR(bus_access_normal, 0x64),
+	DSU_EVENT_ATTR(bus_access_periph, 0x65),
 	DSU_EVENT_ATTR(memory_error, 0x1a),
 	DSU_EVENT_ATTR(bus_cycles, 0x1d),
 	DSU_EVENT_ATTR(l3d_cache_allocate, 0x29),
