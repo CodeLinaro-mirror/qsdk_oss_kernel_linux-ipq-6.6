@@ -281,6 +281,10 @@ ifeq ($(CONFIG_DEBUG),y)
 dtc_cpp_flags += -D __CONFIG_DEBUG__
 endif
 
+ifeq ($(CONFIG_PCIE_QCOM_EARLY_CAL_SUPPORT),y)
+dtc_cpp_flags += -D __PCIE_QCOM_EARLY_CAL_SUPPORT__
+endif
+
 ifdef CONFIG_OBJTOOL
 
 objtool := $(objtree)/tools/objtool/objtool

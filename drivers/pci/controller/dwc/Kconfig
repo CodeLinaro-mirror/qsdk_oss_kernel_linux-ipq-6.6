@@ -284,6 +284,13 @@ config PCIE_QCOM
 	  PCIe controller uses the DesignWare core plus Qualcomm-specific
 	  hardware wrappers.
 
+config PCIE_QCOM_EARLY_CAL_SUPPORT
+	bool "Qualcomm PCIe Early Calibration Support"
+	depends on PCIE_QCOM
+	default n
+	help
+	  Say Y here if Early Calibration for PCIe EPs is supported in uboot.
+
 config PCIE_QCOM_EP
 	tristate "Qualcomm PCIe controller (endpoint mode)"
 	depends on OF && (ARCH_QCOM || COMPILE_TEST)
