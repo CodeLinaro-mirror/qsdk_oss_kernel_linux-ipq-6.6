@@ -4374,6 +4374,17 @@ static const struct qcom_nandc_props ipq5424_nandc_props = {
 	.dev_cmd_reg_start = 0x7000,
 };
 
+static const struct qcom_nandc_props ipq5200_nandc_props = {
+	.ecc_modes = (ECC_BCH_4BIT | ECC_BCH_8BIT),
+	.is_bam = true,
+	.is_serial_nand = true,
+	.qpic_v2 = true,
+	.is_serial_training = true,
+	.quad_mode = true,
+	.page_scope = true,
+	.dev_cmd_reg_start = 0x7000,
+};
+
 static const struct qcom_nandc_props ipq9574_nandc_props = {
 	.ecc_modes = (ECC_BCH_4BIT | ECC_BCH_8BIT),
 	.is_bam = true,
@@ -4414,6 +4425,10 @@ static const struct of_device_id qcom_nandc_of_match[] = {
 	{
 		.compatible = "qcom,ipq5424-nand",
 		.data = &ipq5424_nandc_props,
+	},
+	{
+		.compatible = "qcom,ipq5200-nand",
+		.data = &ipq5200_nandc_props,
 	},
 	{
 		.compatible = "qcom,ipq9574-nand",
