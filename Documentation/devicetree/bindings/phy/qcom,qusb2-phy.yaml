@@ -22,6 +22,7 @@ properties:
               - qcom,ipq8074-qusb2-phy
               - qcom,ipq9574-qusb2-phy
               - qcom,ipq5424-qusb2-phy
+              - qcom,ipq5200-qusb2-phy
               - qcom,msm8953-qusb2-phy
               - qcom,msm8996-qusb2-phy
               - qcom,msm8998-qusb2-phy
