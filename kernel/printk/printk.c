@@ -2375,11 +2375,18 @@ static bool pr_flush(int timeout_ms, bool reset_on_progress);
 static bool __pr_flush(struct console *con, int timeout_ms, bool reset_on_progress);
 
 #ifdef CONFIG_QCA_MINIDUMP
-void minidump_get_log_buf_info(uint64_t *plog_buf, uint64_t *plog_buf_len)
+void minidump_get_log_buf_info(u64 *plog_buf, u64 *plog_buf_len)
 {
-	*plog_buf = (uint64_t)(uintptr_t)log_buf;
-	*plog_buf_len = (uint64_t)__pa(&log_buf_len);
+	*plog_buf = (u64)(uintptr_t)log_buf;
+	*plog_buf_len = (u64)__pa(&log_buf_len);
 }
+EXPORT_SYMBOL(minidump_get_log_buf_info);
+void minidump_get_dmesg_read_info(u64 *dmesg_tail_lpos, u64 *dmesg_tail_len)
+{
+	*dmesg_tail_lpos = (u64)(uintptr_t)&prb->text_data_ring.tail_lpos;
+	*dmesg_tail_len = sizeof(dmesg_tail_lpos);
+}
+EXPORT_SYMBOL(minidump_get_dmesg_read_info);
 #endif /* CONFIG_QCA_MINIDUMP */
 
 #else /* CONFIG_PRINTK */
