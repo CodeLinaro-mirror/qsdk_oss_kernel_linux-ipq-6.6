@@ -1626,6 +1626,12 @@ set_sndbuf:
 		ret = raw_notifier_call_chain(&sock_notifier.notify,
 			SOCK_OFFLOAD_NOTIFY, (void *)sk);
 		mutex_unlock(&sock_notifier.mutex);
+
+		ret = (ret == NOTIFY_OK) ? 0 : -EOPNOTSUPP;
+		if (ret) {
+			sk->offload_appid = 0;
+			sk->offload = 0;
+		}
 		break;
 
 	default:
