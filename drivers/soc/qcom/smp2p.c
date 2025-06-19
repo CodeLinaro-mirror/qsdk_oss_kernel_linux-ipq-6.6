@@ -98,6 +98,7 @@ struct smp2p_entry {
 	const char *name;
 	u32 *value;
 	u32 last_value;
+	u32 th_last_value;
 
 	struct irq_domain *domain;
 	DECLARE_BITMAP(irq_enabled, 32);
@@ -160,6 +161,23 @@ struct qcom_smp2p {
 	struct list_head outbound;
 };
 
+#define SMP2PLOG_SIZE		256
+#define GLOBAL_TIMER_LO         0x0
+#define GLOBAL_TIMER_HI         0x4
+static void __iomem *global_timer_base;
+
+static struct smp2p_log {
+	u64 timestamp;
+	unsigned int global_timer_lo;
+	unsigned int global_timer_hi;
+	u32 value;
+	u32 last_value;
+	u32 status;
+	bool is_threaded_hdlr;
+} smp2pintr[SMP2PLOG_SIZE];
+
+static unsigned int smp2pintrindex;
+
 static void qcom_smp2p_kick(struct qcom_smp2p *smp2p)
 {
 	/* Make sure any updated data is written before the kick */
@@ -216,6 +234,74 @@ static void qcom_smp2p_negotiate(struct qcom_smp2p *smp2p)
 	}
 }
 
+static irqreturn_t qcom_smp2p_top_half(int irq, void *data)
+{
+	struct qcom_smp2p *smp2p = data;
+	char buf[SMP2P_MAX_ENTRY_NAME];
+	struct smp2p_smem_item *in;
+	struct smp2p_entry *entry;
+	unsigned int smem_id;
+	unsigned int pid;
+	size_t size;
+	u32 status;
+	u32 val;
+	int i;
+
+	smem_id = smp2p->smem_items[SMP2P_INBOUND];
+	pid = smp2p->remote_pid;
+	in = smp2p->in;
+
+	/* Acquire smem item, if not already found */
+	if (!in) {
+		in = qcom_smem_get(pid, smem_id, &size);
+		if (IS_ERR(in)) {
+			dev_err(smp2p->dev,
+				"Unable to acquire remote smp2p item\n");
+			return IRQ_HANDLED;
+		}
+
+		smp2p->in = in;
+	}
+
+	/* Match newly created entries */
+	for (i = smp2p->valid_entries; i < in->valid_entries; i++) {
+		list_for_each_entry(entry, &smp2p->inbound, node) {
+			memcpy(buf, in->entries[i].name, sizeof(buf));
+			if (!strcmp(buf, entry->name)) {
+				entry->value = &in->entries[i].value;
+				break;
+			}
+		}
+	}
+	smp2p->valid_entries = 0;
+
+	/* Log value, th_last_value and status */
+	list_for_each_entry(entry, &smp2p->inbound, node) {
+		/* Ignore entries not yet allocated by the remote side */
+		if (!entry->value)
+			continue;
+
+		val = readl(entry->value);
+
+		status = val ^ entry->th_last_value;
+		smp2pintr[smp2pintrindex].timestamp = ktime_to_us(ktime_get());
+		if (global_timer_base) {
+			smp2pintr[smp2pintrindex].global_timer_lo =
+				readl_relaxed(global_timer_base + GLOBAL_TIMER_LO) - 0x13;
+			smp2pintr[smp2pintrindex].global_timer_hi =
+				readl_relaxed(global_timer_base + GLOBAL_TIMER_HI);
+		}
+		smp2pintr[smp2pintrindex].value = val;
+		smp2pintr[smp2pintrindex].last_value = entry->th_last_value;
+		smp2pintr[smp2pintrindex++].status = status;
+		smp2pintrindex &= (SMP2PLOG_SIZE - 1);
+
+		entry->th_last_value = val;
+	}
+
+	return IRQ_WAKE_THREAD;
+}
+
 static void qcom_smp2p_notify_in(struct qcom_smp2p *smp2p)
 {
 	struct smp2p_smem_item *in;
@@ -249,6 +335,19 @@ static void qcom_smp2p_notify_in(struct qcom_smp2p *smp2p)
 		val = readl(entry->value);
 
 		status = val ^ entry->last_value;
+		smp2pintr[smp2pintrindex].timestamp = ktime_to_us(ktime_get());
+		if (global_timer_base) {
+			smp2pintr[smp2pintrindex].global_timer_lo =
+				readl_relaxed(global_timer_base + GLOBAL_TIMER_LO) - 0x13;
+			smp2pintr[smp2pintrindex].global_timer_hi =
+				readl_relaxed(global_timer_base + GLOBAL_TIMER_HI);
+		}
+		smp2pintr[smp2pintrindex].is_threaded_hdlr = 1;
+		smp2pintr[smp2pintrindex].value = val;
+		smp2pintr[smp2pintrindex].last_value = entry->last_value;
+		smp2pintr[smp2pintrindex++].status = status;
+		smp2pintrindex &= (SMP2PLOG_SIZE - 1);
+
 		entry->last_value = val;
 
 		/* No changes of this entry? */
@@ -524,6 +623,7 @@ static int qcom_smp2p_probe(struct platform_device *pdev)
 	const char *key;
 	int irq;
 	int ret;
+	unsigned int global_timer;
 
 	smp2p = devm_kzalloc(&pdev->dev, sizeof(*smp2p), GFP_KERNEL);
 	if (!smp2p)
@@ -613,13 +713,24 @@ static int qcom_smp2p_probe(struct platform_device *pdev)
 	qcom_smp2p_kick(smp2p);
 
 	ret = devm_request_threaded_irq(&pdev->dev, irq,
-					NULL, qcom_smp2p_intr,
+					qcom_smp2p_top_half, qcom_smp2p_intr,
 					IRQF_ONESHOT,
 					"smp2p", (void *)smp2p);
 	if (ret) {
 		dev_err(&pdev->dev, "failed to request interrupt\n");
 		goto unwind_interfaces;
 	}
+
+	/* Get the global timer base and remap it
+	 * to the kernel address space
+	 */
+	ret = of_property_read_u32(pdev->dev.of_node,
+				   "global_timer",
+				   &global_timer);
+	if (!ret)
+		global_timer_base = ioremap(global_timer, 8);
+	else
+		dev_info(&pdev->dev, "global timer is null\n");
 
 	/*
 	 * Treat smp2p interrupt as wakeup source, but keep it disabled
@@ -677,6 +788,10 @@ static int qcom_smp2p_remove(struct platform_device *pdev)
 
 	smp2p->out->valid_entries = 0;
 
+	memset(smp2pintr, 0, sizeof(struct smp2p_log) * SMP2PLOG_SIZE);
+	smp2pintrindex = 0;
+	iounmap(global_timer_base);
+	global_timer_base = NULL;
 	return 0;
 }
 
