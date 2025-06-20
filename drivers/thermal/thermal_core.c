@@ -665,8 +665,18 @@ int thermal_zone_bind_cooling_device(struct thermal_zone_device *tz,
 		upper_no_limit = false;
 	}
 
-	if (lower > upper || upper > cdev->max_state)
-		return -EINVAL;
+	if (upper > cdev->max_state) {
+		dev_dbg(&cdev->device, "Requested upper state is %lu but max"
+			 " supported state is %lu. Limiting to max state.\n",
+			 upper, cdev->max_state);
+		upper = cdev->max_state;
+	}
+	if (lower > upper) {
+		dev_dbg(&cdev->device, "Requested lower state is %lu which is"
+			 " greater than the upper state %lu. Limiting to upper"
+			 " state.\n", lower, upper);
+		lower = upper;
+	}
 
 	dev = kzalloc(sizeof(*dev), GFP_KERNEL);
 	if (!dev)
