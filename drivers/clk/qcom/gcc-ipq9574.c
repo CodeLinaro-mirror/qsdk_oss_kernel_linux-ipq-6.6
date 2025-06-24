@@ -1132,7 +1132,7 @@ static struct clk_branch gcc_pcie0_axi_m_clk = {
 				&pcie0_axi_m_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1149,7 +1149,7 @@ static struct clk_branch gcc_anoc_pcie0_1lane_m_clk = {
 				&pcie0_axi_m_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1179,7 +1179,7 @@ static struct clk_branch gcc_pcie1_axi_m_clk = {
 				&pcie1_axi_m_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1196,7 +1196,7 @@ static struct clk_branch gcc_anoc_pcie1_1lane_m_clk = {
 				&pcie1_axi_m_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1231,7 +1231,7 @@ static struct clk_branch gcc_pcie2_axi_m_clk = {
 				&pcie2_axi_m_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1248,7 +1248,7 @@ static struct clk_branch gcc_anoc_pcie2_2lane_m_clk = {
 				&pcie2_axi_m_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1278,7 +1278,7 @@ static struct clk_branch gcc_pcie3_axi_m_clk = {
 				&pcie3_axi_m_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1295,7 +1295,7 @@ static struct clk_branch gcc_anoc_pcie3_2lane_m_clk = {
 				&pcie3_axi_m_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1325,7 +1325,7 @@ static struct clk_branch gcc_pcie0_axi_s_clk = {
 				&pcie0_axi_s_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1342,7 +1342,7 @@ static struct clk_branch gcc_pcie0_axi_s_bridge_clk = {
 				&pcie0_axi_s_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1359,7 +1359,7 @@ static struct clk_branch gcc_snoc_pcie0_1lane_s_clk = {
 				&pcie0_axi_s_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1389,7 +1389,7 @@ static struct clk_branch gcc_pcie1_axi_s_clk = {
 				&pcie1_axi_s_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1406,7 +1406,7 @@ static struct clk_branch gcc_pcie1_axi_s_bridge_clk = {
 				&pcie1_axi_s_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1423,7 +1423,7 @@ static struct clk_branch gcc_snoc_pcie1_1lane_s_clk = {
 				&pcie1_axi_s_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1453,7 +1453,7 @@ static struct clk_branch gcc_pcie2_axi_s_clk = {
 				&pcie2_axi_s_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1470,7 +1470,7 @@ static struct clk_branch gcc_pcie2_axi_s_bridge_clk = {
 				&pcie2_axi_s_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1487,7 +1487,7 @@ static struct clk_branch gcc_snoc_pcie2_2lane_s_clk = {
 				&pcie2_axi_s_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1517,7 +1517,7 @@ static struct clk_branch gcc_pcie3_axi_s_clk = {
 				&pcie3_axi_s_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1534,7 +1534,7 @@ static struct clk_branch gcc_pcie3_axi_s_bridge_clk = {
 				&pcie3_axi_s_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1551,7 +1551,7 @@ static struct clk_branch gcc_snoc_pcie3_2lane_s_clk = {
 				&pcie3_axi_s_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1583,7 +1583,7 @@ static struct clk_branch gcc_pcie0_pipe_clk = {
 				&pcie0_pipe_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1615,7 +1615,7 @@ static struct clk_branch gcc_pcie1_pipe_clk = {
 				&pcie1_pipe_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1647,7 +1647,7 @@ static struct clk_branch gcc_pcie2_pipe_clk = {
 				&pcie2_pipe_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1679,7 +1679,7 @@ static struct clk_branch gcc_pcie3_pipe_clk = {
 				&pcie3_pipe_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1716,7 +1716,7 @@ static struct clk_branch gcc_pcie0_rchng_clk = {
 
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1746,7 +1746,7 @@ static struct clk_branch gcc_pcie1_rchng_clk = {
 				&pcie1_rchng_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1776,7 +1776,7 @@ static struct clk_branch gcc_pcie2_rchng_clk = {
 				&pcie2_rchng_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1806,7 +1806,7 @@ static struct clk_branch gcc_pcie3_rchng_clk = {
 				&pcie3_rchng_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1842,7 +1842,7 @@ static struct clk_branch gcc_pcie0_aux_clk = {
 				&pcie_aux_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1859,7 +1859,7 @@ static struct clk_branch gcc_pcie1_aux_clk = {
 				&pcie_aux_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1876,7 +1876,7 @@ static struct clk_branch gcc_pcie2_aux_clk = {
 				&pcie_aux_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -1893,7 +1893,7 @@ static struct clk_branch gcc_pcie3_aux_clk = {
 				&pcie_aux_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -2497,7 +2497,7 @@ static struct clk_branch gcc_pcie0_ahb_clk = {
 				&pcnoc_bfdcd_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -2514,7 +2514,7 @@ static struct clk_branch gcc_pcie1_ahb_clk = {
 				&pcnoc_bfdcd_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -2531,7 +2531,7 @@ static struct clk_branch gcc_pcie2_ahb_clk = {
 				&pcnoc_bfdcd_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
@@ -2548,7 +2548,7 @@ static struct clk_branch gcc_pcie3_ahb_clk = {
 				&pcnoc_bfdcd_clk_src.clkr.hw
 			},
 			.num_parents = 1,
-			.flags = CLK_SET_RATE_PARENT,
+			.flags = CLK_SET_RATE_PARENT | CLK_IGNORE_UNUSED,
 			.ops = &clk_branch2_ops,
 		},
 	},
