@@ -214,6 +214,7 @@
 /* Early Cal related fields */
 #define CAL_COMPLETE_TIMEOUT_SECS		60
 #define CAL_COMPLETE_MAGIC			0xCAFECACE
+#define CAL_PANIC_MAGIC				0xDEADBEEF
 
 static bool paniconcaltimeout = true;
 module_param(paniconcaltimeout, bool, 0644);
@@ -1957,19 +1958,30 @@ static int qcom_pcie_deferred_probe(void *data)
 
 	while (retry < (CAL_COMPLETE_TIMEOUT_SECS * 10)) {
 		val = readl(cal_status);
-		if (val == CAL_COMPLETE_MAGIC)
+		if (val == CAL_COMPLETE_MAGIC || val == CAL_PANIC_MAGIC)
 			break;
 		msleep(100);
 		retry++;
 	}
 
-	if (val == CAL_COMPLETE_MAGIC)
+	if (val == CAL_COMPLETE_MAGIC) {
+		dev_info(&pdev->dev, "Calibration completed, took %ds\n",
+			 retry / 10);
+		dev_info(&pdev->dev, "Starting Enumeration\n");
 		return __qcom_pcie_probe(pdev);
+	}
 
-	if (paniconcaltimeout)
-		panic("Calibration timedout for %s\n", pdev->name);
-	else
-		dev_err(&pdev->dev, "Calibration timedout for %s\n", pdev->name);
+	if (paniconcaltimeout) {
+		if (val == CAL_PANIC_MAGIC)
+			panic("Calibration failed for %s\n", pdev->name);
+		else
+			panic("Calibration timedout for %s\n", pdev->name);
+	} else {
+		if (val == CAL_PANIC_MAGIC)
+			dev_err(&pdev->dev, "Calibration failed for %s\n", pdev->name);
+		else
+			dev_err(&pdev->dev, "Calibration timedout for %s\n", pdev->name);
+	}
 
 	return -EINVAL;
 }
