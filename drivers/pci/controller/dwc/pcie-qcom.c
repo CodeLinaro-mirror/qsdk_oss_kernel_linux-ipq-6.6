@@ -334,7 +334,16 @@ struct qcom_pcie {
 	bool enable_iatu;
 	u32 iatu_ib0_base_addr[3];	/* Low , High, Limit */
 	u32 iatu_ib0_target_addr[3];	/* Low , High, Limit */
+	bool enumerated;
+	u32 rc_idx;
 };
+
+struct qcom_pcie_info{
+	struct qcom_pcie *pcie;
+	struct list_head node;
+};
+
+LIST_HEAD(qcom_pcie_list);
 
 #define to_qcom_pcie(x)		dev_get_drvdata((x)->dev)
 
@@ -1343,6 +1352,20 @@ static int qcom_pcie_link_up(struct dw_pcie *pci)
 	return !!(val & PCI_EXP_LNKSTA_DLLLA);
 }
 
+static int qcom_pcie_establish_link(struct qcom_pcie *pcie)
+{
+	struct dw_pcie *pci = pcie->pci;
+
+	if (dw_pcie_link_up(pci))
+		return 0;
+
+	/* Enable Link Training state machine */
+	if (pcie->cfg->ops->ltssm_enable)
+		pcie->cfg->ops->ltssm_enable(pcie);
+
+	return dw_pcie_wait_for_link(pci);
+}
+
 static int qcom_pcie_host_init(struct dw_pcie_rp *pp)
 {
 	struct dw_pcie *pci = to_dw_pcie_from_pp(pp);
@@ -1756,14 +1779,123 @@ static void qcom_pcie_init_debugfs(struct qcom_pcie *pcie)
 				    qcom_pcie_link_transition_count);
 }
 
+int pcie_rescan(int val)
+{
+	int ret;
+	struct dw_pcie_rp *pp;
+	struct qcom_pcie *pcie;
+	struct qcom_pcie_info *pcie_info, *tmp;
+
+	if (!list_empty(&qcom_pcie_list)) {
+		list_for_each_entry_safe(pcie_info, tmp, &qcom_pcie_list, node) {
+			pcie = pcie_info->pcie;
+			if ((pcie) && (pcie->rc_idx == val)) {
+				if (pcie->enumerated) {
+					pr_notice("PCIe: RC%d already enumerated\n", val);
+				} else {
+					pp = &(pcie->pci->pp);
+					if (pp->ops->host_init) {
+						ret = pp->ops->host_init(pp);
+						if (ret)
+							return ret;
+					}
+
+					dw_pcie_setup_rc(pp);
+
+					ret = qcom_pcie_establish_link(pcie);
+					if (ret)
+						return ret;
+
+					ret = pci_host_probe(pp->bridge);
+					if (ret) {
+						pr_err("PCIe rescan failed\n");
+						return ret;
+					}
+
+					pcie->enumerated = true;
+				}
+			}
+		}
+	}
+
+	return 0;
+}
+
+static ssize_t slot_rescan_store(const struct bus_type *bus, const char *buf,
+			      size_t count)
+{
+	unsigned long val;
+
+	if (kstrtoul(buf, 0, &val) < 0)
+		return -EINVAL;
+
+	pci_lock_rescan_remove();
+	pr_debug("slot rescan from sysfs\n");
+	pcie_rescan(val);
+	pci_unlock_rescan_remove();
+
+	return count;
+}
+static BUS_ATTR_WO(slot_rescan);
+
+void pcie_remove_bus(int val)
+{
+	struct dw_pcie_rp *pp;
+	struct qcom_pcie *pcie;
+	struct qcom_pcie_info *pcie_info, *tmp;
+	struct dw_pcie *pci;
+
+	if (!list_empty(&qcom_pcie_list)) {
+		list_for_each_entry_safe_reverse(pcie_info, tmp, &qcom_pcie_list, node) {
+			pcie = pcie_info->pcie;
+			if ((pcie) && (pcie->rc_idx == val)) {
+				if (!pcie->enumerated) {
+					pr_notice("\nPCIe: RC%d already removed\n", val);
+				} else {
+					pr_notice("---> Removing %d\n", val);
+					pp = &(pcie->pci->pp);
+					pci = pcie->pci;
+
+					pci_stop_root_bus(pp->bridge->bus);
+					pci_remove_root_bus(pp->bridge->bus);
+					if (pp->ops->host_deinit)
+						pp->ops->host_deinit(pp);
+
+					pcie->enumerated = false;
+					pr_notice(" ... done<---\n");
+				}
+			}
+		}
+	}
+}
+
+static ssize_t slot_remove_store(const struct bus_type *bus, const char *buf,
+			      size_t count)
+{
+	unsigned long val;
+
+	if (kstrtoul(buf, 0, &val) < 0)
+		return -EINVAL;
+
+	pci_lock_rescan_remove();
+	pr_debug("slot remove from sysfs\n");
+	pcie_remove_bus(val);
+	pci_unlock_rescan_remove();
+
+	return count;
+}
+static BUS_ATTR_WO(slot_remove);
+
 static int __qcom_pcie_probe(struct platform_device *pdev)
 {
 	const struct qcom_pcie_cfg *pcie_cfg;
+	struct qcom_pcie_info *pcie_info;
 	struct device *dev = &pdev->dev;
 	struct qcom_pcie *pcie;
 	struct dw_pcie_rp *pp;
 	struct resource *res;
 	struct dw_pcie *pci;
+	static int rc_idx;
 	int ret;
 	uint32_t num_lanes = 0;
 
@@ -1911,6 +2043,8 @@ static int __qcom_pcie_probe(struct platform_device *pdev)
 		goto err_phy_exit;
 	}
 
+	pcie->enumerated = true;
+
 	qcom_pcie_icc_update(pcie);
 
 	if (pcie->mhi)
@@ -1928,6 +2062,30 @@ static int __qcom_pcie_probe(struct platform_device *pdev)
 			pm_runtime_disable(&pdev->dev);
 			goto err_phy_exit;
 		}
+	}
+
+	if (!rc_idx) {
+		ret = bus_create_file(&pci_bus_type, &bus_attr_slot_rescan);
+		if (ret != 0) {
+			dev_err(&pdev->dev, "Failed to create sysfs slot rescan file\n");
+			return ret;
+		}
+
+		ret = bus_create_file(&pci_bus_type, &bus_attr_slot_remove);
+		if (ret != 0) {
+			dev_err(&pdev->dev, "Failed to create sysfs slot remove file\n");
+			return ret;
+		}
+	}
+
+	pcie->rc_idx = pcie->domain;
+	rc_idx++;
+
+	/* Add qcom_pcie pointer to the list */
+	pcie_info = kzalloc(sizeof(struct qcom_pcie_info), GFP_KERNEL);
+	if (pcie_info) {
+		pcie_info->pcie = pcie;
+		list_add_tail(&pcie_info->node, &qcom_pcie_list);
 	}
 
 	return 0;
