@@ -218,7 +218,16 @@
 
 static bool paniconcaltimeout = true;
 module_param(paniconcaltimeout, bool, 0644);
-MODULE_PARM_DESC(paniconcaltimeout, "Panic on Calibration timeout: 0,1");
+MODULE_PARM_DESC(paniconcaltimeout, "Panic on calibration timeout: 0,1");
+
+/*
+ * Some EP devices need additional time after calibration completes
+ * before they're ready for enumeration. This parameter allows tuning
+ * that delay based on specific hardware requirements.
+ */
+static unsigned int cal_reset_wait_ms = 1000;
+module_param(cal_reset_wait_ms, uint, 0644);
+MODULE_PARM_DESC(cal_reset_wait_ms, "Time to wait, in ms, after calibration complete");
 
 #define QCOM_PCIE_1_0_0_MAX_CLOCKS		4
 struct qcom_pcie_resources_1_0_0 {
@@ -2125,6 +2134,11 @@ static int qcom_pcie_deferred_probe(void *data)
 	if (val == CAL_COMPLETE_MAGIC) {
 		dev_info(&pdev->dev, "Calibration completed, took %ds\n",
 			 retry / 10);
+		/* After the EP completes cal, wait here for it to complete
+		 * reset. Default is 1000ms
+		 */
+		if (cal_reset_wait_ms)
+			msleep(cal_reset_wait_ms);
 		dev_info(&pdev->dev, "Starting Enumeration\n");
 		return __qcom_pcie_probe(pdev);
 	}
