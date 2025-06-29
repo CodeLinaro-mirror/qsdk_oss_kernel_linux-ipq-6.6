@@ -294,6 +294,7 @@ ipt_do_table(void *priv,
 	/* Initialization */
 	WARN_ON(!(table->valid_hooks & (1 << hook)));
 	local_bh_disable();
+	addend = xt_write_recseq_begin();
 	private = READ_ONCE(table->private); /* Address dependency. */
 	cpu        = smp_processor_id();
 	table_base = private->entries;
@@ -304,6 +305,7 @@ ipt_do_table(void *priv,
 
 		counter = xt_get_this_cpu_counter(&e->counters);
 		ADD_COUNTER(*counter, skb->len, 1);
+		xt_write_recseq_end(addend);
 		local_bh_enable();
 		return verdict;
 	}
@@ -313,7 +315,6 @@ ipt_do_table(void *priv,
 	indev = state->in ? state->in->name : nulldevname;
 	outdev = state->out ? state->out->name : nulldevname;
 
-	addend = xt_write_recseq_begin();
 	jumpstack  = (struct ipt_entry **)private->jumpstack[cpu];
 
 	/* Switch to alternate jumpstack if we're being invoked via TEE.
