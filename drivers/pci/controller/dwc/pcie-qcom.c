@@ -2162,6 +2162,7 @@ static int qcom_pcie_probe(struct platform_device *pdev)
 {
 	struct device_node *rp_node, *ep_node;
 	struct device *dev = &pdev->dev;
+	bool early_cal_support = false;
 	struct nvmem_cell *pcie_nvmem;
 	u8 *disable_status;
 	int ret = 0;
@@ -2186,28 +2187,26 @@ static int qcom_pcie_probe(struct platform_device *pdev)
 	}
 
 	rp_node = of_get_next_child(dev->of_node, NULL);
-	if (!rp_node) {
-		dev_err(dev, "Failed to get rp node\n");
-		return -ENODEV;
-	}
-
-	ep_node = of_get_next_child(rp_node, NULL);
-	if (!rp_node) {
-		dev_err(dev, "Failed to get ep node\n");
+	if (rp_node) {
+		ep_node = of_get_next_child(rp_node, NULL);
 		of_node_put(rp_node);
-		return -ENODEV;
+		if (ep_node) {
+			if (of_property_match_string(ep_node,
+						     "qcom,early_cal_enabled",
+						     "okay") >= 0)
+				early_cal_support = true;
+			of_node_put(ep_node);
+		}
 	}
 
-	if (of_property_match_string(ep_node, "qcom,early_cal_enabled", "okay") >= 0) {
+	if (early_cal_support) {
 		dev_info(dev, "Starting kthread for %s", pdev->name);
 		kthread_run(qcom_pcie_deferred_probe, pdev,
 			    "deferred_probe_%s", pdev->name);
 	} else {
+		dev_info(dev, "Early Cal not supported\n");
 		ret =  __qcom_pcie_probe(pdev);
 	}
-
-	of_node_put(ep_node);
-	of_node_put(rp_node);
 
 	return ret;
 }
