@@ -100,6 +100,8 @@ struct qcom_glink {
 	struct qcom_glink_pipe *tx_pipe;
 
 	struct work_struct rx_work;
+	/* Dedicated workqueue for handling received control messages */
+	struct workqueue_struct *rx_wq;
 	spinlock_t rx_lock;
 	struct list_head rx_queue;
 
@@ -1004,7 +1006,7 @@ static int qcom_glink_rx_defer(struct qcom_glink *glink, size_t extra)
 	list_add_tail(&dcmd->node, &glink->rx_queue);
 	spin_unlock(&glink->rx_lock);
 
-	schedule_work(&glink->rx_work);
+	queue_work(glink->rx_wq, &glink->rx_work);
 	log_kernel_ts(glinkwork_schedule, glinkwork_sche_index);
 	glinkwork_sche_index &= (RPMLOG_SIZE - 1);
 
@@ -1938,6 +1940,8 @@ static void qcom_glink_cancel_rx_work(struct qcom_glink *glink)
 
 	log_kernel_ts(glinkwork_cancel, glinkwork_cancel_index);
 	glinkwork_cancel_index &= (RPMLOG_SIZE - 1);
+	if (glink->rx_wq)
+		destroy_workqueue(glink->rx_wq);
 
 	list_for_each_entry_safe(dcmd, tmp, &glink->rx_queue, node)
 		kfree(dcmd);
@@ -2023,6 +2027,13 @@ struct qcom_glink *qcom_glink_native_probe(struct device *dev,
 	spin_lock_init(&glink->rx_lock);
 	INIT_LIST_HEAD(&glink->rx_queue);
 	INIT_WORK(&glink->rx_work, qcom_glink_work);
+
+	glink->rx_wq = alloc_ordered_workqueue("glink_rx_wq", 0);
+	if (!glink->rx_wq)
+		return ERR_PTR(dev_err_probe(dev,
+					     -ENOMEM,
+					     "failed to allocate rx workqueue\n"));
+
 	init_waitqueue_head(&glink->tx_avail_notify);
 
 	spin_lock_init(&glink->idr_lock);
