@@ -37,6 +37,7 @@ obj-$(CONFIG_IPQ_GCC_9679) += gcc-ipq9679.o
 obj-$(CONFIG_IPQ_NSSCC_5332) += nsscc-ipq5332.o
 obj-$(CONFIG_IPQ_NSSCC_5424) += nsscc-ipq5424.o
 obj-$(CONFIG_IPQ_NSSCC_9574) += nsscc-ipq9574.o
+obj-$(CONFIG_IPQ_NSSCC_9679) += nsscc-ipq9679.o
 obj-$(CONFIG_IPQ_LCC_806X) += lcc-ipq806x.o
 obj-$(CONFIG_MDM_GCC_9607) += gcc-mdm9607.o
 obj-$(CONFIG_MDM_GCC_9615) += gcc-mdm9615.o
