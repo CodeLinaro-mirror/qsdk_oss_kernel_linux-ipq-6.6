@@ -49,19 +49,6 @@ struct qcom_glink_smem {
 	u32 remote_pid;
 };
 
-struct glink_smem_pipe {
-	struct qcom_glink_pipe native;
-
-	__le32 *tail;
-	__le32 *head;
-
-	void *fifo;
-
-	struct qcom_glink_smem *smem;
-};
-
-#define to_smem_pipe(p) container_of(p, struct glink_smem_pipe, native)
-
 static size_t glink_smem_rx_avail(struct qcom_glink_pipe *np)
 {
 	struct glink_smem_pipe *pipe = to_smem_pipe(np);
