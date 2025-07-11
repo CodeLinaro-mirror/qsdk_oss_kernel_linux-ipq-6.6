@@ -949,6 +949,15 @@ static void qcom_glink_handle_intent_req(struct qcom_glink *glink,
 	qcom_glink_channel_ref_put(channel);
 }
 
+static struct rx_defer {
+	u16 cmd;
+	u16 param1;
+	u32 param2;
+	u32 global_timer_lo;
+	u32 global_timer_hi;
+	s64 ktime;
+} rx_defer;
+
 static int qcom_glink_rx_defer(struct qcom_glink *glink, size_t extra)
 {
 	struct glink_defer_cmd *dcmd;
@@ -967,6 +976,29 @@ static int qcom_glink_rx_defer(struct qcom_glink *glink, size_t extra)
 	INIT_LIST_HEAD(&dcmd->node);
 
 	qcom_glink_rx_peek(glink, &dcmd->msg, 0, sizeof(dcmd->msg) + extra);
+
+	rx_defer.cmd = le16_to_cpu(dcmd->msg.cmd);
+	rx_defer.ktime = ktime_to_ms(ktime_get());
+	rx_defer.param1 = le16_to_cpu(dcmd->msg.param1);
+	rx_defer.param2 = le32_to_cpu(dcmd->msg.param2);
+	log_global_timer(&rx_defer, 0);
+
+	if (rx_defer.cmd != GLINK_CMD_VERSION &&
+	    rx_defer.cmd != GLINK_CMD_VERSION_ACK &&
+	    rx_defer.cmd != GLINK_CMD_OPEN &&
+	    rx_defer.cmd != GLINK_CMD_CLOSE &&
+	    rx_defer.cmd != GLINK_CMD_CLOSE_ACK &&
+	    rx_defer.cmd != GLINK_CMD_RX_INTENT_REQ) {
+		dev_err(glink->dev,
+			"timestamp = %llu cmd: %d param1: %d param2: %d global_timer_lo: %u global_timer_hi: %u\n",
+			rx_defer.ktime,
+			rx_defer.cmd,
+			rx_defer.param1,
+			rx_defer.param2,
+			rx_defer.global_timer_lo,
+			rx_defer.global_timer_hi);
+			panic("Unknown command ID: %d\n", rx_defer.cmd);
+	}
 
 	spin_lock(&glink->rx_lock);
 	list_add_tail(&dcmd->node, &glink->rx_queue);
