@@ -21,6 +21,7 @@
 #include <linux/init.h>
 #include <linux/of.h>
 #include <linux/of_gpio.h>
+#include <linux/of_reserved_mem.h>
 #include <linux/pci.h>
 #include <linux/pm_runtime.h>
 #include <linux/platform_device.h>
@@ -2110,17 +2111,49 @@ err_pm_runtime_put:
 
 static int qcom_pcie_deferred_probe(void *data)
 {
+	struct device_node *rp_node, *ep_node, *rmem_node;
 	struct platform_device *pdev = data;
-	struct resource *res;
+	u32 retry = 0, val, cal_status_off;
+	struct reserved_mem *rmem = NULL;
+	struct device *dev = &pdev->dev;
 	void __iomem *cal_status;
-	u32 retry = 0, val;
 
-	res = platform_get_resource_byname(pdev, IORESOURCE_MEM, "cal-status");
-	if (res) {
-		cal_status = devm_ioremap(&pdev->dev, res->start,
-					  resource_size(res));
-		if (IS_ERR(cal_status))
-			return PTR_ERR(cal_status);
+	rp_node = of_get_next_child(dev->of_node, NULL);
+	if (rp_node) {
+		ep_node = of_get_next_child(rp_node, NULL);
+		of_node_put(rp_node);
+		if (ep_node) {
+			rmem_node = of_parse_phandle(ep_node, "memory-region", 0);
+			of_node_put(ep_node);
+			if (rmem_node) {
+				rmem = of_reserved_mem_lookup(rmem_node);
+				of_node_put(rmem_node);
+			}
+		}
+	}
+
+	if (!rmem) {
+		dev_err(dev, "Failed to get reserved mem for cal status\n");
+		return -ENOMEM;
+	}
+
+	if (of_property_read_u32(dev->of_node, "cal-status-offset",
+				 &cal_status_off)) {
+		dev_err(dev, "Failed to get cal-status-offset from devicetree\n");
+		return -EINVAL;
+	}
+
+	if (rmem->base + cal_status_off + sizeof(u32) >
+					rmem->base + rmem->size - 1) {
+		dev_err(dev, "Invalid cal-status-offset: 0x%x rmem base: 0x%pa size: %pa\n",
+			cal_status_off, &rmem->base, &rmem->size);
+		return -EINVAL;
+	}
+
+	cal_status = devm_ioremap(dev, rmem->base + cal_status_off, sizeof(u32));
+	if (IS_ERR(cal_status)) {
+		dev_err(dev, "Failed to ioremap cal_status memory\n");
+		return PTR_ERR(cal_status);
 	}
 
 	while (retry < (CAL_COMPLETE_TIMEOUT_SECS * 10)) {
@@ -2130,6 +2163,8 @@ static int qcom_pcie_deferred_probe(void *data)
 		msleep(100);
 		retry++;
 	}
+
+	devm_iounmap(dev, cal_status);
 
 	if (val == CAL_COMPLETE_MAGIC) {
 		dev_info(&pdev->dev, "Calibration completed, took %ds\n",
