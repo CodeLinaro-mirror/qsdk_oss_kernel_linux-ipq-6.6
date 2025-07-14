@@ -575,8 +575,9 @@ static void msm_complete_rx_dma(void *args)
 
 	for (i = 0; i < count; i++) {
 		char flag = TTY_NORMAL;
+		unsigned char ch = dma->virt[i];
 
-		if (msm_port->break_detected && dma->virt[i] == 0) {
+		if (msm_port->break_detected && ch == 0) {
 			port->icount.brk++;
 			flag = TTY_BREAK;
 			msm_port->break_detected = false;
@@ -588,10 +589,10 @@ static void msm_complete_rx_dma(void *args)
 			flag = TTY_NORMAL;
 
 		spin_unlock_irqrestore(&port->lock, flags);
-		sysrq = uart_handle_sysrq_char(port, dma->virt[i]);
+		sysrq = uart_handle_sysrq_char(port, ch);
 		spin_lock_irqsave(&port->lock, flags);
 		if (!sysrq)
-			tty_insert_flip_char(tport, dma->virt[i], flag);
+			tty_insert_flip_char(tport, ch, flag);
 	}
 
 	msm_start_rx_dma(msm_port);
