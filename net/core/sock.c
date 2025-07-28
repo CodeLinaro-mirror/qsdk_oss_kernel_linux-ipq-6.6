@@ -1611,12 +1611,12 @@ set_sndbuf:
 
 	case SO_OFFLOAD:
 		if (val < 0 || val > 7) {
-			ret = -EPERM;
+			ret = -EINVAL;
 			break;
 		}
 
 		if (val == sk->offload_appid) {
-			ret = -EPERM;
+			ret = -EINVAL;
 			break;
 		}
 
@@ -1630,7 +1630,14 @@ set_sndbuf:
 			SOCK_OFFLOAD_NOTIFY, (void *)sk);
 		mutex_unlock(&sock_notifier.mutex);
 
-		ret = (ret == NOTIFY_OK) ? 0 : -EOPNOTSUPP;
+		if (ret == NOTIFY_OK) {
+			ret = 0;
+		} else if (ret == NOTIFY_DONE) {
+			ret = -ENOPKG;
+		} else if (ret == NOTIFY_BAD) {
+			ret = -EPERM;
+		}
+
 		if (ret) {
 			sk->offload_appid = 0;
 			sk->offload = 0;
