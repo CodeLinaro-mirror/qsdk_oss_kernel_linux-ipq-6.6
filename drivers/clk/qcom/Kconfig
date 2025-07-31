@@ -232,6 +232,12 @@ config IPQ_GCC_9679
 	  i2c, USB, SD/eMMC, etc. Select this for the root clock
 	  of ipq9679.
 
+config IPQ_NSSCC_5200
+        tristate "IPQ5200 NSS Clock Controller"
+        depends on IPQ_GCC_5200
+        help
+          Support for NSS clock controller on ipq5200 devices.
+
 config IPQ_NSSCC_5332
         tristate "IPQ5332 NSS Clock Controller"
         depends on IPQ_GCC_5332
