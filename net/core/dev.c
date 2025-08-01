@@ -157,6 +157,7 @@
 #include "dev.h"
 #include "net-sysfs.h"
 #include "skbuff_debug.h"
+#include "skbuff_recycle.h"
 
 static DEFINE_SPINLOCK(ptype_lock);
 struct list_head ptype_base[PTYPE_HASH_SIZE] __read_mostly;
@@ -5996,6 +5997,7 @@ another_round:
 	if (static_branch_unlikely(&generic_xdp_needed_key)) {
 		int ret2;
 
+		skb_recycler_clear_fast_flags(skb);
 		migrate_disable();
 		ret2 = do_xdp_generic(rcu_dereference(skb->dev->xdp_prog), skb);
 		migrate_enable();
@@ -6015,6 +6017,8 @@ another_round:
 			}
 		}
 	}
+
+	skb_recycler_clear_fast_flags(skb);
 
 	if (eth_type_vlan(skb->protocol)) {
 		skb = skb_vlan_untag(skb);
