@@ -173,7 +173,7 @@ static int sdhci_msm_ice_set_hwkey_config(struct qcom_ice *ice,
 	int ret;
 
 	ice_settings = kzalloc(sizeof(struct ice_config_sec), GFP_KERNEL);
-	if (!ice)
+	if (!ice_settings)
 		return -ENOMEM;
 
 	switch (cipher) {
@@ -200,7 +200,7 @@ static int sdhci_msm_ice_set_hwkey_config(struct qcom_ice *ice,
 	default:
 		dev_err_ratelimited(dev, "Unhandled cipher for HW Key support;"
 					"cipher_id=%d\n", cipher);
-		kfree(ice);
+		kfree(ice_settings);
 		return -EINVAL;
 	}
 	ret = qcom_config_sec_ice(ice_settings, sizeof(struct ice_config_sec));
