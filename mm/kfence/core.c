@@ -52,7 +52,16 @@
 static bool kfence_enabled __read_mostly;
 static bool disabled_by_warn __read_mostly;
 
+/*
+ * For LM256, KFENCE is not supported due to memory constraints.
+ * For LM512, KFENCE can be enabled from bootargs.
+ * For other profiles, KFENCE enabled by default.
+ */
+#if ((CONFIG_IPQ_MEM_PROFILE != 512) || (CONFIG_IPQ_MEM_PROFILE != 256))
 unsigned long kfence_sample_interval __read_mostly = CONFIG_KFENCE_SAMPLE_INTERVAL;
+#else
+unsigned long kfence_sample_interval __read_mostly;
+#endif
 EXPORT_SYMBOL_GPL(kfence_sample_interval); /* Export for test modules. */
 
 #ifdef MODULE_PARAM_PREFIX
@@ -97,11 +106,11 @@ static const struct kernel_param_ops sample_interval_param_ops = {
 module_param_cb(sample_interval, &sample_interval_param_ops, &kfence_sample_interval, 0600);
 
 /* Pool usage% threshold when currently covered allocations are skipped. */
-static unsigned long kfence_skip_covered_thresh __read_mostly = 75;
+static unsigned long kfence_skip_covered_thresh __read_mostly = 15;
 module_param_named(skip_covered_thresh, kfence_skip_covered_thresh, ulong, 0644);
 
 /* Allocation burst count: number of excess KFENCE allocations per sample. */
-static unsigned int kfence_burst __read_mostly;
+static unsigned int kfence_burst __read_mostly = 1000;
 module_param_named(burst, kfence_burst, uint, 0644);
 
 /* If true, use a deferrable timer. */
@@ -109,7 +118,7 @@ static bool kfence_deferrable __read_mostly = IS_ENABLED(CONFIG_KFENCE_DEFERRABL
 module_param_named(deferrable, kfence_deferrable, bool, 0444);
 
 /* If true, check all canary bytes on panic. */
-static bool kfence_check_on_panic __read_mostly;
+static bool kfence_check_on_panic __read_mostly = true;
 module_param_named(check_on_panic, kfence_check_on_panic, bool, 0444);
 
 /* The pool of pages used for guard pages and objects. */
