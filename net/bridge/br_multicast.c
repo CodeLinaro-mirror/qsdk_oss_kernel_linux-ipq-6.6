@@ -1432,6 +1432,9 @@ struct net_bridge_port_group *br_multicast_new_port_group(
 	p->eht_host_tree = RB_ROOT;
 	p->eht_set_tree = RB_ROOT;
 	p->mcast_gc.destroy = br_multicast_destroy_port_group;
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	p->eht_event = BR_MCAST_EVENT_NONE;
+#endif
 	INIT_HLIST_HEAD(&p->src_list);
 
 	if (!br_multicast_is_star_g(group) &&
@@ -2056,6 +2059,17 @@ void br_multicast_del_port(struct net_bridge_port *port)
 
 	/* Take care of the remaining groups, only perm ones should be left */
 	spin_lock_bh(&br->multicast_lock);
+
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	/*
+	 * Send Flush ALL Event for the given MCAST LAN port.
+	 */
+	if ((port->flags & BR_MCAST_MCUC_HW_OFFLOAD) && (!port->mcast_flush_all)) {
+		port->mcast_flush_all = true;
+		br_mcast_offload_send_event((void *)port, NULL, BR_MCAST_EVENT_FLUSH_ALL);
+	}
+#endif
+
 	hlist_for_each_entry_safe(pg, n, &port->mglist, mglist)
 		br_multicast_find_del_pg(br, pg);
 	spin_unlock_bh(&br->multicast_lock);
@@ -2147,6 +2161,17 @@ static void __br_multicast_disable_port_ctx(struct net_bridge_mcast_port *pmctx)
 void br_multicast_disable_port(struct net_bridge_port *port)
 {
 	spin_lock_bh(&port->br->multicast_lock);
+
+	/*
+	 * Send FLUSH ALL Event for the given MCAST LAN port.
+	 */
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	if ((port->flags & BR_MCAST_MCUC_HW_OFFLOAD) && (!port->mcast_flush_all)) {
+		port->mcast_flush_all = true;
+		br_mcast_offload_send_event((void *)port, NULL, BR_MCAST_EVENT_FLUSH_ALL);
+	}
+#endif
+
 	__br_multicast_disable_port_ctx(&port->multicast_ctx);
 	spin_unlock_bh(&port->br->multicast_lock);
 }
@@ -4125,6 +4150,7 @@ void br_multicast_ctx_init(struct net_bridge *br,
 #endif
 #if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
 	br_mcast_offload_init_map(brmctx);
+	br_mcast_offload_init_shared_mac_states(brmctx);
 #endif
 }
 
@@ -4133,6 +4159,7 @@ void br_multicast_ctx_deinit(struct net_bridge_mcast *brmctx)
 	__br_multicast_stop(brmctx);
 #if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
 	br_mcast_offload_cleanup_map(brmctx);
+	br_mcast_offload_cleanup_shared_mac_states(brmctx);
 #endif
 }
 
@@ -4417,10 +4444,27 @@ void br_multicast_stop(struct net_bridge *br)
 void br_multicast_dev_del(struct net_bridge *br)
 {
 	struct net_bridge_mdb_entry *mp;
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	struct net_bridge_port *p;
+#endif
 	HLIST_HEAD(deleted_head);
 	struct hlist_node *tmp;
 
 	spin_lock_bh(&br->multicast_lock);
+
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	/* multicast_lock protects port_list, no RCU lock needed */
+	list_for_each_entry(p, &br->port_list, list) {
+		/*
+		 * Send FLUSH ALL Event for the given MCAST LAN port.
+		 */
+		if ((p->flags & BR_MCAST_MCUC_HW_OFFLOAD) && (!p->mcast_flush_all)) {
+			p->mcast_flush_all = true;
+			br_mcast_offload_send_event((void *)p, NULL, BR_MCAST_EVENT_FLUSH_ALL);
+		}
+	}
+#endif
+
 	hlist_for_each_entry_safe(mp, tmp, &br->mdb_list, mdb_node)
 		br_multicast_del_mdb_entry(mp);
 	hlist_move_list(&br->mcast_gc_list, &deleted_head);

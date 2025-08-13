@@ -20,6 +20,7 @@
 #include <linux/rhashtable.h>
 #include <linux/refcount.h>
 #include <linux/netfilter.h>
+#include <linux/netfilter_bridge.h>
 #include <linux/export.h>
 
 #define BR_HASH_BITS 8
@@ -59,6 +60,10 @@ enum {
 
 #ifndef BR_IP_MAC_HASH_SIZE
 #define BR_IP_MAC_HASH_SIZE 256
+#endif
+
+#ifndef BR_SHARED_MAC_STATE_HASH_SIZE
+#define BR_SHARED_MAC_STATE_HASH_SIZE 64
 #endif
 
 typedef struct bridge_id bridge_id;
@@ -173,6 +178,7 @@ struct net_bridge_mcast {
 #endif /* IS_ENABLED(CONFIG_IPV6) */
 #if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
 	struct hlist_head		ip_mac_map[BR_IP_MAC_HASH_SIZE];
+	struct hlist_head		shared_mac_state[BR_SHARED_MAC_STATE_HASH_SIZE];
 #endif
 #endif /* CONFIG_BRIDGE_IGMP_SNOOPING */
 };
@@ -369,6 +375,9 @@ struct net_bridge_port_group {
 	struct rhash_head		rhnode;
 	struct net_bridge_mcast_gc	mcast_gc;
 	struct rcu_head			rcu;
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	enum br_mcast_event_type	eht_event;
+#endif
 };
 
 struct net_bridge_mdb_entry {
@@ -402,6 +411,7 @@ struct net_bridge_port {
 	u8				sub_br_id;
 	u8				priority;
 	u8				state;
+	bool				mcast_flush_all;
 	u16				mac_lrn_cnt;
 	u16				mac_lrn_limit;
 	u16				port_no;

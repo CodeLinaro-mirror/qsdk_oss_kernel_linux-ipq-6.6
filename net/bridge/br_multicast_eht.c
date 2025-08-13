@@ -29,6 +29,9 @@
 
 #include "br_private.h"
 #include "br_private_mcast_eht.h"
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+#include "br_mcast_offload.h"
+#endif
 
 static bool br_multicast_del_eht_set_entry(struct net_bridge_port_group *pg,
 					   union net_bridge_eht_addr *src_addr,
@@ -40,7 +43,7 @@ static void br_multicast_create_eht_set_entry(const struct net_bridge_mcast *brm
 					      int filter_mode,
 					      bool allow_zero_src);
 
-static struct net_bridge_group_eht_host *
+struct net_bridge_group_eht_host *
 br_multicast_eht_host_lookup(struct net_bridge_port_group *pg,
 			     union net_bridge_eht_addr *h_addr)
 {
@@ -126,13 +129,34 @@ br_multicast_eht_set_lookup(struct net_bridge_port_group *pg,
 
 static void __eht_destroy_host(struct net_bridge_group_eht_host *eht_host)
 {
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	struct net_bridge_port_group *pg = eht_host->pg;
+	union net_bridge_eht_addr eht_host_addr;
+#endif
+
 	WARN_ON(!hlist_empty(&eht_host->set_entries));
 
 	br_multicast_eht_hosts_dec(eht_host->pg);
 
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	memset(&eht_host_addr, 0, sizeof(eht_host_addr));
+	memcpy(&eht_host_addr, &eht_host->h_addr, sizeof(eht_host_addr));
+#endif
+
 	rb_erase(&eht_host->rb_node, &eht_host->pg->eht_host_tree);
 	RB_CLEAR_NODE(&eht_host->rb_node);
 	kfree(eht_host);
+
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	pg->eht_event = BR_MCAST_EVENT_DEL;
+
+	/*
+	 * Trigger the DEL event here as the EHT HOST Destroy
+	 * can happen from any path.
+	 */
+	br_mcast_offload_send_event((void *)pg, (void *)&eht_host_addr, pg->eht_event);
+	pg->eht_event = BR_MCAST_EVENT_NONE;
+#endif
 }
 
 static void br_multicast_destroy_eht_set_entry(struct net_bridge_mcast_gc *gc)
@@ -172,21 +196,44 @@ static void __eht_del_set_entry(struct net_bridge_group_eht_set_entry *set_h)
 	hlist_add_head(&set_h->mcast_gc.gc_node, &set_h->br->mcast_gc_list);
 	queue_work(system_long_wq, &set_h->br->mcast_gc_work);
 
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	if (eht_host->pg->eht_event == BR_MCAST_EVENT_NONE)
+		eht_host->pg->eht_event = BR_MCAST_EVENT_UPDATE;
+#endif
+
 	if (hlist_empty(&eht_host->set_entries))
 		__eht_destroy_host(eht_host);
 }
 
 static void br_multicast_del_eht_set(struct net_bridge_group_eht_set *eht_set)
 {
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	struct net_bridge_port_group *pg = eht_set->pg;
+	union net_bridge_eht_addr eht_host_addr;
+#endif
 	struct net_bridge_group_eht_set_entry *set_h;
 	struct rb_node *node;
 
 	while ((node = rb_first(&eht_set->entry_tree))) {
 		set_h = rb_entry(node, struct net_bridge_group_eht_set_entry,
 				 rb_node);
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+		if (eht_set->timer_expired) {
+			pg->eht_event = BR_MCAST_EVENT_NONE;
+			memset(&eht_host_addr, 0, sizeof(eht_host_addr));
+			memcpy(&eht_host_addr, &set_h->h_addr, sizeof(eht_host_addr));
+		}
+#endif
+
 		__eht_del_set_entry(set_h);
+
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+		if (eht_set->timer_expired && pg->eht_event)
+			br_mcast_offload_send_event((void *)pg, (void *)&eht_host_addr, pg->eht_event);
+#endif
 	}
 
+	eht_set->timer_expired = false;
 	rb_erase(&eht_set->rb_node, &eht_set->pg->eht_set_tree);
 	RB_CLEAR_NODE(&eht_set->rb_node);
 	hlist_add_head(&eht_set->mcast_gc.gc_node, &eht_set->br->mcast_gc_list);
@@ -208,15 +255,30 @@ void br_multicast_eht_clean_sets(struct net_bridge_port_group *pg)
 static void br_multicast_eht_set_entry_expired(struct timer_list *t)
 {
 	struct net_bridge_group_eht_set_entry *set_h = from_timer(set_h, t, timer);
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	struct net_bridge_port_group *pg = set_h->eht_set->pg;
+	union net_bridge_eht_addr eht_host_addr;
+#endif
 	struct net_bridge *br = set_h->br;
 
 	spin_lock(&br->multicast_lock);
 	if (RB_EMPTY_NODE(&set_h->rb_node) || timer_pending(&set_h->timer))
 		goto out;
 
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	pg->eht_event = BR_MCAST_EVENT_NONE;
+	memset(&eht_host_addr, 0, sizeof(eht_host_addr));
+	memcpy(&eht_host_addr, &set_h->h_addr, sizeof(eht_host_addr));
+#endif
+
 	br_multicast_del_eht_set_entry(set_h->eht_set->pg,
 				       &set_h->eht_set->src_addr,
 				       &set_h->h_addr);
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	if (pg && pg->eht_event)
+		br_mcast_offload_send_event((void *)pg, (void *)&eht_host_addr, pg->eht_event);
+#endif
+
 out:
 	spin_unlock(&br->multicast_lock);
 }
@@ -231,6 +293,7 @@ static void br_multicast_eht_set_expired(struct timer_list *t)
 	if (RB_EMPTY_NODE(&eht_set->rb_node) || timer_pending(&eht_set->timer))
 		goto out;
 
+	eht_set->timer_expired = true;
 	br_multicast_del_eht_set(eht_set);
 out:
 	spin_unlock(&br->multicast_lock);
@@ -276,6 +339,9 @@ __eht_lookup_create_host(struct net_bridge_port_group *pg,
 	rb_insert_color(&eht_host->rb_node, &pg->eht_host_tree);
 
 	br_multicast_eht_hosts_inc(pg);
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	pg->eht_event = BR_MCAST_EVENT_ADD;
+#endif
 
 	return eht_host;
 }
@@ -331,6 +397,11 @@ __eht_lookup_create_set_entry(struct net_bridge *br,
 	if (!allow_zero_src)
 		eht_host->num_entries++;
 
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	if (eht_set->pg->eht_event == BR_MCAST_EVENT_NONE)
+		eht_set->pg->eht_event = BR_MCAST_EVENT_UPDATE;
+#endif
+
 	return set_h;
 }
 
@@ -365,11 +436,17 @@ __eht_lookup_create_set(struct net_bridge_port_group *pg,
 	eht_set->mcast_gc.destroy = br_multicast_destroy_eht_set;
 	eht_set->pg = pg;
 	eht_set->br = pg->key.port->br;
+	eht_set->timer_expired = false;
 	eht_set->entry_tree = RB_ROOT;
 	timer_setup(&eht_set->timer, br_multicast_eht_set_expired, 0);
 
 	rb_link_node(&eht_set->rb_node, parent, link);
 	rb_insert_color(&eht_set->rb_node, &pg->eht_set_tree);
+
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	if (pg->eht_event == BR_MCAST_EVENT_NONE)
+		pg->eht_event = BR_MCAST_EVENT_UPDATE;
+#endif
 
 	return eht_set;
 }
@@ -788,6 +865,9 @@ bool br_multicast_eht_handle(const struct net_bridge_mcast *brmctx,
 	if (!eht_enabled)
 		goto out;
 
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	pg->eht_event = BR_MCAST_EVENT_NONE;
+#endif
 	memset(&eht_host_addr, 0, sizeof(eht_host_addr));
 	memcpy(&eht_host_addr, h_addr, addr_size);
 	if (addr_size == sizeof(__be32))
@@ -797,6 +877,14 @@ bool br_multicast_eht_handle(const struct net_bridge_mcast *brmctx,
 	else
 		changed = __eht_ip6_handle(brmctx, pg, &eht_host_addr, srcs,
 					   nsrcs, grec_type);
+#endif
+
+	/*
+	 * Send Bridge MCAST notification event.
+	 */
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	if (pg && pg->eht_event)
+		br_mcast_offload_send_event((void *)pg, (void *)&eht_host_addr, pg->eht_event);
 #endif
 
 out:

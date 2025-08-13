@@ -5,6 +5,58 @@
 #include <uapi/linux/netfilter_bridge.h>
 #include <linux/skbuff.h>
 
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+#define BR_MCAST_SRC_ENT_LIMIT	32
+
+/*
+ * Bridge MCAST filter mode
+ */
+enum br_mcast_filter {
+	BR_MCAST_SRCLIST_NONE = 0,
+	BR_MCAST_SRCLIST_EXCLUDE,
+	BR_MCAST_SRCLIST_INCLUDE,
+	BR_MCAST_SRCLIST_IGNORE,
+	BR_MCAST_SRCLIST_FILTER_MAX
+};
+
+/*
+ * Bridge MCAST event generated for each host
+ */
+enum br_mcast_event_type {
+	BR_MCAST_EVENT_NONE = 0,
+	BR_MCAST_EVENT_ADD,
+	BR_MCAST_EVENT_DEL,
+	BR_MCAST_EVENT_UPDATE,
+	BR_MCAST_EVENT_FLUSH_ALL,
+	BR_MCAST_EVENT_MAX
+};
+
+/*
+ * MCAST event when a host is added / deleted / updated in Bridge snoop table
+ */
+struct br_mcast_event {
+	/* MCAST Group & Port */
+	u32 ifindex;
+	bool is_v4;
+	bool is_vlan;
+	union nf_inet_addr grp_ip;
+
+	/* Source list for IGMPv3/MLDv2 */
+	u32 src_cnt;
+	enum br_mcast_filter src_filter;
+	union nf_inet_addr src_list[BR_MCAST_SRC_ENT_LIMIT];
+
+	/* Host information */
+	u8 host_mac[ETH_ALEN];
+};
+
+/*
+ * Register/De-register APIs to listen to Bridge MCAST Atomic Notify events.
+ */
+extern void br_mcast_offload_event_notifier_register(struct notifier_block *nb);
+extern void br_mcast_offload_event_notifier_unregister(struct notifier_block *nb);
+#endif
+
 struct nf_bridge_frag_data {
 	char    mac[ETH_HLEN];
 	bool    vlan_present;

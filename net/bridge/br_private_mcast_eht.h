@@ -47,9 +47,12 @@ struct net_bridge_group_eht_set {
 	struct net_bridge_port_group	*pg;
 	struct net_bridge		*br;
 	struct net_bridge_mcast_gc	mcast_gc;
+	bool				timer_expired;
 };
 
 #ifdef CONFIG_BRIDGE_IGMP_SNOOPING
+struct net_bridge_group_eht_host *br_multicast_eht_host_lookup(struct net_bridge_port_group *pg,
+			     union net_bridge_eht_addr *h_addr);
 void br_multicast_eht_clean_sets(struct net_bridge_port_group *pg);
 bool br_multicast_eht_handle(const struct net_bridge_mcast *brmctx,
 			     struct net_bridge_port_group *pg,
