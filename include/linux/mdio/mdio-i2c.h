@@ -16,8 +16,10 @@ enum mdio_i2c_proto {
 	MDIO_I2C_MARVELL_C22,
 	MDIO_I2C_C45,
 	MDIO_I2C_ROLLBALL,
-	MIDO_I2C_QCOM,
+	MDIO_I2C_QCOM,
 };
+
+#define MIDO_I2C_QCOM MDIO_I2C_QCOM
 
 struct qcom_mdio_i2c_data {
 	void __iomem	*membase[2];

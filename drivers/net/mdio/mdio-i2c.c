@@ -584,7 +584,7 @@ struct mii_bus *mdio_i2c_alloc(struct device *parent, struct i2c_adapter *i2c,
 	if (!i2c_check_functionality(i2c, I2C_FUNC_I2C))
 		return ERR_PTR(-EINVAL);
 
-	if (protocol == MIDO_I2C_QCOM)
+	if (protocol == MDIO_I2C_QCOM)
 		return qcom_mdio_i2c_alloc(parent, i2c);
 
 	mii = mdiobus_alloc();
