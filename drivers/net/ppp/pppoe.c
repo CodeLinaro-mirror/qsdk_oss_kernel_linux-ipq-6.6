@@ -552,7 +552,7 @@ static struct sk_buff *pppoe_gso_segment(struct sk_buff *skb, netdev_features_t 
 	/* Reset back headers to original skb */
 	do {
 		struct pppoe_hdr *ph;
-		u8 len = 0;
+		u32 ip_len = 0;
 
 		skb->mac_len = mac_len;
 		skb->protocol = protocol;
@@ -566,16 +566,16 @@ static struct sk_buff *pppoe_gso_segment(struct sk_buff *skb, netdev_features_t 
 			struct iphdr *iph;
 
 			iph = (struct iphdr *)((uint8_t *)ph + sizeof(*ph) + PPP_PROTO_LEN);
-			len = iph->tot_len;
-		} else if (ntohs(inner_protocol == PPP_IPV6)) {
+			ip_len = ntohs(iph->tot_len);
+		} else if (ntohs(inner_protocol) == PPP_IPV6) {
 			struct ipv6hdr *ip6h;
 
 			ip6h = (struct ipv6hdr *)((uint8_t *)ph + sizeof(*ph) + PPP_PROTO_LEN);
-			len = ip6h->payload_len + sizeof(*ip6h);
+			ip_len = ntohs(ip6h->payload_len) + sizeof(*ip6h);
 		}
 
 		/* Adjust the header length as per segment */
-		ph->length = (len + PPP_PROTO_LEN);
+		ph->length = htons(ip_len + PPP_PROTO_LEN);
 	} while ((skb = skb->next));
 
 out:
