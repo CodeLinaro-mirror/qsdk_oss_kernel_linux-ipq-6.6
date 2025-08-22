@@ -47,7 +47,8 @@
 #include "sd_ops.h"
 #include "sdio_ops.h"
 
-#define EMU_CLK_ADJ_REG 0x194C008
+#define EMU_CLK_ADJ_REG 	0x194C008
+#define IPQ9679_EMU_CLK_ADJ_REG	0x1959008
 
 /* The max erase timeout, used when host->max_busy_timeout isn't specified */
 #define MMC_ERASE_TIMEOUT_MS	(60 * 1000) /* 60 s */
@@ -2217,7 +2218,12 @@ void mmc_rescan(struct work_struct *work)
 		return;
 
 	if (of_property_read_bool(host->parent->of_node, "qcom,emulation")) {
-		emu_clk_adj_reg = ioremap(EMU_CLK_ADJ_REG, 4);
+		if (of_device_is_compatible(host->parent->of_node, "qcom,ipq9679-sdhci")) {
+			emu_clk_adj_reg = ioremap(IPQ9679_EMU_CLK_ADJ_REG, 4);
+		} else {
+			emu_clk_adj_reg = ioremap(EMU_CLK_ADJ_REG, 4);
+		}
+
 		if (IS_ERR_OR_NULL(emu_clk_adj_reg)) {
 			dev_info(host->parent,
 				 "ioremap failed for emu clk adj register\n");
