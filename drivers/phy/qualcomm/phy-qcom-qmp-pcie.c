@@ -3683,6 +3683,30 @@ static int qmp_pcie_disable(struct phy *phy)
 	return qmp_pcie_exit(phy);
 }
 
+static int qmp_pcie_reset(struct phy *phy)
+{
+	struct qmp_pcie *qmp = phy_get_drvdata(phy);
+	int ret;
+
+	ret = clk_bulk_prepare_enable(qmp->num_pipe_clks, qmp->pipe_clks);
+	if (ret)
+		return ret;
+
+	ret = clk_bulk_prepare_enable(ARRAY_SIZE(qmp_pciephy_clk_l), qmp->clks);
+	if (ret) {
+		clk_bulk_disable_unprepare(qmp->num_pipe_clks, qmp->pipe_clks);
+		return ret;
+	}
+
+	ret = qmp_pcie_disable(phy);
+	if (ret) {
+		clk_bulk_disable_unprepare(ARRAY_SIZE(qmp_pciephy_clk_l), qmp->clks);
+		clk_bulk_disable_unprepare(qmp->num_pipe_clks, qmp->pipe_clks);
+	}
+
+	return ret;
+}
+
 static int qmp_pcie_set_mode(struct phy *phy, enum phy_mode mode, int submode)
 {
 	struct qmp_pcie *qmp = phy_get_drvdata(phy);
@@ -3703,6 +3727,7 @@ static int qmp_pcie_set_mode(struct phy *phy, enum phy_mode mode, int submode)
 static const struct phy_ops qmp_pcie_phy_ops = {
 	.power_on	= qmp_pcie_enable,
 	.power_off	= qmp_pcie_disable,
+	.reset		= qmp_pcie_reset,
 	.set_mode	= qmp_pcie_set_mode,
 	.owner		= THIS_MODULE,
 };

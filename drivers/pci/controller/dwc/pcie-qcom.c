@@ -314,6 +314,7 @@ struct qcom_pcie_ops {
 	void (*deinit)(struct qcom_pcie *pcie);
 	void (*ltssm_enable)(struct qcom_pcie *pcie);
 	int (*config_sid)(struct qcom_pcie *pcie);
+	void (*reset)(struct qcom_pcie *pcie);
 };
 
 struct qcom_pcie_cfg {
@@ -1198,6 +1199,21 @@ static int qcom_pcie_get_resources_2_9_0(struct qcom_pcie *pcie)
 	return 0;
 }
 
+static void qcom_pcie_reset_2_9_0(struct qcom_pcie *pcie)
+{
+	struct qcom_pcie_resources_2_9_0 *res = &pcie->res.v2_9_0;
+	struct device *dev = pcie->pci->dev;
+	int ret;
+
+	ret = clk_bulk_prepare_enable(res->num_clks, res->clks);
+	if (ret) {
+		dev_err(dev, "%s: Failed to enable clocks: %d\n", __func__, ret);
+		return;
+	}
+
+	clk_bulk_disable_unprepare(res->num_clks, res->clks);
+}
+
 static void qcom_pcie_deinit_2_9_0(struct qcom_pcie *pcie)
 {
 	struct qcom_pcie_resources_2_9_0 *res = &pcie->res.v2_9_0;
@@ -1641,6 +1657,7 @@ static const struct qcom_pcie_ops ops_1_27_0 = {
 	.post_init = qcom_pcie_post_init_1_27_0,
 	.deinit = qcom_pcie_deinit_2_9_0,
 	.ltssm_enable = qcom_pcie_2_3_2_ltssm_enable,
+	.reset = qcom_pcie_reset_2_9_0,
 };
 
 static const struct qcom_pcie_cfg cfg_1_0_0 = {
@@ -1896,7 +1913,8 @@ static ssize_t slot_remove_store(const struct bus_type *bus, const char *buf,
 }
 static BUS_ATTR_WO(slot_remove);
 
-static int __qcom_pcie_probe(struct platform_device *pdev)
+static int __qcom_pcie_probe(struct platform_device *pdev,
+			     bool reset_before_init)
 {
 	const struct qcom_pcie_cfg *pcie_cfg;
 	struct qcom_pcie_info *pcie_info;
@@ -2041,6 +2059,19 @@ static int __qcom_pcie_probe(struct platform_device *pdev)
 
 	pp->ops = &qcom_pcie_dw_ops;
 
+	/* reset_before_init is set if host and phy were initialized by
+	 * the bootloader and requires a reset before initialization here.
+	 * This is to avoid causing the clocks to go a bad state.
+	 */
+	if (reset_before_init && pcie->cfg->ops->reset) {
+		pcie->cfg->ops->reset(pcie);
+		ret = phy_reset(pcie->phy);
+		if (ret) {
+			dev_err(pci->dev, "Failed to reset phy: %d\n", ret);
+			goto err_pm_runtime_put;
+		}
+	}
+
 	ret = phy_init(pcie->phy);
 	if (ret)
 		goto err_pm_runtime_put;
@@ -2175,7 +2206,7 @@ static int qcom_pcie_deferred_probe(void *data)
 		if (cal_reset_wait_ms)
 			msleep(cal_reset_wait_ms);
 		dev_info(&pdev->dev, "Starting Enumeration\n");
-		return __qcom_pcie_probe(pdev);
+		return __qcom_pcie_probe(pdev, true);
 	}
 
 	if (paniconcaltimeout) {
@@ -2240,7 +2271,7 @@ static int qcom_pcie_probe(struct platform_device *pdev)
 			    "deferred_probe_%s", pdev->name);
 	} else {
 		dev_info(dev, "Early Cal not supported\n");
-		ret =  __qcom_pcie_probe(pdev);
+		ret =  __qcom_pcie_probe(pdev, false);
 	}
 
 	return ret;
