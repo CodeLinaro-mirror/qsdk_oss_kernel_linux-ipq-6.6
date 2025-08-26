@@ -1666,6 +1666,8 @@ static void ppp_setup(struct net_device *dev)
 	dev->hw_features |= (NETIF_F_FRAGLIST | NETIF_F_SG | NETIF_F_TSO | NETIF_F_GSO);
 	dev->hw_features |= (NETIF_F_TSO6 | NETIF_F_TSO_MANGLEID | NETIF_F_HW_CSUM);
 
+	dev->hw_features |= NETIF_F_GSO_UDP_L4;
+
 	dev->hard_header_len = PPP_HDRLEN;
 	dev->mtu = PPP_MRU;
 	dev->addr_len = 0;
