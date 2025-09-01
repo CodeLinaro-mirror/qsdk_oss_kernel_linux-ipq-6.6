@@ -43,6 +43,8 @@
 #define QCA8K_HDR_TYPE_2B				0
 #define QCA8K_HDR_TYPE_4B				1
 
+#define HIGH_ADDR_DFLT	0x200
+
 /* Global control registers */
 #define QCA8K_REG_MASK_CTRL				0x000
 #define   QCA8K_MASK_CTRL_REV_ID_MASK			GENMASK(7, 0)
