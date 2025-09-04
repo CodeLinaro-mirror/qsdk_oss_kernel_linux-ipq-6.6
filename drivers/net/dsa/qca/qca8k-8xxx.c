@@ -359,13 +359,11 @@ qca8k_read_mii(struct qca8k_priv *priv, uint32_t reg, uint32_t *val)
 
 	mutex_lock_nested(&bus->mdio_lock, MDIO_MUTEX_NESTED);
 
-	ret = qca8k_set_page(priv, page);
-	if (ret < 0)
-		goto exit;
-
+	bus->write(bus, 0x18, 0, page);
+	udelay(100);
 	ret = qca8k_mii_read32(bus, 0x10 | r2, r1, val);
+	bus->write(bus, 0x18, 0, HIGH_ADDR_DFLT);
 
-exit:
 	mutex_unlock(&bus->mdio_lock);
 	return ret;
 }
@@ -401,13 +399,11 @@ qca8k_write_mii(struct qca8k_priv *priv, uint32_t reg, uint32_t val)
 
 	mutex_lock_nested(&bus->mdio_lock, MDIO_MUTEX_NESTED);
 
-	ret = qca8k_set_page(priv, page);
-	if (ret < 0)
-		goto exit;
-
+	bus->write(bus, 0x18, 0, page);
+	udelay(100);
 	qca8k_mii_write32(bus, 0x10 | r2, r1, val);
+	bus->write(bus, 0x18, 0, HIGH_ADDR_DFLT);
 
-exit:
 	mutex_unlock(&bus->mdio_lock);
 	return ret;
 }
@@ -455,10 +451,8 @@ qca8k_regmap_update_bits_mii(struct qca8k_priv *priv, uint32_t reg,
 
 	mutex_lock_nested(&bus->mdio_lock, MDIO_MUTEX_NESTED);
 
-	ret = qca8k_set_page(priv, page);
-	if (ret < 0)
-		goto exit;
-
+	bus->write(bus, 0x18, 0, page);
+	udelay(100);
 	ret = qca8k_mii_read32(bus, 0x10 | r2, r1, &val);
 	if (ret < 0)
 		goto exit;
@@ -466,6 +460,7 @@ qca8k_regmap_update_bits_mii(struct qca8k_priv *priv, uint32_t reg,
 	val &= ~mask;
 	val |= write_val;
 	qca8k_mii_write32(bus, 0x10 | r2, r1, val);
+	bus->write(bus, 0x18, 0, HIGH_ADDR_DFLT);
 
 exit:
 	mutex_unlock(&bus->mdio_lock);
