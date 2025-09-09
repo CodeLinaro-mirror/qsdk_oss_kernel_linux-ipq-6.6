@@ -2042,11 +2042,6 @@ qca8k_setup(struct dsa_switch *ds)
 		if (ret)
 			return ret;
 
-		ret = regmap_clear_bits(priv->regmap, QCA8K_PORT_LOOKUP_CTRL(port),
-					QCA8K_PORT_LOOKUP_LEARN);
-		if (ret)
-			return ret;
-
 		/* For port based vlans to work we need to set the
 		 * default egress vid
 		 */
@@ -2063,15 +2058,21 @@ qca8k_setup(struct dsa_switch *ds)
 			return ret;
 	}
 
-	/* For port based vlans to work we need to set the
-	 * default egress vlan mode as untouched
-	 */
 	dsa_switch_for_each_port(dp, ds) {
+		/* For port based vlans to work we need to set the
+		 * default egress vlan mode as untouched
+		 */
 		qca8k_rmw(priv, QCA8K_REG_PORT_VLAN_CTRL1(dp->index),
 			QCA8K_PORT_VLAN_EGMODE_MASK, QCA8K_PORT_VLAN_EGMODE(0x3));
 		qca8k_rmw(priv, QCA8K_ROUTE_EGRESS_VLAN,
 			QCA8K_ROUTE_EGRESS_VLAN_MASK(dp->index),
 			QCA8K_ROUTE_EGRESS_VLAN_VAL(dp->index, 0x3));
+
+		/* disable fdb learning on all the ports, including CPU ports */
+		ret = regmap_clear_bits(priv->regmap, QCA8K_PORT_LOOKUP_CTRL(dp->index),
+					QCA8K_PORT_LOOKUP_LEARN);
+		if (ret)
+			return ret;
 	}
 
 	/* The port 5 of the qca8337 have some problem in flood condition. The
@@ -2126,6 +2127,10 @@ qca8k_teardown(struct dsa_switch *ds)
 		/* resume stp status */
 		qca8k_rmw(priv, QCA8K_PORT_LOOKUP_CTRL(i),
 	  		QCA8K_PORT_LOOKUP_STATE_MASK, QCA8K_PORT_LOOKUP_STATE_FORWARD);
+
+		/* recover fdb learning on all the ports */
+		regmap_set_bits(priv->regmap, QCA8K_PORT_LOOKUP_CTRL(i),
+					QCA8K_PORT_LOOKUP_LEARN);
 
 		/* resume port status */
 		qca8k_port_set_status(priv, i, 1);
