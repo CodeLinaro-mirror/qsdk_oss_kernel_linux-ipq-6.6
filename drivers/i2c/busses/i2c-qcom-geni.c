@@ -156,7 +156,7 @@ static const struct geni_i2c_clk_fld geni_i2c_clk_map_19p2mhz[] = {
 
 /* source_clock = 32 MHz */
 static const struct geni_i2c_clk_fld geni_i2c_clk_map_32mhz[] = {
-       {KHZ(100), 8, 14, 18, 38},
+       {KHZ(100), 12, 9, 10, 25},
        {KHZ(400), 4,  3,  9, 19},
        {KHZ(1000), 2, 3,  5, 15},
        {},
