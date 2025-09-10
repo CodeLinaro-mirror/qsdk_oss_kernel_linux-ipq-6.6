@@ -603,7 +603,12 @@ static int qcom_glink_send_open_req(struct qcom_glink *glink,
 		struct glink_msg msg;
 		u8 name[GLINK_NAME_SIZE];
 	} __packed req;
+
 	int name_len = strlen(channel->name) + 1;
+
+	if (name_len > GLINK_NAME_SIZE)
+		return -EINVAL;
+
 	int req_len = ALIGN(sizeof(req.msg) + name_len, 8);
 	int ret;
 	unsigned long flags;
@@ -623,7 +628,8 @@ static int qcom_glink_send_open_req(struct qcom_glink *glink,
 	req.msg.cmd = cpu_to_le16(GLINK_CMD_OPEN);
 	req.msg.param1 = cpu_to_le16(channel->lcid);
 	req.msg.param2 = cpu_to_le32(name_len);
-	strcpy(req.name, channel->name);
+
+	strscpy(req.name, channel->name, GLINK_NAME_SIZE);
 
 	ret = qcom_glink_tx(glink, &req, req_len, NULL, 0, true);
 	if (ret)
