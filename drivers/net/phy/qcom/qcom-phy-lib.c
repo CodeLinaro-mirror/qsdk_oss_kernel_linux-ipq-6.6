@@ -269,6 +269,7 @@ EXPORT_SYMBOL_GPL(at803x_read_specific_status);
 int at803x_config_mdix(struct phy_device *phydev, u8 ctrl)
 {
 	u16 val;
+	int ret;
 
 	switch (ctrl) {
 	case ETH_TP_MDI:
@@ -284,9 +285,16 @@ int at803x_config_mdix(struct phy_device *phydev, u8 ctrl)
 		return 0;
 	}
 
-	return phy_modify_changed(phydev, AT803X_SPECIFIC_FUNCTION_CONTROL,
+	ret = phy_modify_changed(phydev, AT803X_SPECIFIC_FUNCTION_CONTROL,
 			  AT803X_SFC_MDI_CROSSOVER_MODE_M,
 			  FIELD_PREP(AT803X_SFC_MDI_CROSSOVER_MODE_M, val));
+	if (ret > 0) {
+		ret = genphy_soft_reset(phydev);
+		if (ret < 0)
+			return ret;
+	}
+
+	return ret;
 }
 EXPORT_SYMBOL_GPL(at803x_config_mdix);
 
@@ -674,3 +682,15 @@ int qca808x_led_reg_blink_set(struct phy_device *phydev, u16 reg,
 	return 0;
 }
 EXPORT_SYMBOL_GPL(qca808x_led_reg_blink_set);
+
+int qcom_phy_config_aneg(struct phy_device *phydev)
+{
+	int ret;
+
+	ret = at803x_config_mdix(phydev, phydev->mdix_ctrl);
+	if (ret < 0)
+		return ret;
+
+	return genphy_config_aneg(phydev);
+}
+EXPORT_SYMBOL_GPL(qcom_phy_config_aneg);
