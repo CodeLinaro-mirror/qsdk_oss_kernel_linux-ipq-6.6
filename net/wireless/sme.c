@@ -837,6 +837,20 @@ void __cfg80211_connect_result(struct net_device *dev,
 						 wdev->u.client.ssid_len,
 						 wdev->conn_bss_type,
 						 IEEE80211_PRIVACY_ANY);
+			/* In Hidden SSID cases, AP might be stored without
+			 * SSID information in scan results.
+			 * cfg80211_get_bss will return NULL in such cases.
+			 * Retry cfg80211_get_bss() with NULL SSID
+			 * as a fallback.
+			 */
+			if (!cr->links[link].bss) {
+				cr->links[link].bss =
+					cfg80211_get_bss(wdev->wiphy, NULL,
+					cr->links[link].bssid,
+					NULL, 0, wdev->conn_bss_type,
+					IEEE80211_PRIVACY_ANY);
+			}
+
 			if (!cr->links[link].bss) {
 				bss_not_found = true;
 				break;
