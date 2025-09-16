@@ -241,3 +241,4 @@ int qca808x_led_reg_brightness_set(struct phy_device *phydev,
 int qca808x_led_reg_blink_set(struct phy_device *phydev, u16 reg,
 			      unsigned long *delay_on,
 			      unsigned long *delay_off);
+int qcom_phy_config_aneg(struct phy_device *phydev);
