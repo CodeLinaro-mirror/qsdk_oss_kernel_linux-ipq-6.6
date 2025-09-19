@@ -1202,16 +1202,13 @@ static int qcom_pcie_get_resources_2_9_0(struct qcom_pcie *pcie)
 static void qcom_pcie_reset_2_9_0(struct qcom_pcie *pcie)
 {
 	struct qcom_pcie_resources_2_9_0 *res = &pcie->res.v2_9_0;
-	struct device *dev = pcie->pci->dev;
-	int ret;
+	int num_clks = res->num_clks;
 
-	ret = clk_bulk_prepare_enable(res->num_clks, res->clks);
-	if (ret) {
-		dev_err(dev, "%s: Failed to enable clocks: %d\n", __func__, ret);
+	if (!res->clks || num_clks <= 0)
 		return;
-	}
 
-	clk_bulk_disable_unprepare(res->num_clks, res->clks);
+	while (--num_clks >= 0)
+		clk_force_disable(res->clks[num_clks].clk);
 }
 
 static void qcom_pcie_deinit_2_9_0(struct qcom_pcie *pcie)
@@ -2064,6 +2061,8 @@ static int __qcom_pcie_probe(struct platform_device *pdev,
 	 * This is to avoid causing the clocks to go a bad state.
 	 */
 	if (reset_before_init && pcie->cfg->ops->reset) {
+		qcom_ep_reset_assert(pcie);
+		msleep(50);
 		pcie->cfg->ops->reset(pcie);
 		ret = phy_reset(pcie->phy);
 		if (ret) {
