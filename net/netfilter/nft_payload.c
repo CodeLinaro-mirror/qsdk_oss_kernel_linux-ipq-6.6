@@ -24,6 +24,10 @@
 #include <linux/ip.h>
 #include <linux/ipv6.h>
 #include <net/sctp/checksum.h>
+#ifdef CONFIG_NF_CONNTRACK_DSCPREMARK_EXT
+#include <net/netfilter/nf_conntrack_dscpremark_ext.h>
+#include <linux/netfilter/xt_dscp.h>
+#endif
 
 static bool nft_payload_rebuild_vlan_hdr(const struct sk_buff *skb, int mac_off,
 					 struct vlan_ethhdr *veth)
@@ -860,6 +864,12 @@ static void nft_payload_set_eval(const struct nft_expr *expr,
 	int offset, csum_offset, vlan_hlen = 0;
 	struct sk_buff *skb = pkt->skb;
 	__wsum fsum, tsum;
+#ifdef CONFIG_NF_CONNTRACK_DSCPREMARK_EXT
+	struct nf_conn *ct;
+	enum ip_conntrack_info ctinfo;
+	u8 old_dscp;
+	u8 dscp;
+#endif
 
 	switch (priv->base) {
 	case NFT_PAYLOAD_LL_HEADER:
@@ -919,6 +929,19 @@ static void nft_payload_set_eval(const struct nft_expr *expr,
 			goto err;
 	}
 
+#ifdef CONFIG_NF_CONNTRACK_DSCPREMARK_EXT
+	if (priv->base == NFT_PAYLOAD_NETWORK_HEADER && priv->offset <= 1) {
+		switch (nft_pf(pkt)) {
+		case NFPROTO_IPV4:
+			old_dscp = ipv4_get_dsfield(ip_hdr(skb)) >> XT_DSCP_SHIFT;
+			break;
+		case NFPROTO_IPV6:
+			old_dscp = ipv6_get_dsfield(ipv6_hdr(skb)) >> XT_DSCP_SHIFT;
+			break;
+		}
+	}
+#endif
+
 	if (skb_ensure_writable(skb, max(offset + priv->len, 0)) ||
 	    skb_store_bits(skb, offset, src, priv->len) < 0)
 		goto err;
@@ -930,6 +953,28 @@ static void nft_payload_set_eval(const struct nft_expr *expr,
 		    nft_payload_csum_sctp(skb, nft_thoff(pkt)))
 			goto err;
 	}
+
+#ifdef CONFIG_NF_CONNTRACK_DSCPREMARK_EXT
+	if (priv->base == NFT_PAYLOAD_NETWORK_HEADER && priv->offset <= 1) {
+		switch (nft_pf(pkt)) {
+		case NFPROTO_IPV4:
+			/* Extract DSCP value from src for IPV4 */
+			dscp = (htonl(*src) >> 18) & XT_DSCP_MAX;
+			break;
+		case NFPROTO_IPV6:
+			/* Extract DSCP value from src for IPv6 */
+			dscp = (htonl(*src) >> 22) & XT_DSCP_MAX;
+			break;
+		}
+
+		if ((nft_pf(pkt) == NFPROTO_IPV4 || nft_pf(pkt) == NFPROTO_IPV6) &&
+		    old_dscp != dscp) {
+			ct = nf_ct_get(skb, &ctinfo);
+			if (ct)
+				nf_conntrack_dscpremark_ext_set_dscp_rule_valid(ct);
+		}
+	}
+#endif
 
 	return;
 err:
