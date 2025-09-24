@@ -383,7 +383,11 @@ static int qca808x_config_aneg(struct phy_device *phydev)
 	if (ret < 0)
 		return ret;
 
-	return __genphy_config_aneg(phydev, ret);
+	ret = __genphy_config_aneg(phydev, ret);
+	if (ret < 0)
+		return ret;
+
+	return at803x_config_mdix(phydev, phydev->mdix_ctrl);
 }
 
 static void qca808x_link_change_notify(struct phy_device *phydev)

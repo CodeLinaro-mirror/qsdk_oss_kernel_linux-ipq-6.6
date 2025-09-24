@@ -373,7 +373,6 @@ qca8k_write_mii(struct qca8k_priv *priv, uint32_t reg, uint32_t val)
 {
 	struct mii_bus *bus = priv->bus;
 	u16 r1, r2, page;
-	int ret;
 
 	if (priv->switch_id == QCA8K_ID_QCA8386) {
 		u16 switch_phy_id, lo, hi;
@@ -398,14 +397,13 @@ qca8k_write_mii(struct qca8k_priv *priv, uint32_t reg, uint32_t val)
 	qca8k_split_addr(reg, &r1, &r2, &page);
 
 	mutex_lock_nested(&bus->mdio_lock, MDIO_MUTEX_NESTED);
-
 	bus->write(bus, 0x18, 0, page);
 	udelay(100);
 	qca8k_mii_write32(bus, 0x10 | r2, r1, val);
 	bus->write(bus, 0x18, 0, HIGH_ADDR_DFLT);
-
 	mutex_unlock(&bus->mdio_lock);
-	return ret;
+
+	return 0;
 }
 
 static int
