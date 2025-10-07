@@ -797,11 +797,11 @@ static int qcom_socinfo_probe(struct platform_device *pdev)
 	}
 
 	qs->attr.oem_id = devm_kasprintf(&pdev->dev, GFP_KERNEL,
-						 "%u",
+						 "0x%x",
 						 le32_to_cpu(oem_id));
 
 	qs->attr.prod_id = devm_kasprintf(&pdev->dev, GFP_KERNEL,
-						 "%u",
+						 "0x%x",
 						 le32_to_cpu(prod_id));
 
 	qs->soc_dev = soc_device_register(&qs->attr);
