@@ -89,6 +89,10 @@ extern struct net_bridge_fdb_entry *br_fdb_has_entry(struct net_device *dev,
 						     __u16 vid);
 extern void br_fdb_update_register_notify(struct notifier_block *nb);
 extern void br_fdb_update_unregister_notify(struct notifier_block *nb);
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+extern void br_mcast_offload_mdb_register_notify(struct notifier_block *nb);
+extern void br_mcast_offload_mdb_unregister_notify(struct notifier_block *nb);
+#endif
 extern bool br_is_hairpin_enabled(struct net_device *dev);
 
 #if IS_ENABLED(CONFIG_BRIDGE) && IS_ENABLED(CONFIG_BRIDGE_IGMP_SNOOPING)
@@ -279,6 +283,27 @@ struct br_fdb_event {
 	struct net_bridge *br;
 	struct net_device *orig_dev;
 };
+
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+/*
+ * Bridge MDB event types.
+ */
+enum br_mdb_event_type {
+	BR_MDB_EVENT_NONE = 0,
+	BR_MDB_EVENT_ADD,
+	BR_MDB_EVENT_DEL,
+	BR_MDB_EVENT_MAX
+};
+
+/*
+ * Bridge MDB event data-structure.
+ */
+struct br_mdb_event {
+	struct net_device *dev;
+	union nf_inet_addr group;
+	__be16		proto;
+};
+#endif
 
 extern void br_fdb_register_notify(struct notifier_block *nb);
 extern void br_fdb_unregister_notify(struct notifier_block *nb);
