@@ -407,7 +407,15 @@ static rx_handler_result_t br_handle_frame(struct sk_buff **pskb)
 			    fwd_mask & (1u << dest[5]))
 				goto forward;
 			*pskb = skb;
-			__br_handle_local_finish(skb);
+
+			/*
+			 * Skip FDB learning for BPDU packets (protocol type 0xFEFE)
+			 * received from switch ports.
+			 * Blocked ports may still receive BPDUs,
+			 * which can overwrite entries learned on forwarding ports.
+			 */
+			if (skb->protocol != cpu_to_be16(0xfefe))
+				__br_handle_local_finish(skb);
 			return RX_HANDLER_PASS;
 
 		case 0x01:	/* IEEE MAC (Pause) */
