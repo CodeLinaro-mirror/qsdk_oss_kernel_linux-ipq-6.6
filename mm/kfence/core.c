@@ -57,7 +57,7 @@ static bool disabled_by_warn __read_mostly;
  * For LM512, KFENCE can be enabled from bootargs.
  * For other profiles, KFENCE enabled by default.
  */
-#if ((CONFIG_IPQ_MEM_PROFILE != 512) || (CONFIG_IPQ_MEM_PROFILE != 256))
+#if (CONFIG_IPQ_MEM_PROFILE == 0)
 unsigned long kfence_sample_interval __read_mostly = CONFIG_KFENCE_SAMPLE_INTERVAL;
 #else
 unsigned long kfence_sample_interval __read_mostly;
