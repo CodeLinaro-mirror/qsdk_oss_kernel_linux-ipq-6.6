@@ -846,6 +846,7 @@ static const struct rpm_regulator_data rpm_mp5496_regulators[] = {
 	{ "s2", QCOM_SMD_RPM_SMPA, 2, &mp5496_smps, "s2", 875000 },
 	{ "s4", QCOM_SMD_RPM_SMPA, 4, &mp5496_corn, "s4", 5 },
 	{ "l2", QCOM_SMD_RPM_LDOA, 2, &mp5496_ldoa2, "l2", 2950000 },
+	{ "l5", QCOM_SMD_RPM_LDOA, 5, &mp5496_ldoa2, "l5", 1800000 },
 	{}
 };
 
