@@ -77,6 +77,7 @@ enum geni_i2c_err_code {
 #define ABORT_TIMEOUT		HZ
 #define XFER_TIMEOUT		HZ
 #define RST_TIMEOUT		HZ
+#define I2C_32MHZ_TOLERANCE_HZ  320000 /* 1% Tolerance for 32 MHz */
 
 struct geni_i2c_dev {
 	struct geni_se se;
@@ -155,21 +156,49 @@ static const struct geni_i2c_clk_fld geni_i2c_clk_map_19p2mhz[] = {
 };
 
 /* source_clock = 32 MHz */
-static const struct geni_i2c_clk_fld geni_i2c_clk_map_32mhz[] = {
-       {KHZ(100), 12, 9, 10, 25},
-       {KHZ(400), 4,  3,  9, 19},
-       {KHZ(1000), 2, 3,  5, 15},
-       {},
+static const struct geni_i2c_clk_fld geni_i2c_clk_map_32mhz_minicore_se[] = {
+	{KHZ(100), 12, 9, 10, 26},
+	{KHZ(400), 4,  3,  9, 19},
+	{KHZ(1000), 2, 3,  5, 15},
+	{},
+};
+
+static const struct geni_i2c_clk_fld geni_i2c_clk_map_32mhz_firmware_se[] = {
+	{KHZ(100), 12, 9, 10, 25},
+	{KHZ(400), 4,  3,  9, 18},
+	{KHZ(1000), 2, 3,  4, 14},
+	{},
 };
 
 static int geni_i2c_clk_map_idx(struct geni_i2c_dev *gi2c)
 {
 	const struct geni_i2c_clk_fld *itr;
+	struct geni_se *se = &gi2c->se;
+	u32 val;
+	unsigned long clk_rate;
 
-	if (clk_get_rate(gi2c->se.clk) == 32 * HZ_PER_MHZ)
-		itr = geni_i2c_clk_map_32mhz;
-	else
+	/* Check if the SE is mini-core or Firmware based to
+	 * pick the counter values accordingly.
+	 * Add frequency tolerance check to ensure clock rates
+	 * approximating 32MHz (eg:31.9MHz) as valid and pick
+	 * appropriate counter values.
+	 */
+	if (!gi2c->se.clk) {
+		dev_err(gi2c->se.dev, "SE clock is not initialized\n");
+		return -EINVAL;
+	}
+
+	clk_rate = clk_get_rate(gi2c->se.clk);
+	if (abs((long)clk_rate - (long)(32 * HZ_PER_MHZ))
+	    <= I2C_32MHZ_TOLERANCE_HZ) {
+		val = readl_relaxed(se->base + SE_HW_PARAM_2_OFFSET);
+		if (val & SE_GENI_USE_MINICORES_MASK)
+			itr = geni_i2c_clk_map_32mhz_minicore_se;
+		else
+			itr = geni_i2c_clk_map_32mhz_firmware_se;
+	} else {
 		itr = geni_i2c_clk_map_19p2mhz;
+	}
 
 	while (itr->clk_freq_out != 0) {
 		if (itr->clk_freq_out == gi2c->clk_freq_out) {
