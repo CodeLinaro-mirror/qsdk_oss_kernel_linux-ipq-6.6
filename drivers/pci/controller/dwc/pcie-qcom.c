@@ -347,6 +347,7 @@ struct qcom_pcie {
 	u32 iatu_ib0_target_addr[3];	/* Low , High, Limit */
 	bool enumerated;
 	u32 rc_idx;
+	bool is_emulation;
 };
 
 struct qcom_pcie_info{
@@ -1234,7 +1235,10 @@ static int qcom_pcie_init_2_9_0(struct qcom_pcie *pcie)
 	 * Delay periods before and after reset deassert are working values
 	 * from downstream Codeaurora kernel
 	 */
-	usleep_range(2000, 2500);
+	if (pcie->is_emulation)
+		usleep_range(10000, 12000);
+	else
+		usleep_range(2000, 2500);
 
 	ret = reset_control_deassert(res->rst);
 	if (ret) {
@@ -1242,7 +1246,10 @@ static int qcom_pcie_init_2_9_0(struct qcom_pcie *pcie)
 		return ret;
 	}
 
-	usleep_range(2000, 2500);
+	if (pcie->is_emulation)
+		usleep_range(10000, 12000);
+	else
+		usleep_range(2000, 2500);
 
 	return clk_bulk_prepare_enable(res->num_clks, res->clks);
 }
@@ -2005,6 +2012,9 @@ static int __qcom_pcie_probe(struct platform_device *pdev,
 
 	pcie->enable_iatu = of_property_read_bool(pdev->dev.of_node,
 						  "enable-iatu");
+
+	pcie->is_emulation = of_property_read_bool(pdev->dev.of_node,
+						   "qcom,emulation");
 
 	of_property_read_u32(pdev->dev.of_node, "num-lanes",
 				&num_lanes);
