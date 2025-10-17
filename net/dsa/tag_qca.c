@@ -32,6 +32,7 @@ static struct sk_buff *_qca_tag_xmit(struct sk_buff *skb, struct net_device *dev
 {
 	struct dsa_port *dp = dsa_slave_to_port(dev);
 	__be16 *phdr;
+	bool is_bpdu = qca_skb_is_bpdu(skb);
 
 	skb_push(skb, hdr_len);
 
@@ -56,7 +57,7 @@ static struct sk_buff *_qca_tag_xmit(struct sk_buff *skb, struct net_device *dev
 		*phdr = FIELD_PREP(QCA_HDR_XMIT_VERSION, QCA_HDR_VERSION3);
 		*phdr |= FIELD_PREP(QCA_HDR_XMIT_VCHANNEL, dp->ds->fc_group[dp->index - 1]);
 
-		if (unlikely(dp->cpu_dp->tag_ops->proto == DSA_TAG_PROTO_4B_QCA || qca_skb_is_bpdu(skb))) {
+		if (unlikely(dp->cpu_dp->tag_ops->proto == DSA_TAG_PROTO_4B_QCA || is_bpdu)) {
 			*phdr |= QCA_HDR_XMIT_FROM_CPU;
 			*phdr |= FIELD_PREP(QCA_HDR_XMIT_DP_ID, dp->index);
 		}
