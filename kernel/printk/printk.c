@@ -2378,7 +2378,7 @@ static bool __pr_flush(struct console *con, int timeout_ms, bool reset_on_progre
 void minidump_get_log_buf_info(u64 *plog_buf, u64 *plog_buf_len)
 {
 	*plog_buf = (u64)(uintptr_t)log_buf;
-	*plog_buf_len = (u64)__pa(&log_buf_len);
+	*plog_buf_len = (uint64_t)(uintptr_t)&log_buf_len;
 }
 EXPORT_SYMBOL(minidump_get_log_buf_info);
 void minidump_get_dmesg_read_info(u64 *dmesg_tail_lpos, u64 *dmesg_tail_len)
