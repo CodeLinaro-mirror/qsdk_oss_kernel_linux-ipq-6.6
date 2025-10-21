@@ -15,6 +15,10 @@
 #endif
 
 #include "br_private.h"
+#include "br_private_mcast_eht.h"
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+#include "br_mcast_offload.h"
+#endif
 
 static bool
 br_ip4_rports_get_timer(struct net_bridge_mcast_port *pmctx,
@@ -229,7 +233,8 @@ out_cancel_err:
 
 static int __mdb_fill_info(struct sk_buff *skb,
 			   struct net_bridge_mdb_entry *mp,
-			   struct net_bridge_port_group *p)
+			   struct net_bridge_port_group *p,
+			   bool eht_dump_en)
 {
 	bool dump_srcs_mode = false;
 	struct timer_list *mtimer;
@@ -305,6 +310,28 @@ static int __mdb_fill_info(struct sk_buff *skb,
 		     nla_put_u8(skb, MDBA_MDB_EATTR_GROUP_MODE,
 				p->filter_mode)))
 			goto nest_err;
+
+		/*
+		 * Collect EHT snapshot if enabled
+		 */
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+		if (eht_dump_en &&
+				(p->key.port->flags & BR_MCAST_MCUC_HW_OFFLOAD) &&
+				!RB_EMPTY_ROOT(&p->eht_host_tree) &&
+				br_multicast_is_star_g(&mp->addr)) {
+			struct eht_snapshot *eht_snap;
+			int err;
+
+			eht_snap = br_mcast_offload_eht_collect_snapshot(p, mp->addr.proto);
+
+			if (eht_snap) {
+				err = br_mcast_offload_mdb_fill_eht_hosts_from_snapshot(skb, eht_snap);
+				br_mcast_offload_eht_snapshot_free(eht_snap);
+				if (err)
+					goto nest_err;
+			}
+		}
+#endif
 	}
 	nla_nest_end(skb, nest_ent);
 
@@ -322,9 +349,19 @@ static int br_mdb_fill_info(struct sk_buff *skb, struct netlink_callback *cb,
 	struct net_bridge *br = netdev_priv(dev);
 	struct net_bridge_mdb_entry *mp;
 	struct nlattr *nest, *nest2;
+	bool eht_dump_en = false;
 
 	if (!br_opt_get(br, BROPT_MULTICAST_ENABLED))
 		return 0;
+
+	/*
+	 * Get EHT dump flag from callback args (set by br_mdb_dump)
+	 */
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	eht_dump_en = !!cb->args[3];
+#else
+	eht_dump_en = false;
+#endif
 
 	nest = nla_nest_start_noflag(skb, MDBA_MDB);
 	if (nest == NULL)
@@ -344,7 +381,7 @@ static int br_mdb_fill_info(struct sk_buff *skb, struct netlink_callback *cb,
 		}
 
 		if (!s_pidx && mp->host_joined) {
-			err = __mdb_fill_info(skb, mp, NULL);
+			err = __mdb_fill_info(skb, mp, NULL, eht_dump_en);
 			if (err) {
 				nla_nest_cancel(skb, nest2);
 				break;
@@ -358,7 +395,7 @@ static int br_mdb_fill_info(struct sk_buff *skb, struct netlink_callback *cb,
 			if (pidx < s_pidx)
 				goto skip_pg;
 
-			err = __mdb_fill_info(skb, mp, p);
+			err = __mdb_fill_info(skb, mp, p, eht_dump_en);
 			if (err) {
 				nla_nest_end(skb, nest2);
 				goto out;
@@ -380,13 +417,47 @@ out:
 	return err;
 }
 
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+static const struct nla_policy br_mdb_dump_pol[MDBA_MAX + 1] = {
+	[MDBA_MDB_EHT_DUMP] = { .type = NLA_U32 },
+};
+#endif
+
 int br_mdb_dump(struct net_device *dev, struct sk_buff *skb,
 		struct netlink_callback *cb)
 {
 	struct net_bridge *br = netdev_priv(dev);
 	struct br_port_msg *bpm;
 	struct nlmsghdr *nlh;
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	struct nlattr *dtb[MDBA_MAX + 1];
+	u32 dump_flags = 0;
+#endif
+	bool eht_dump_en = false;
 	int err;
+
+	/*
+	 * Parse dump flags from the original request
+	 */
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	if (cb->nlh->nlmsg_len > NLMSG_HDRLEN + sizeof(struct br_port_msg)) {
+		err = nlmsg_parse(cb->nlh, sizeof(struct br_port_msg), dtb,
+				MDBA_MAX, br_mdb_dump_pol, cb->extack);
+		if (err < 0) {
+			return err;
+		}
+
+		if (dtb[MDBA_MDB_EHT_DUMP]) {
+			dump_flags = nla_get_u32(dtb[MDBA_MDB_EHT_DUMP]);
+			eht_dump_en = !!(dump_flags & MDBA_MDB_DUMPF_EHT);
+		}
+	}
+#endif
+
+	/*
+	 * Store the EHT dump flag in callback args for br_mdb_fill_info
+	 */
+	cb->args[3] = eht_dump_en ? 1 : 0;
 
 	nlh = nlmsg_put(skb, NETLINK_CB(cb->skb).portid,
 			cb->nlh->nlmsg_seq, RTM_GETMDB, sizeof(*bpm),
@@ -438,7 +509,10 @@ static int nlmsg_populate_mdb_fill(struct sk_buff *skb,
 	if (nest2 == NULL)
 		goto end;
 
-	if (__mdb_fill_info(skb, mp, pg))
+	/*
+	 * Notify path: don't include EHT data
+	 */
+	if (__mdb_fill_info(skb, mp, pg, false))
 		goto end;
 
 	nla_nest_end(skb, nest2);
