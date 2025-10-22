@@ -9,6 +9,7 @@
 #include <linux/io.h>
 #include <linux/log2.h>
 #include <linux/module.h>
+#include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/pm_opp.h>
 #include <linux/pm_runtime.h>
@@ -668,6 +669,13 @@ static int spi_geni_init(struct spi_geni_master *mas)
 		goto out_pm;
 	}
 	mas->tx_fifo_depth = geni_se_get_tx_fifo_depth(se);
+
+	/*
+	 * Override SE fifo depth to allow switching between
+	 * FIFO and DMA mode.
+	 */
+	of_property_read_u32(mas->dev->of_node, "qup-tx-fifo-depth",
+			     &mas->tx_fifo_depth);
 
 	/* Width of Tx and Rx FIFO is same */
 	mas->fifo_width_bits = geni_se_get_tx_fifo_width(se);
