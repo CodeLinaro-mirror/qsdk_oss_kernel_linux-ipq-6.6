@@ -348,6 +348,7 @@ struct qcom_pcie {
 	bool enumerated;
 	u32 rc_idx;
 	bool is_emulation;
+	bool aspm_supported;
 };
 
 struct qcom_pcie_info{
@@ -1286,6 +1287,27 @@ static int qcom_pcie_post_init(struct qcom_pcie *pcie)
 
 	writel(0, pcie->parf + PARF_Q2A_FLUSH);
 
+	if (pcie->aspm_supported) {
+		/* Enable L0s & L1 in link control register. L1ss is not enabled. */
+		if (offset) {
+			dw_pcie_dbi_ro_wr_en(pci);
+
+			/* Enable L0s & L1 */
+			val = readl_relaxed(pci->dbi_base + offset + PCI_EXP_LNKCTL);
+			val |= PCI_EXP_LNKCTL_ASPM_L0S | PCI_EXP_LNKCTL_ASPM_L1;
+			writel_relaxed(val, pci->dbi_base + offset + PCI_EXP_LNKCTL);
+
+			dev_dbg(pci->dev, "PCIe: RC%d: L0s and L1 enabled via device tree property\n", pcie->rc_idx);
+
+			dw_pcie_dbi_ro_wr_dis(pci);
+
+			/* Remove L1 entry restriction */
+			val = readl(pcie->parf + PARF_PM_CTRL);
+			val &= ~REQ_NOT_ENTR_L1;
+			writel(val, pcie->parf + PARF_PM_CTRL);
+		}
+	}
+
 	if (pcie->axi_wr_addr_halt) {
 		val = readl(pcie->parf + PARF_AXI_MSTR_WR_ADDR_HALT_V2);
 		val &= ~PARF_AXI_MSTR_WR_ADDR_HALT_V2_MASK;
@@ -2006,6 +2028,9 @@ static int __qcom_pcie_probe(struct platform_device *pdev,
 				&pcie->axi_wr_addr_halt);
 
 	of_property_read_u32(pdev->dev.of_node, "linux,pci-domain",&pcie->domain);
+
+	pcie->aspm_supported = of_property_read_bool(pdev->dev.of_node,
+									"qcom,aspm-supported");
 
 	pcie->enable_vc = of_property_read_bool(pdev->dev.of_node,
 					"enable-virtual-channel");
