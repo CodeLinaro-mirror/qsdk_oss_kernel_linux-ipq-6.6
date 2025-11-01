@@ -85,8 +85,20 @@ u32 ieee80211_channel_to_freq_khz(int chan, enum nl80211_band band)
 			return MHZ_TO_KHZ(2484);
 		else if (chan < 14)
 			return MHZ_TO_KHZ(2407 + chan * 5);
+                else if (chan  >= 221 && chan <= 224)
+                        return MHZ_TO_KHZ(2477 + (chan - 221) * 5);
+                else if (chan > 200 && chan <= 224)
+                        return MHZ_TO_KHZ(2399 + (chan - 200) * 5);
+                else if ((chan > 190 && chan < 200) || chan > 224) {
+                        if ((chan % 2) == 0)
+                                return MHZ_TO_KHZ(2399 + (((chan - 190)*5)/2));
+                        else
+                                return MHZ_TO_KHZ(2399 + (((chan - 190)*5)/2) +1);
+                }
 		break;
 	case NL80211_BAND_5GHZ:
+		if ((chan > 1 && chan < 31) || (chan >= 182 && chan <= 184))
+			return MHZ_TO_KHZ(5000 + chan * 5);
 		if (chan >= 182 && chan <= 196)
 			return MHZ_TO_KHZ(4000 + chan * 5);
 		else
@@ -147,7 +159,9 @@ int ieee80211_freq_khz_to_channel(u32 freq)
 	/* see 802.11 17.3.8.3.2 and Annex J */
 	if (freq == 2484)
 		return 14;
-	else if (freq < 2484)
+	else if (freq < 2412 || freq > 2492)
+		return (190 + (((freq - 2399) * 2)/5));
+	else if (freq < 2484 && freq >= 2412)
 		return (freq - 2407) / 5;
 	else if (freq >= 4910 && freq <= 4980)
 		return (freq - 4000) / 5;
@@ -2467,13 +2481,13 @@ bool cfg80211_does_bw_fit_range(const struct ieee80211_freq_range *freq_range,
 {
 	u32 start_freq_khz, end_freq_khz;
 
-	/* As 4.9GHz supports 5Mhz and 10 MHz center frequencies,
+	/* As 4.9GHz and 2.4GHz supports 5Mhz and 10 MHz center frequencies,
 	 * the offset calculation using the bw_khz may not work.
 	 * Therefore, apply center_freq_khz to start_freq_khz and
 	 * end_freq_khz directly for bw check.
 	 */
-	if (center_freq_khz >= MHZ_TO_KHZ(4940) &&
-	    center_freq_khz <= MHZ_TO_KHZ(5090)) {
+	if ((center_freq_khz >= MHZ_TO_KHZ(4940) && center_freq_khz <= MHZ_TO_KHZ(5090)) ||
+		(center_freq_khz >= MHZ_TO_KHZ(2399) && center_freq_khz <= MHZ_TO_KHZ(2505))) {
 		start_freq_khz = center_freq_khz;
 		end_freq_khz = center_freq_khz;
 	} else {
