@@ -1582,6 +1582,14 @@ int br_ip4_multicast_add_group(struct net_bridge_mcast *brmctx,
 	if (ipv4_is_local_multicast(group))
 		return 0;
 
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	/*
+	 * If a forced flood rule exists for this group, do not create MDB state
+	 */
+	if (br_mcast_rule_check_ip4(brmctx->br, group))
+		return 0;
+#endif
+
 	memset(&br_group, 0, sizeof(br_group));
 	br_group.dst.ip4 = group;
 	br_group.proto = htons(ETH_P_IP);
@@ -1608,6 +1616,14 @@ int br_ip6_multicast_add_group(struct net_bridge_mcast *brmctx,
 
 #if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
 	if (!br_mcast_offload_ip6_should_snoop_group(brmctx, group))
+		return 0;
+#endif
+
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	/*
+	 * If a forced flood rule exists for this group, do not create MDB state
+	 */
+	if (br_mcast_rule_check_ip6(brmctx->br, group))
 		return 0;
 #endif
 
@@ -4177,6 +4193,9 @@ void br_multicast_init(struct net_bridge *br)
 	spin_lock_init(&br->multicast_lock);
 	INIT_HLIST_HEAD(&br->mdb_list);
 	INIT_HLIST_HEAD(&br->mcast_gc_list);
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	INIT_HLIST_HEAD(&br->mcast_rule_list);
+#endif
 	INIT_WORK(&br->mcast_gc_work, br_multicast_gc_work);
 }
 
@@ -4474,6 +4493,9 @@ void br_multicast_dev_del(struct net_bridge *br)
 
 	br_multicast_ctx_deinit(&br->multicast_ctx);
 	br_multicast_gc(&deleted_head);
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	br_mcast_rule_flush(br);
+#endif
 	cancel_work_sync(&br->mcast_gc_work);
 
 	rcu_barrier();

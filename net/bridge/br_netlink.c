@@ -19,6 +19,9 @@
 #include "br_private_cfm.h"
 #include "br_private_tunnel.h"
 #include "br_private_mcast_eht.h"
+#if IS_ENABLED(CONFIG_BRIDGE_IGMP_SNOOPING) && IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+#include "br_mcast_offload.h"
+#endif
 
 static int __get_num_vlan_infos(struct net_bridge_vlan_group *vg,
 				u32 filter_mask)
@@ -1925,6 +1928,187 @@ struct rtnl_link_ops br_link_ops __read_mostly = {
 	.fill_slave_info	= br_port_fill_slave_info,
 };
 
+#if IS_ENABLED(CONFIG_BRIDGE_IGMP_SNOOPING) && IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+static const struct nla_policy br_mcastrule_entry_policy[BR_MCASTRULE_ENTRY_MAX + 1] = {
+	[BR_MCASTRULE_ENTRY_GROUP]  = { .type = NLA_BINARY }, /* variable length */
+	[BR_MCASTRULE_ENTRY_ACTION] = { .type = NLA_U8 },
+};
+
+static const struct nla_policy br_mcastrule_policy[BR_MCASTRULE_MAX + 1] = {
+	[BR_MCASTRULE_UNSPEC] = { .type = NLA_UNSPEC },
+	[BR_MCASTRULE_ENTRY]  = { .type = NLA_NESTED },
+};
+
+static int br_mcastrule_add(struct sk_buff *skb, struct nlmsghdr *nlh,
+			    struct netlink_ext_ack *extack)
+{
+	struct br_mcast_rule_msg *msg;
+	struct nlattr *tb[BR_MCASTRULE_MAX + 1];
+	struct nlattr *entry_tb[BR_MCASTRULE_ENTRY_MAX + 1];
+	struct net_device *dev;
+	struct net_bridge *br;
+	struct net *net = sock_net(skb->sk);
+	const void *group = NULL;
+	size_t glen = 0;
+	u8 action = 0;
+	__be16 proto;
+	int err;
+
+	if (nlmsg_len(nlh) < sizeof(*msg)) {
+		NL_SET_ERR_MSG_MOD(extack, "Invalid message length");
+		return -EINVAL;
+	}
+	msg = nlmsg_data(nlh);
+
+	switch (msg->family) {
+	case AF_INET:
+		proto = htons(ETH_P_IP);
+		glen = sizeof(__be32);
+		break;
+#if IS_ENABLED(CONFIG_IPV6)
+	case AF_INET6:
+		proto = htons(ETH_P_IPV6);
+		glen = sizeof(struct in6_addr);
+		break;
+#endif
+	default:
+		NL_SET_ERR_MSG_MOD(extack, "Unsupported address family");
+		return -EAFNOSUPPORT;
+	}
+
+	err = nlmsg_parse(nlh, sizeof(*msg), tb, BR_MCASTRULE_MAX,
+			  br_mcastrule_policy, extack);
+	if (err)
+		return err;
+	if (!tb[BR_MCASTRULE_ENTRY]) {
+		NL_SET_ERR_MSG_MOD(extack, "Missing rule entry");
+		return -EINVAL;
+	}
+
+	err = nla_parse_nested_deprecated(entry_tb, BR_MCASTRULE_ENTRY_MAX,
+					  tb[BR_MCASTRULE_ENTRY],
+					  br_mcastrule_entry_policy, extack);
+	if (err)
+		return err;
+
+	if (!entry_tb[BR_MCASTRULE_ENTRY_GROUP] ||
+	    !entry_tb[BR_MCASTRULE_ENTRY_ACTION]) {
+		NL_SET_ERR_MSG_MOD(extack, "Missing group/action");
+		return -EINVAL;
+	}
+
+	if (nla_len(entry_tb[BR_MCASTRULE_ENTRY_GROUP]) != glen) {
+		NL_SET_ERR_MSG_MOD(extack, "Invalid group length for family");
+		return -EINVAL;
+	}
+
+	group = nla_data(entry_tb[BR_MCASTRULE_ENTRY_GROUP]);
+	action = nla_get_u8(entry_tb[BR_MCASTRULE_ENTRY_ACTION]);
+
+	dev = __dev_get_by_index(net, msg->ifindex);
+	if (!dev) {
+		NL_SET_ERR_MSG_MOD(extack, "Device not found");
+		return -ENODEV;
+	}
+	if (!netif_is_bridge_master(dev)) {
+		NL_SET_ERR_MSG_MOD(extack, "Device is not a bridge");
+		return -EINVAL;
+	}
+	br = netdev_priv(dev);
+
+	err = br_mcast_rule_add(br, proto, group, glen, action);
+	if (err) {
+		NL_SET_ERR_MSG_MOD(extack, "Failed to add multicast rule");
+		return err;
+	}
+
+	return 0;
+}
+
+static int br_mcastrule_del(struct sk_buff *skb, struct nlmsghdr *nlh,
+			    struct netlink_ext_ack *extack)
+{
+	struct br_mcast_rule_msg *msg;
+	struct nlattr *tb[BR_MCASTRULE_MAX + 1];
+	struct nlattr *entry_tb[BR_MCASTRULE_ENTRY_MAX + 1];
+	struct net_device *dev;
+	struct net_bridge *br;
+	struct net *net = sock_net(skb->sk);
+	const void *group = NULL;
+	size_t glen = 0;
+	__be16 proto;
+	int err;
+
+	if (nlmsg_len(nlh) < sizeof(*msg)) {
+		NL_SET_ERR_MSG_MOD(extack, "Invalid message length");
+		return -EINVAL;
+	}
+	msg = nlmsg_data(nlh);
+
+	switch (msg->family) {
+	case AF_INET:
+		proto = htons(ETH_P_IP);
+		glen = sizeof(__be32);
+		break;
+#if IS_ENABLED(CONFIG_IPV6)
+	case AF_INET6:
+		proto = htons(ETH_P_IPV6);
+		glen = sizeof(struct in6_addr);
+		break;
+#endif
+	default:
+		NL_SET_ERR_MSG_MOD(extack, "Unsupported address family");
+		return -EAFNOSUPPORT;
+	}
+
+	err = nlmsg_parse(nlh, sizeof(*msg), tb, BR_MCASTRULE_MAX,
+			  br_mcastrule_policy, extack);
+	if (err)
+		return err;
+	if (!tb[BR_MCASTRULE_ENTRY]) {
+		NL_SET_ERR_MSG_MOD(extack, "Missing rule entry");
+		return -EINVAL;
+	}
+
+	err = nla_parse_nested_deprecated(entry_tb, BR_MCASTRULE_ENTRY_MAX,
+					  tb[BR_MCASTRULE_ENTRY],
+					  br_mcastrule_entry_policy, extack);
+	if (err)
+		return err;
+
+	if (!entry_tb[BR_MCASTRULE_ENTRY_GROUP]) {
+		NL_SET_ERR_MSG_MOD(extack, "Missing group");
+		return -EINVAL;
+	}
+	if (nla_len(entry_tb[BR_MCASTRULE_ENTRY_GROUP]) != glen) {
+		NL_SET_ERR_MSG_MOD(extack, "Invalid group length for family");
+		return -EINVAL;
+	}
+
+	group = nla_data(entry_tb[BR_MCASTRULE_ENTRY_GROUP]);
+
+	dev = __dev_get_by_index(net, msg->ifindex);
+	if (!dev) {
+		NL_SET_ERR_MSG_MOD(extack, "Device not found");
+		return -ENODEV;
+	}
+	if (!netif_is_bridge_master(dev)) {
+		NL_SET_ERR_MSG_MOD(extack, "Device is not a bridge");
+		return -EINVAL;
+	}
+	br = netdev_priv(dev);
+
+	err = br_mcast_rule_del(br, proto, group, glen);
+	if (err) {
+		NL_SET_ERR_MSG_MOD(extack, "Failed to delete multicast rule");
+		return err;
+	}
+
+	return 0;
+}
+
+#endif
+
 int __init br_netlink_init(void)
 {
 	int err;
@@ -1938,6 +2122,16 @@ int __init br_netlink_init(void)
 	err = rtnl_link_register(&br_link_ops);
 	if (err)
 		goto out_af;
+
+#if IS_ENABLED(CONFIG_BRIDGE_IGMP_SNOOPING) && IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	rtnl_register(PF_INET, RTM_NEWMCASTRULE, br_mcastrule_add, NULL, 0);
+	rtnl_register(PF_INET, RTM_DELMCASTRULE, br_mcastrule_del, NULL, 0);
+#if IS_ENABLED(CONFIG_IPV6)
+	rtnl_register(PF_INET6, RTM_NEWMCASTRULE, br_mcastrule_add, NULL, 0);
+	rtnl_register(PF_INET6, RTM_DELMCASTRULE, br_mcastrule_del, NULL, 0);
+#endif
+	rtnl_register(PF_BRIDGE, RTM_GETMCASTRULE, NULL, br_mcastrule_dump, 0);
+#endif
 
 	return 0;
 

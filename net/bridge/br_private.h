@@ -394,6 +394,25 @@ struct net_bridge_mdb_entry {
 	struct rcu_head			rcu;
 };
 
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+struct br_mcast_rule_key {
+	__be16 proto;
+	union {
+		__be32 ip4;
+#if IS_ENABLED(CONFIG_IPV6)
+		struct in6_addr ip6;
+#endif
+	} dst;
+};
+
+struct br_mcast_rule {
+	struct hlist_node hnode;
+	struct br_mcast_rule_key key;
+	u8 action; /* 1 = flood, reserved for future */
+	struct rcu_head rcu;
+};
+#endif /* CONFIG_BRIDGE_MCAST_OFFLOAD */
+
 struct net_bridge_port {
 	struct net_bridge		*br;
 	struct net_device		*dev;
@@ -569,6 +588,9 @@ struct net_bridge {
 	struct hlist_head		mdb_list;
 
 	struct work_struct		mcast_gc_work;
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	struct hlist_head		mcast_rule_list;
+#endif
 #endif
 
 	struct timer_list		hello_timer;
@@ -1553,6 +1575,26 @@ br_multicast_ctx_options_equal(const struct net_bridge_mcast *brmctx1,
 			       const struct net_bridge_mcast *brmctx2)
 {
 	return true;
+}
+
+/* Stubs for multicast rule helpers when IGMP snooping is disabled */
+static inline bool br_mcast_rule_check_ip4(struct net_bridge *br, __be32 group)
+{
+	return false;
+}
+#if IS_ENABLED(CONFIG_IPV6)
+static inline bool br_mcast_rule_check_ip6(struct net_bridge *br, const struct in6_addr *group)
+{
+	return false;
+}
+#endif
+static inline int br_mcast_rule_add(struct net_bridge *br, __be16 proto, const void *group, size_t len, u8 action)
+{
+	return -EOPNOTSUPP;
+}
+static inline int br_mcast_rule_del(struct net_bridge *br, __be16 proto, const void *group, size_t len)
+{
+	return -EOPNOTSUPP;
 }
 #endif
 

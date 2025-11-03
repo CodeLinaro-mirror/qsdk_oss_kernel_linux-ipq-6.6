@@ -864,4 +864,29 @@ enum {
 	__BRIDGE_QUERIER_MAX
 };
 #define BRIDGE_QUERIER_MAX (__BRIDGE_QUERIER_MAX - 1)
+
+/*
+ * Bridge multicast rule messages and attributes
+ */
+enum {
+	BR_MCASTRULE_UNSPEC,
+	BR_MCASTRULE_ENTRY,
+	__BR_MCASTRULE_MAX,
+};
+#define BR_MCASTRULE_MAX (__BR_MCASTRULE_MAX - 1)
+
+enum {
+	BR_MCASTRULE_ENTRY_UNSPEC,
+	BR_MCASTRULE_ENTRY_GROUP,
+	BR_MCASTRULE_ENTRY_ACTION,
+	__BR_MCASTRULE_ENTRY_MAX,
+};
+#define BR_MCASTRULE_ENTRY_MAX (__BR_MCASTRULE_ENTRY_MAX - 1)
+
+struct br_mcast_rule_msg {
+	__u8  family;      /* AF_INET or AF_INET6 */
+	__u8  reserved1;
+	__u16 reserved2;
+	__u32 ifindex;     /* target bridge ifindex */
+};
 #endif /* _UAPI_LINUX_IF_BRIDGE_H */
