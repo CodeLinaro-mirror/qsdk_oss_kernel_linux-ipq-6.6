@@ -57,23 +57,12 @@ static void br_multicast_start_querier(struct net_bridge_mcast *brmctx,
 				       struct bridge_mcast_own_query *query);
 static void br_ip4_multicast_add_router(struct net_bridge_mcast *brmctx,
 					struct net_bridge_mcast_port *pmctx);
-static void br_ip4_multicast_leave_group(struct net_bridge_mcast *brmctx,
-					 struct net_bridge_mcast_port *pmctx,
-					 __be32 group,
-					 __u16 vid,
-					 const unsigned char *src);
 static void br_multicast_port_group_rexmit(struct timer_list *t);
 
 static void
 br_multicast_rport_del_notify(struct net_bridge_mcast_port *pmctx, bool deleted);
 static void br_ip6_multicast_add_router(struct net_bridge_mcast *brmctx,
 					struct net_bridge_mcast_port *pmctx);
-#if IS_ENABLED(CONFIG_IPV6)
-static void br_ip6_multicast_leave_group(struct net_bridge_mcast *brmctx,
-					 struct net_bridge_mcast_port *pmctx,
-					 const struct in6_addr *group,
-					 __u16 vid, const unsigned char *src);
-#endif
 static struct net_bridge_port_group *
 __br_multicast_add_group(struct net_bridge_mcast *brmctx,
 			 struct net_bridge_mcast_port *pmctx,
@@ -266,7 +255,7 @@ br_multicast_port_vid_to_port_ctx(struct net_bridge_port *port, u16 vid)
  * - if pmctx is non-NULL (port), check if it should be used
  * - if pmctx is NULL (bridge), check if brmctx should be used
  */
-static bool
+bool
 br_multicast_ctx_should_use(const struct net_bridge_mcast *brmctx,
 			    const struct net_bridge_mcast_port *pmctx)
 {
@@ -1580,7 +1569,7 @@ static int br_multicast_add_group(struct net_bridge_mcast *brmctx,
 	return err;
 }
 
-static int br_ip4_multicast_add_group(struct net_bridge_mcast *brmctx,
+int br_ip4_multicast_add_group(struct net_bridge_mcast *brmctx,
 				      struct net_bridge_mcast_port *pmctx,
 				      __be32 group,
 				      __u16 vid,
@@ -1604,7 +1593,7 @@ static int br_ip4_multicast_add_group(struct net_bridge_mcast *brmctx,
 }
 
 #if IS_ENABLED(CONFIG_IPV6)
-static int br_ip6_multicast_add_group(struct net_bridge_mcast *brmctx,
+int br_ip6_multicast_add_group(struct net_bridge_mcast *brmctx,
 				      struct net_bridge_mcast_port *pmctx,
 				      const struct in6_addr *group,
 				      __u16 vid,
@@ -3723,7 +3712,7 @@ out:
 	spin_unlock(&brmctx->br->multicast_lock);
 }
 
-static void br_ip4_multicast_leave_group(struct net_bridge_mcast *brmctx,
+void br_ip4_multicast_leave_group(struct net_bridge_mcast *brmctx,
 					 struct net_bridge_mcast_port *pmctx,
 					 __be32 group,
 					 __u16 vid,
@@ -3748,7 +3737,7 @@ static void br_ip4_multicast_leave_group(struct net_bridge_mcast *brmctx,
 }
 
 #if IS_ENABLED(CONFIG_IPV6)
-static void br_ip6_multicast_leave_group(struct net_bridge_mcast *brmctx,
+void br_ip6_multicast_leave_group(struct net_bridge_mcast *brmctx,
 					 struct net_bridge_mcast_port *pmctx,
 					 const struct in6_addr *group,
 					 __u16 vid,
@@ -3896,8 +3885,11 @@ static int br_multicast_ipv4_rcv(struct net_bridge_mcast *brmctx,
 	case IGMP_HOST_MEMBERSHIP_REPORT:
 	case IGMPV2_HOST_MEMBERSHIP_REPORT:
 		BR_INPUT_SKB_CB(skb)->mrouters_only = 1;
-		err = br_ip4_multicast_add_group(brmctx, pmctx, ih->group, vid,
-						 src, true);
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+		err = br_mcast_offload_handle_igmpv2_report(brmctx, pmctx, skb, vid);
+#else
+		err = br_ip4_multicast_add_group(brmctx, pmctx, ih->group, vid, src, true);
+#endif
 		break;
 	case IGMPV3_HOST_MEMBERSHIP_REPORT:
 		err = br_ip4_multicast_igmp3_report(brmctx, pmctx, skb, vid);
@@ -3906,7 +3898,11 @@ static int br_multicast_ipv4_rcv(struct net_bridge_mcast *brmctx,
 		br_ip4_multicast_query(brmctx, pmctx, skb, vid);
 		break;
 	case IGMP_HOST_LEAVE_MESSAGE:
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+		br_mcast_offload_handle_igmpv2_leave(brmctx, pmctx, skb, ih->group, vid, src);
+#else
 		br_ip4_multicast_leave_group(brmctx, pmctx, ih->group, vid, src);
+#endif
 		break;
 	}
 
@@ -3985,8 +3981,11 @@ static int br_multicast_ipv6_rcv(struct net_bridge_mcast *brmctx,
 	case ICMPV6_MGM_REPORT:
 		src = eth_hdr(skb)->h_source;
 		BR_INPUT_SKB_CB(skb)->mrouters_only = 1;
-		err = br_ip6_multicast_add_group(brmctx, pmctx, &mld->mld_mca,
-						 vid, src, true);
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+		err = br_mcast_offload_handle_mldv1_report(brmctx, pmctx, skb, vid);
+#else
+		err = br_ip6_multicast_add_group(brmctx, pmctx, &mld->mld_mca, vid, src, true);
+#endif
 		break;
 	case ICMPV6_MLD2_REPORT:
 		err = br_ip6_multicast_mld2_report(brmctx, pmctx, skb, vid);
@@ -3996,8 +3995,11 @@ static int br_multicast_ipv6_rcv(struct net_bridge_mcast *brmctx,
 		break;
 	case ICMPV6_MGM_REDUCTION:
 		src = eth_hdr(skb)->h_source;
-		br_ip6_multicast_leave_group(brmctx, pmctx, &mld->mld_mca, vid,
-					     src);
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+		br_mcast_offload_handle_mldv1_leave(brmctx, pmctx, skb, &mld->mld_mca, vid, src);
+#else
+		br_ip6_multicast_leave_group(brmctx, pmctx, &mld->mld_mca, vid, src);
+#endif
 		break;
 	}
 

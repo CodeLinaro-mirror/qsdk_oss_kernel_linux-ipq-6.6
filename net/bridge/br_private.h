@@ -979,8 +979,34 @@ int br_multicast_rcv(struct net_bridge_mcast **brmctx,
 		     struct net_bridge_mcast_port **pmctx,
 		     struct net_bridge_vlan *vlan,
 		     struct sk_buff *skb, u16 vid);
+bool br_multicast_ctx_should_use(const struct net_bridge_mcast *brmctx,
+				 const struct net_bridge_mcast_port *pmctx);
 struct net_bridge_mdb_entry *br_mdb_get(struct net_bridge_mcast *brmctx,
 					struct sk_buff *skb, u16 vid);
+int br_ip4_multicast_add_group(struct net_bridge_mcast *brmctx,
+			       struct net_bridge_mcast_port *pmctx,
+			       __be32 group,
+			       __u16 vid,
+			       const unsigned char *src,
+			       bool igmpv2);
+void br_ip4_multicast_leave_group(struct net_bridge_mcast *brmctx,
+				  struct net_bridge_mcast_port *pmctx,
+				  __be32 group,
+				  __u16 vid,
+				  const unsigned char *src);
+#if IS_ENABLED(CONFIG_IPV6)
+int br_ip6_multicast_add_group(struct net_bridge_mcast *brmctx,
+			       struct net_bridge_mcast_port *pmctx,
+			       const struct in6_addr *group,
+			       __u16 vid,
+			       const unsigned char *src,
+			       bool mldv1);
+void br_ip6_multicast_leave_group(struct net_bridge_mcast *brmctx,
+				  struct net_bridge_mcast_port *pmctx,
+				  const struct in6_addr *group,
+				  __u16 vid,
+				  const unsigned char *src);
+#endif
 int br_multicast_add_port(struct net_bridge_port *port);
 void br_multicast_del_port(struct net_bridge_port *port);
 void br_multicast_enable_port(struct net_bridge_port *port);
