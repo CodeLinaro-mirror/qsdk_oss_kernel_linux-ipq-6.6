@@ -1896,6 +1896,11 @@ static int sfp_sm_probe_for_phy(struct sfp *sfp)
 
 	switch (sfp->mdio_protocol) {
 	case MDIO_I2C_NONE:
+	/* MDIO_I2C_QCOM is specific for QCOM I2C PHY and does not require
+	* standard PHY probing as the PHY is handled through a different
+	* mechanism specific to the QCOM platform.
+	*/
+	case MDIO_I2C_QCOM:
 		break;
 
 	case MDIO_I2C_MARVELL_C22:
