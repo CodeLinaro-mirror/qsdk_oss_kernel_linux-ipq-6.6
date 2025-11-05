@@ -4125,9 +4125,9 @@ void br_multicast_ctx_init(struct net_bridge *br,
 
 	brmctx->ip4_querier.port_ifidx = 0;
 	seqcount_spinlock_init(&brmctx->ip4_querier.seq, &br->multicast_lock);
-	brmctx->multicast_igmp_version = 2;
+	brmctx->multicast_igmp_version = 3;
 #if IS_ENABLED(CONFIG_IPV6)
-	brmctx->multicast_mld_version = 1;
+	brmctx->multicast_mld_version = 2;
 	brmctx->ip6_querier.port_ifidx = 0;
 	seqcount_spinlock_init(&brmctx->ip6_querier.seq, &br->multicast_lock);
 #endif
