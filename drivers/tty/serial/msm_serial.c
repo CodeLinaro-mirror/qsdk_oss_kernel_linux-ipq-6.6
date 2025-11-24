@@ -1016,8 +1016,13 @@ static void msm_reset(struct uart_port *port)
 	msm_write(port, mr, MSM_UART_MR1);
 
 	/* Disable DM modes */
-	if (msm_port->is_uartdm)
+	if (msm_port->is_uartdm) {
 		msm_write(port, 0, UARTDM_DMEN);
+		/* Clear any stale NCF_TX value that might cause hangs */
+		msm_write(port, 0, UARTDM_NCF_TX);
+		/* Reset TX_READY to clear any pending state */
+		msm_write(port, MSM_UART_CR_CMD_RESET_TX_READY, MSM_UART_CR);
+	}
 }
 
 static void msm_set_mctrl(struct uart_port *port, unsigned int mctrl)
@@ -1205,6 +1210,13 @@ static int msm_startup(struct uart_port *port)
 		 "msm_serial%d", port->line);
 
 	msm_init_clock(port);
+
+	/*
+	 * Reset and disable UART to clear any stale state.
+	 * This is critical to avoid TX hangs from previous state.
+	 */
+	msm_reset(port);
+	msm_write(port, 0, MSM_UART_IMR);
 
 	if (likely(port->fifosize > 12))
 		rfr_level = port->fifosize - 12;
@@ -1687,6 +1699,7 @@ static void msm_console_write(struct console *co, const char *s,
 static int msm_console_setup(struct console *co, char *options)
 {
 	struct uart_port *port;
+	struct msm_port *msm_port;
 	int baud = 115200;
 	int bits = 8;
 	int parity = 'n';
@@ -1696,11 +1709,18 @@ static int msm_console_setup(struct console *co, char *options)
 		return -ENXIO;
 
 	port = msm_get_port_from_line(co->index);
+	msm_port = to_msm_port(port);
 
 	if (unlikely(!port->membase))
 		return -ENXIO;
 
 	msm_init_clock(port);
+
+	/* Reset the UART before configuration to ensure clean state */
+	msm_reset(port);
+
+	/* Ensure TX and RX are enabled for console */
+	msm_write(port, MSM_UART_CR_TX_ENABLE | MSM_UART_CR_RX_ENABLE, MSM_UART_CR);
 
 	if (options)
 		uart_parse_options(options, &baud, &parity, &bits, &flow);
