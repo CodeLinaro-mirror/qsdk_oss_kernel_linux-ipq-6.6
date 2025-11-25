@@ -16,7 +16,7 @@ static int ___cfg80211_stop_ap(struct cfg80211_registered_device *rdev,
 			       bool notify, struct genl_info *info)
 {
 	struct wireless_dev *wdev = dev->ieee80211_ptr;
-	int err;
+	int err, i;
 	struct cfg80211_ap_settings params = {0};
 
 	ASSERT_WDEV_LOCK(wdev);
@@ -45,6 +45,14 @@ static int ___cfg80211_stop_ap(struct cfg80211_registered_device *rdev,
 		memset(&wdev->links[link_id].ap.chandef, 0,
 		       sizeof(wdev->links[link_id].ap.chandef));
 
+		for (i = 0; i < IEEE80211_MLD_MAX_NUM_LINKS; i++) {
+			if (i == link_id)
+				continue;
+			if ((BIT(i) & wdev->valid_links) &&
+			    wdev->links[i].ap.beacon_interval != 0) {
+				goto dont_reset_port_id;
+			}
+		}
 		if (!params.reconfig) {
 			/* Clear this only when the stop is NOT received for
 			 * MLO Reconfig link removal as other link(s) will
@@ -53,6 +61,8 @@ static int ___cfg80211_stop_ap(struct cfg80211_registered_device *rdev,
 			wdev->conn_owner_nlportid = 0;
 			wdev->u.ap.ssid_len = 0;
 		}
+
+dont_reset_port_id:
 
 		rdev_set_qos_map(rdev, dev, NULL);
 		if (notify)
