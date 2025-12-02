@@ -375,6 +375,14 @@ config QCOM_SOC_NETSTANDBY
 	help
 	  SoC network standby driver for ErP support
 
+config QTI_TFA_OPTEE_LOG
+	tristate "TFA and OPTEE Log Driver"
+	depends on DEBUG_FS
+	help
+	  This option enables a driver with a debugfs interface for messages
+	  produced by the Secure code (TFA & OPTEE). These messages provide
+	  diagnostic information about secure world operation.
+
 config QTI_TZ_LOG
 	tristate "Trust Zone (TZ) Log Driver"
 	depends on DEBUG_FS
