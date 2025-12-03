@@ -117,6 +117,7 @@
 #define LINK_CAPABLE_OFFSET(x)			((x) << 16)
 #define PCIE20_LANE_SKEW_OFF			0x714
 #define PCIE20_LANE_SKEW_OFF_MASK		0xFF000000
+#define PCIE20_LANE_SKEW_DYNAMIC_SWITCH_VAL	0x20
 #define PCIE20_MULTI_LANE_CONTROL_OFF		0x8C0
 #define PCIE20_LINK_CONTROL_LINK_STATUS_REG	0x80
 #define PCIE20_PARF_LTSSM_MASK			0x3F
@@ -1260,6 +1261,7 @@ static int qcom_pcie_post_init(struct qcom_pcie *pcie)
 	u16 offset = dw_pcie_find_capability(pci, PCI_CAP_ID_EXP);
 	u32 val;
 	int i;
+	int size = 4;
 
 	val = readl(pci->dbi_base + offset + PCI_EXP_DEVCTL);
 	val &= ~PCI_EXP_DEVCTL_PAYLOAD;
@@ -1320,6 +1322,11 @@ static int qcom_pcie_post_init(struct qcom_pcie *pcie)
 	val &= ~PCI_EXP_LNKCAP_ASPMS;
 	writel(val, pci->dbi_base + offset + PCI_EXP_LNKCAP);
 #endif
+
+	/* Set lane skew parameter to enable dynamic lane switching at runtime */
+	dw_pcie_read(pci->dbi_base + PCIE20_LANE_SKEW_OFF, size, &val);
+	val = (val & PCIE20_LANE_SKEW_OFF_MASK) | PCIE20_LANE_SKEW_DYNAMIC_SWITCH_VAL;
+	dw_pcie_write(pci->dbi_base + PCIE20_LANE_SKEW_OFF, size, val);
 
 	writel(PCI_EXP_DEVCTL2_COMP_TMOUT_DIS, pci->dbi_base + offset +
 			PCI_EXP_DEVCTL2);
