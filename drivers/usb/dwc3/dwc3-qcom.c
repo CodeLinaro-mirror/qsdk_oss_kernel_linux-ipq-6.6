@@ -2022,6 +2022,9 @@ static void dwc3_qcom_remove(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	int i, ret;
 
+	pm_runtime_get_sync(dev);
+	pm_runtime_disable(dev);
+
 	if (np) {
 		of_platform_depopulate(&pdev->dev);
 	} else {
@@ -2044,9 +2047,6 @@ static void dwc3_qcom_remove(struct platform_device *pdev)
 			dev_err(qcom->dev,
 			  "Not able to configure phy mux selection:%d\n", ret);
 	}
-
-	pm_runtime_allow(dev);
-	pm_runtime_disable(dev);
 
 	for (i = qcom->num_clocks - 1; i >= 0; i--) {
 		if (!qcom->is_suspended)
