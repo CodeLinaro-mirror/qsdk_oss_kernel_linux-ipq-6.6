@@ -589,6 +589,9 @@ void br_mdb_notify(struct net_device *dev,
 	struct net *net = dev_net(dev);
 	struct sk_buff *skb;
 	int err = -ENOBUFS;
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	int ret = 0;
+#endif
 
 	br_switchdev_mdb_notify(dev, mp, pg, type);
 
@@ -601,6 +604,18 @@ void br_mdb_notify(struct net_device *dev,
 		kfree_skb(skb);
 		goto errout;
 	}
+
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	/*
+	 * Notification should only be generated for a (*,G) MDB entry
+	 * having a valid Port-Group pointer.
+	 */
+	if (br_multicast_is_star_g(&mp->addr) && pg)
+		ret = br_mcast_offload_mdb_send_event_notify(dev, mp, type);
+
+	if (ret)
+		pr_debug("bridge: Failed to Send Bridge MDB notification(%d)\n", ret);
+#endif
 
 	rtnl_notify(skb, net, 0, RTNLGRP_MDB, NULL, GFP_ATOMIC);
 	return;
