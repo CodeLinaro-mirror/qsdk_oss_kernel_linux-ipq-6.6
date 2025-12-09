@@ -602,15 +602,19 @@ enum {
  *        u32 ifindex
  *        [MDBA_ROUTER_PATTR attributes]
  *    }
+ * [MDBA_MDB_EHT_DUMP] = [EHT DUMP ENABLE attribute]
  * }
  */
 enum {
 	MDBA_UNSPEC,
 	MDBA_MDB,
 	MDBA_ROUTER,
+	MDBA_MDB_EHT_DUMP,
 	__MDBA_MAX,
 };
 #define MDBA_MAX (__MDBA_MAX - 1)
+
+#define MDBA_MDB_DUMPF_EHT	(1 << 0) /* Include EHT host tracking data for mdb dump*/
 
 enum {
 	MDBA_MDB_UNSPEC,
@@ -639,9 +643,33 @@ enum {
 	MDBA_MDB_EATTR_VNI,
 	MDBA_MDB_EATTR_IFINDEX,
 	MDBA_MDB_EATTR_SRC_VNI,
+	MDBA_MDB_EATTR_EHT_HOSTS,      /* List of EHT hosts */
 	__MDBA_MDB_EATTR_MAX
 };
 #define MDBA_MDB_EATTR_MAX (__MDBA_MDB_EATTR_MAX - 1)
+
+/* per mdb entry EHT host attributes */
+enum {
+	MDBA_MDB_EATTR_EHT_HOST_UNSPEC,
+	MDBA_MDB_EATTR_EHT_HOST_ENTRY,     /* Nested entry */
+	MDBA_MDB_EATTR_EHT_HOST_IP_ADDR,   /* Host IP address */
+	MDBA_MDB_EATTR_EHT_HOST_MODE,      /* INCLUDE/EXCLUDE mode */
+	MDBA_MDB_EATTR_EHT_HOST_NSRCS,     /* Number of sources */
+	MDBA_MDB_EATTR_EHT_HOST_SRCS,      /* List of source addresses */
+	MDBA_MDB_EATTR_EHT_HOST_MAC,       /* Host MAC address */
+	__MDBA_MDB_EATTR_EHT_HOST_MAX
+};
+#define MDBA_MDB_EATTR_EHT_HOST_MAX (__MDBA_MDB_EATTR_EHT_HOST_MAX - 1)
+
+/* per EHT host source address attributes */
+enum {
+	MDBA_MDB_EATTR_EHT_HOST_SRC_UNSPEC,
+	MDBA_MDB_EATTR_EHT_HOST_SRC_ENTRY,   /* Nested source entry */
+	MDBA_MDB_EATTR_EHT_HOST_SRC_ADDR,    /* Source IP address */
+	MDBA_MDB_EATTR_EHT_HOST_SRC_TIMER,   /* Source timer value */
+	__MDBA_MDB_EATTR_EHT_HOST_SRC_MAX
+};
+#define MDBA_MDB_EATTR_EHT_HOST_SRC_MAX (__MDBA_MDB_EATTR_EHT_HOST_SRC_MAX - 1)
 
 /* per mdb entry source */
 enum {

@@ -6168,9 +6168,42 @@ static int rtnl_mdb_valid_dump_req(const struct nlmsghdr *nlh,
 		NL_SET_ERR_MSG(extack, "Filtering by device index is not supported for mdb dump request");
 		return -EINVAL;
 	}
+
 	if (nlmsg_attrlen(nlh, sizeof(*bpm))) {
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+		/*
+		 * Parse attributes to validate them
+		 */
+		struct nlattr *tb[MDBA_MAX + 1];
+		int err;
+
+		err = nlmsg_parse_deprecated_strict(nlh, sizeof(*bpm), tb,
+				MDBA_MAX, NULL, extack);
+		if (err)
+			return err;
+
+		/*
+		 * Only MDBA_MDB_EHT_DUMP attribute is allowed for dump requests
+		 */
+		if (tb[MDBA_MDB_EHT_DUMP]) {
+			if (nla_len(tb[MDBA_MDB_EHT_DUMP]) != sizeof(u32)) {
+				NL_SET_ERR_MSG(extack, "Invalid MDBA_MDB_EHT_DUMP attribute length");
+				return -EINVAL;
+			}
+		} else {
+			/*
+			 * If attributes exist but it's not MDBA_MDB_EHT_DUMP, reject
+			 */
+			NL_SET_ERR_MSG(extack, "Invalid data after header in mdb dump request");
+			return -EINVAL;
+		}
+#else
+		/*
+		 * Attributes in MDB dump are only supported when multicast offload is enabled
+		 */
 		NL_SET_ERR_MSG(extack, "Invalid data after header in mdb dump request");
 		return -EINVAL;
+#endif
 	}
 
 	return 0;
