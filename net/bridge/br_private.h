@@ -57,6 +57,10 @@ enum {
 
 #define BR_FDB_NOTIFY_SETTABLE_BITS (FDB_NOTIFY_BIT | FDB_NOTIFY_INACTIVE_BIT)
 
+#ifndef BR_IP_MAC_HASH_SIZE
+#define BR_IP_MAC_HASH_SIZE 256
+#endif
+
 typedef struct bridge_id bridge_id;
 typedef struct mac_addr mac_addr;
 typedef __u16 port_id;
@@ -167,6 +171,9 @@ struct net_bridge_mcast {
 	struct bridge_mcast_own_query	ip6_own_query;
 	struct bridge_mcast_querier	ip6_querier;
 #endif /* IS_ENABLED(CONFIG_IPV6) */
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	struct hlist_head		ip_mac_map[BR_IP_MAC_HASH_SIZE];
+#endif
 #endif /* CONFIG_BRIDGE_IGMP_SNOOPING */
 };
 

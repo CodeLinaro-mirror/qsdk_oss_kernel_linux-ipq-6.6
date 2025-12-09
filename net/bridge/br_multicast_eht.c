@@ -781,7 +781,7 @@ bool br_multicast_eht_handle(const struct net_bridge_mcast *brmctx,
 			     size_t addr_size,
 			     int grec_type)
 {
-	bool eht_enabled = !!(pg->key.port->flags & BR_MULTICAST_FAST_LEAVE);
+	bool eht_enabled = !!(pg->key.port->flags & (BR_MULTICAST_FAST_LEAVE | BR_MCAST_MCUC_HW_OFFLOAD));
 	union net_bridge_eht_addr eht_host_addr;
 	bool changed = false;
 

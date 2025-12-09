@@ -35,6 +35,9 @@
 
 #include "br_private.h"
 #include "br_private_mcast_eht.h"
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+#include "br_mcast_offload.h"
+#endif
 
 static const struct rhashtable_params br_mdb_rht_params = {
 	.head_offset = offsetof(struct net_bridge_mdb_entry, rhnode),
@@ -3837,6 +3840,23 @@ static int br_multicast_ipv4_rcv(struct net_bridge_mcast *brmctx,
 	src = eth_hdr(skb)->h_source;
 	BR_INPUT_SKB_CB(skb)->igmp = ih->type;
 
+	/*
+	 * Add IP-MAC mapping for hardware offload
+	 */
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	if (pmctx && (pmctx->port->flags & BR_MCAST_MCUC_HW_OFFLOAD)) {
+		int ifindex = pmctx->port->dev->ifindex;
+		struct net_bridge *br = brmctx->br;
+		struct br_ip host;
+
+		br_mcast_offload_get_br_ip(skb, &host);
+		err = br_mcast_offload_map_add(&br->multicast_ctx, &host, src, ifindex, vid);
+		if (err) {
+			pr_debug("br_multicast: Failed to add IP-MAC mapping: %d\n", err);
+		}
+	}
+
+#endif
 	switch (ih->type) {
 	case IGMP_HOST_MEMBERSHIP_REPORT:
 	case IGMPV2_HOST_MEMBERSHIP_REPORT:
@@ -3902,6 +3922,25 @@ static int br_multicast_ipv6_rcv(struct net_bridge_mcast *brmctx,
 	mld = (struct mld_msg *)skb_transport_header(skb);
 	BR_INPUT_SKB_CB(skb)->igmp = mld->mld_type;
 
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+
+	/*
+	 * Add IP-MAC mapping for hardware offload
+	 */
+	if (pmctx && (pmctx->port->flags & BR_MCAST_MCUC_HW_OFFLOAD)) {
+		int ifindex = pmctx->port->dev->ifindex;
+		struct net_bridge *br = brmctx->br;
+		struct br_ip host;
+
+		src = eth_hdr(skb)->h_source;
+		br_mcast_offload_get_br_ip(skb, &host);
+		err = br_mcast_offload_map_add(&br->multicast_ctx, &host, src, ifindex, vid);
+		if (err) {
+			pr_debug("br_multicast: Failed to add IP-MAC mapping: %d\n", err);
+		}
+	}
+
+#endif
 	switch (mld->mld_type) {
 	case ICMPV6_MGM_REPORT:
 		src = eth_hdr(skb)->h_source;
@@ -4069,11 +4108,17 @@ void br_multicast_ctx_init(struct net_bridge *br,
 	timer_setup(&brmctx->ip6_own_query.timer,
 		    br_ip6_multicast_query_expired, 0);
 #endif
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	br_mcast_offload_init_map(brmctx);
+#endif
 }
 
 void br_multicast_ctx_deinit(struct net_bridge_mcast *brmctx)
 {
 	__br_multicast_stop(brmctx);
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	br_mcast_offload_cleanup_map(brmctx);
+#endif
 }
 
 void br_multicast_init(struct net_bridge *br)

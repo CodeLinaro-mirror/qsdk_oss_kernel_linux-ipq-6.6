@@ -64,6 +64,7 @@ struct br_ip_list {
 #define BR_BPDU_FILTER		BIT(24)
 #define BR_UPSTREAM_PORT	BIT(25)
 #define BR_NO_HAIRPIN_FLOOD	BIT(26)
+#define BR_MCAST_MCUC_HW_OFFLOAD	BIT(27)
 
 #define BR_DEFAULT_AGEING_TIME	(300 * HZ)
 

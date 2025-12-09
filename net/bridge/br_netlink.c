@@ -213,6 +213,7 @@ static inline size_t br_port_info_size(void)
 		+ nla_total_size(sizeof(u32))	/* IFLA_BRPORT_MCAST_EHT_HOSTS_LIMIT */
 		+ nla_total_size(sizeof(u32))	/* IFLA_BRPORT_MCAST_EHT_HOSTS_CNT */
 		+ nla_total_size(sizeof(u32))	/* IFLA_BRPORT_BACKUP_NHID */
+		+ nla_total_size(1)		/* IFLA_BRPORT_MCAST_MCUC_HW_OFFLOAD */
 		+ 0;
 }
 
@@ -284,7 +285,9 @@ static int br_port_fill_attrs(struct sk_buff *skb,
 	    nla_put_u8(skb, IFLA_BRPORT_MAB, !!(p->flags & BR_PORT_MAB)) ||
 	    nla_put_u8(skb, IFLA_BRPORT_NEIGH_VLAN_SUPPRESS,
 		       !!(p->flags & BR_NEIGH_VLAN_SUPPRESS)) ||
-	    nla_put_u8(skb, IFLA_BRPORT_BPDU_FILTER, !!(p->flags & BR_BPDU_FILTER)))
+	    nla_put_u8(skb, IFLA_BRPORT_BPDU_FILTER, !!(p->flags & BR_BPDU_FILTER)) ||
+	    nla_put_u8(skb, IFLA_BRPORT_MCAST_MCUC_HW_OFFLOAD,
+			    !!(p->flags & BR_MCAST_MCUC_HW_OFFLOAD)))
 		return -EMSGSIZE;
 
 	timerval = br_timer_value(&p->message_age_timer);
@@ -907,6 +910,7 @@ static const struct nla_policy br_port_policy[IFLA_BRPORT_MAX + 1] = {
 	[IFLA_BRPORT_MCAST_MAX_GROUPS] = { .type = NLA_U32 },
 	[IFLA_BRPORT_NEIGH_VLAN_SUPPRESS] = NLA_POLICY_MAX(NLA_U8, 1),
 	[IFLA_BRPORT_BACKUP_NHID] = { .type = NLA_U32 },
+	[IFLA_BRPORT_MCAST_MCUC_HW_OFFLOAD] = { .type = NLA_U8 },
 };
 
 /* Change the state of the port and notify spanning tree */
@@ -1083,6 +1087,8 @@ static int br_setport(struct net_bridge_port *p, struct nlattr *tb[],
 
 		WRITE_ONCE(p->backup_nhid, backup_nhid);
 	}
+
+	br_set_port_flag(p, tb, IFLA_BRPORT_MCAST_MCUC_HW_OFFLOAD, BR_MCAST_MCUC_HW_OFFLOAD);
 
 	return 0;
 }
