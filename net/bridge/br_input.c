@@ -96,9 +96,6 @@ int br_handle_frame_finish(struct net *net, struct sock *sk, struct sk_buff *skb
 	struct net_bridge *br;
 	br_multicast_handle_hook_t *multicast_handle_hook;
 	struct net_bridge_port *pdst = NULL;
-#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
-	bool force_mcast_flood = false;
-#endif
 	br_get_dst_hook_t *get_dst_hook = rcu_dereference(br_get_dst_hook);
 	u16 vid = 0;
 	u8 state;
@@ -203,26 +200,11 @@ int br_handle_frame_finish(struct net *net, struct sock *sk, struct sk_buff *skb
 #if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
 		/*
 		 * Check if multicast flood rule is present
-		 * Only apply forced flood if MDB lookup resulted in NULL (unknown multicast).
-		 */
-		if (!mdst) {
-			if (skb->protocol == htons(ETH_P_IP)) {
-				if (br_mcast_rule_check_ip4(br, ip_hdr(skb)->daddr))
-					force_mcast_flood = true;
-#if IS_ENABLED(CONFIG_IPV6)
-			} else if (skb->protocol == htons(ETH_P_IPV6)) {
-				if (br_mcast_rule_check_ip6(br, &ipv6_hdr(skb)->daddr))
-					force_mcast_flood = true;
-#endif
-			}
-		}
-
-		/*
 		 * If forced flood is requested for this group,
 		 * take the unknown-mcast flooding path and skip MDB-based replication.
 		 * We set local_rcv like the unknown path and break out to common flooding.
 		 */
-		if (force_mcast_flood) {
+		if (br_mcast_offload_should_force_flood(br, skb, mdst)) {
 			local_rcv = true;
 			DEV_STATS_INC(br->dev, multicast);
 			break;
