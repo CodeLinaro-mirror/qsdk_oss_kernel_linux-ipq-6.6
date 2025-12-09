@@ -827,6 +827,7 @@ static const struct nla_policy nl80211_policy[NUM_NL80211_ATTR] = {
 	[NL80211_ATTR_TSF] = { .type = NLA_U64 },
 	[NL80211_ATTR_MLO_AP_RECONFIG] = { .type = NLA_FLAG },
 	[NL80211_ATTR_MLO_AP_AFC] = { .type = NLA_FLAG },
+	[NL80211_ATTR_CHANNEL] = { .type = NLA_U8 },
 };
 
 /* policy for the key attributes */
@@ -3964,6 +3965,8 @@ int nl80211_send_chandef(struct sk_buff *msg, const struct cfg80211_chan_def *ch
 	    nla_put_u32(msg, NL80211_ATTR_CENTER_FREQ2, chandef->center_freq2))
 		return -ENOBUFS;
 	if (nla_put_u32(msg, NL80211_ATTR_PUNCT_BITMAP, chandef->puncture_bitmap))
+		return -ENOBUFS;
+	if (nla_put_u8(msg, NL80211_ATTR_CHANNEL, chandef->chan->hw_value))
 		return -ENOBUFS;
 	return 0;
 }
