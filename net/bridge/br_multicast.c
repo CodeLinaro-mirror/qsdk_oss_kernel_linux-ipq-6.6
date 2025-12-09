@@ -1614,6 +1614,11 @@ static int br_ip6_multicast_add_group(struct net_bridge_mcast *brmctx,
 	if (ipv6_addr_is_ll_all_nodes(group))
 		return 0;
 
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	if (!br_mcast_offload_ip6_should_snoop_group(brmctx, group))
+		return 0;
+#endif
+
 	memset(&br_group, 0, sizeof(br_group));
 	br_group.dst.ip6 = *group;
 	br_group.proto = htons(ETH_P_IPV6);
@@ -3730,6 +3735,11 @@ static void br_ip6_multicast_leave_group(struct net_bridge_mcast *brmctx,
 	if (ipv6_addr_is_ll_all_nodes(group))
 		return;
 
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	if (!br_mcast_offload_ip6_should_snoop_group(brmctx, group))
+		return;
+#endif
+
 	own_query = pmctx ? &pmctx->ip6_own_query : &brmctx->ip6_own_query;
 
 	memset(&br_group, 0, sizeof(br_group));
@@ -3907,8 +3917,13 @@ static int br_multicast_ipv6_rcv(struct net_bridge_mcast *brmctx,
 	err = ipv6_mc_check_mld(skb);
 
 	if (err == -ENOMSG || err == -ENODATA) {
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+		if (br_mcast_offload_ip6_should_mark_mrouters_only(brmctx, &ipv6_hdr(skb)->daddr))
+			BR_INPUT_SKB_CB(skb)->mrouters_only = 1;
+#else
 		if (!ipv6_addr_is_ll_all_nodes(&ipv6_hdr(skb)->daddr))
 			BR_INPUT_SKB_CB(skb)->mrouters_only = 1;
+#endif
 		if (err == -ENODATA &&
 		    ipv6_addr_is_all_snoopers(&ipv6_hdr(skb)->daddr))
 			br_ip6_multicast_mrd_rcv(brmctx, pmctx, skb);

@@ -1278,6 +1278,7 @@ static const struct nla_policy br_policy[IFLA_BR_MAX + 1] = {
 	[IFLA_BR_VLAN_STATS_PER_PORT] = { .type = NLA_U8 },
 	[IFLA_BR_MULTI_BOOLOPT] =
 		NLA_POLICY_EXACT_LEN(sizeof(struct br_boolopt_multi)),
+	[IFLA_BR_MCAST_IGNORE_T_BIT] = { .type = NLA_U8 },
 };
 
 static int br_changelink(struct net_device *brdev, struct nlattr *tb[],
@@ -1552,6 +1553,12 @@ static int br_changelink(struct net_device *brdev, struct nlattr *tb[],
 			return err;
 	}
 
+	if (data[IFLA_BR_MCAST_IGNORE_T_BIT]) {
+		u8 ignore_t_bit = nla_get_u8(data[IFLA_BR_MCAST_IGNORE_T_BIT]);
+
+		br_opt_toggle(br, BROPT_MCAST_IGNORE_T_BIT, !!ignore_t_bit);
+	}
+
 	return 0;
 }
 
@@ -1632,6 +1639,7 @@ static size_t br_get_size(const struct net_device *brdev)
 	       nla_total_size(sizeof(u8)) +     /* IFLA_BR_NF_CALL_ARPTABLES */
 #endif
 	       nla_total_size(sizeof(struct br_boolopt_multi)) + /* IFLA_BR_MULTI_BOOLOPT */
+	       nla_total_size(sizeof(u8)) +     /* IFLA_BR_MCAST_IGNORE_T_BIT */
 	       0;
 }
 
@@ -1754,6 +1762,10 @@ static int br_fill_info(struct sk_buff *skb, const struct net_device *brdev)
 		       br_opt_get(br, BROPT_NF_CALL_ARPTABLES) ? 1 : 0))
 		return -EMSGSIZE;
 #endif
+
+	if (nla_put_u8(skb, IFLA_BR_MCAST_IGNORE_T_BIT,
+				br_opt_get(br, BROPT_MCAST_IGNORE_T_BIT)))
+		return -EMSGSIZE;
 
 	return 0;
 }
