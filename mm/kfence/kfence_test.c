@@ -162,7 +162,7 @@ static bool report_matches(const struct expect_report *r)
 		break;
 	}
 
-	cur += scnprintf(cur, end - cur, " 0x%p", (void *)addr);
+	cur += scnprintf(cur, end - cur, " 0x%px", (void *)addr);
 
 	spin_lock_irqsave(&observed.lock, flags);
 	if (!report_available())
