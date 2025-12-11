@@ -233,7 +233,9 @@ static void br_multicast_del_eht_set(struct net_bridge_group_eht_set *eht_set)
 #endif
 	}
 
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
 	eht_set->timer_expired = false;
+#endif
 	rb_erase(&eht_set->rb_node, &eht_set->pg->eht_set_tree);
 	RB_CLEAR_NODE(&eht_set->rb_node);
 	hlist_add_head(&eht_set->mcast_gc.gc_node, &eht_set->br->mcast_gc_list);
@@ -293,7 +295,9 @@ static void br_multicast_eht_set_expired(struct timer_list *t)
 	if (RB_EMPTY_NODE(&eht_set->rb_node) || timer_pending(&eht_set->timer))
 		goto out;
 
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
 	eht_set->timer_expired = true;
+#endif
 	br_multicast_del_eht_set(eht_set);
 out:
 	spin_unlock(&br->multicast_lock);
@@ -436,7 +440,6 @@ __eht_lookup_create_set(struct net_bridge_port_group *pg,
 	eht_set->mcast_gc.destroy = br_multicast_destroy_eht_set;
 	eht_set->pg = pg;
 	eht_set->br = pg->key.port->br;
-	eht_set->timer_expired = false;
 	eht_set->entry_tree = RB_ROOT;
 	timer_setup(&eht_set->timer, br_multicast_eht_set_expired, 0);
 
@@ -444,6 +447,7 @@ __eht_lookup_create_set(struct net_bridge_port_group *pg,
 	rb_insert_color(&eht_set->rb_node, &pg->eht_set_tree);
 
 #if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	eht_set->timer_expired = false;
 	if (pg->eht_event == BR_MCAST_EVENT_NONE)
 		pg->eht_event = BR_MCAST_EVENT_UPDATE;
 #endif
@@ -623,7 +627,7 @@ static bool __eht_del_set_entries(struct net_bridge_port_group *pg,
 		src_ent = br_multicast_find_group_src(pg, &src_ip);
 		if (!src_ent)
 			continue;
-		br_multicast_del_group_src(src_ent, true);
+		br_multicast_del_group_src(src_ent, !!(pg->key.port->flags & BR_MULTICAST_FAST_LEAVE));
 		changed = true;
 	}
 

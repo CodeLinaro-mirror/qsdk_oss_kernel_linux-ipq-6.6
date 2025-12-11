@@ -2053,6 +2053,12 @@ int br_multicast_add_port(struct net_bridge_port *port)
 	if (!port->mcast_stats)
 		return -ENOMEM;
 
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	struct net_bridge_mcast_port *pmctx = &port->multicast_ctx;
+
+	pmctx->mcast_flush_all = false;
+#endif
+
 	return 0;
 }
 
@@ -2066,11 +2072,13 @@ void br_multicast_del_port(struct net_bridge_port *port)
 	spin_lock_bh(&br->multicast_lock);
 
 #if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	struct net_bridge_mcast_port *pmctx = &port->multicast_ctx;
+
 	/*
 	 * Send Flush ALL Event for the given MCAST LAN port.
 	 */
-	if ((port->flags & BR_MCAST_MCUC_HW_OFFLOAD) && (!port->mcast_flush_all)) {
-		port->mcast_flush_all = true;
+	if ((port->flags & BR_MCAST_MCUC_HW_OFFLOAD) && (!pmctx->mcast_flush_all)) {
+		pmctx->mcast_flush_all = true;
 		br_mcast_offload_send_event((void *)port, NULL, BR_MCAST_EVENT_FLUSH_ALL);
 	}
 #endif
@@ -2136,6 +2144,11 @@ void br_multicast_enable_port(struct net_bridge_port *port)
 	struct net_bridge *br = port->br;
 
 	spin_lock_bh(&br->multicast_lock);
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	struct net_bridge_mcast_port *pmctx = &port->multicast_ctx;
+
+	pmctx->mcast_flush_all = false;
+#endif
 	__br_multicast_enable_port_ctx(&port->multicast_ctx);
 	spin_unlock_bh(&br->multicast_lock);
 }
@@ -2171,8 +2184,10 @@ void br_multicast_disable_port(struct net_bridge_port *port)
 	 * Send FLUSH ALL Event for the given MCAST LAN port.
 	 */
 #if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
-	if ((port->flags & BR_MCAST_MCUC_HW_OFFLOAD) && (!port->mcast_flush_all)) {
-		port->mcast_flush_all = true;
+	struct net_bridge_mcast_port *pmctx = &port->multicast_ctx;
+
+	if ((port->flags & BR_MCAST_MCUC_HW_OFFLOAD) && (!pmctx->mcast_flush_all)) {
+		pmctx->mcast_flush_all = true;
 		br_mcast_offload_send_event((void *)port, NULL, BR_MCAST_EVENT_FLUSH_ALL);
 	}
 #endif
@@ -4445,22 +4460,23 @@ void br_multicast_stop(struct net_bridge *br)
 void br_multicast_dev_del(struct net_bridge *br)
 {
 	struct net_bridge_mdb_entry *mp;
-#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
-	struct net_bridge_port *p;
-#endif
 	HLIST_HEAD(deleted_head);
 	struct hlist_node *tmp;
 
 	spin_lock_bh(&br->multicast_lock);
 
 #if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	struct net_bridge_port *p;
+
 	/* multicast_lock protects port_list, no RCU lock needed */
 	list_for_each_entry(p, &br->port_list, list) {
+		struct net_bridge_mcast_port *pmctx = &p->multicast_ctx;
+
 		/*
 		 * Send FLUSH ALL Event for the given MCAST LAN port.
 		 */
-		if ((p->flags & BR_MCAST_MCUC_HW_OFFLOAD) && (!p->mcast_flush_all)) {
-			p->mcast_flush_all = true;
+		if ((p->flags & BR_MCAST_MCUC_HW_OFFLOAD) && (!pmctx->mcast_flush_all)) {
+			pmctx->mcast_flush_all = true;
 			br_mcast_offload_send_event((void *)p, NULL, BR_MCAST_EVENT_FLUSH_ALL);
 		}
 	}

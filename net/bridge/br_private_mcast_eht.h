@@ -47,7 +47,9 @@ struct net_bridge_group_eht_set {
 	struct net_bridge_port_group	*pg;
 	struct net_bridge		*br;
 	struct net_bridge_mcast_gc	mcast_gc;
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
 	bool				timer_expired;
+#endif
 };
 
 #ifdef CONFIG_BRIDGE_IGMP_SNOOPING
