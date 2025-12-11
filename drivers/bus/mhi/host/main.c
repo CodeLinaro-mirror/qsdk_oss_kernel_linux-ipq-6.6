@@ -511,7 +511,8 @@ irqreturn_t mhi_intvec_threaded_handler(int irq_number, void *priv)
 	switch (ee) {
 	case MHI_EE_RDDM:
 		/* proceed if power down is not already in progress */
-		if (mhi_cntrl->rddm_size && mhi_is_active(mhi_cntrl)) {
+		if (mhi_cntrl->rddm_size && mhi_is_active(mhi_cntrl) &&
+		    mhi_cntrl->ee != MHI_EE_RDDM) {
 			mhi_cntrl->status_cb(mhi_cntrl, MHI_CB_EE_RDDM);
 			mhi_cntrl->ee = ee;
 			wake_up_all(&mhi_cntrl->state_event);
