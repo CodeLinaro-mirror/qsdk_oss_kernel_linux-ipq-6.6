@@ -84,3 +84,10 @@ config BRIDGE_CFM
 	  Say N to exclude this support and reduce the binary size.
 
 	  If unsure, say N.
+
+config BRIDGE_MCAST_OFFLOAD
+	bool "Bridge multicast offload"
+	depends on BRIDGE && BRIDGE_IGMP_SNOOPING
+	default y
+	help
+	  Enables multicast NSS/MCUC offload support.
