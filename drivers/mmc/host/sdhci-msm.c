@@ -2137,8 +2137,7 @@ static int sdhci_msm_cqe_add_host(struct sdhci_host *host,
 		goto cleanup;
 	}
 
-	if (!msm_host->mmc->host_disable_cqe)
-		msm_host->mmc->caps2 |= MMC_CAP2_CQE | MMC_CAP2_CQE_DCMD;
+	msm_host->mmc->caps2 |= MMC_CAP2_CQE | MMC_CAP2_CQE_DCMD;
 	cq_host->ops = &sdhci_msm_cqhci_ops;
 
 	dma64 = host->flags & SDHCI_USE_64_BIT_DMA;
@@ -2775,13 +2774,10 @@ static int sdhci_msm_probe(struct platform_device *pdev)
 	host->mmc_host_ops.start_signal_voltage_switch =
 		sdhci_msm_start_signal_voltage_switch;
 	host->mmc_host_ops.execute_tuning = sdhci_msm_execute_tuning;
-	/*
-	 * If "supports-cqe" is not set in DT, disable CQE at host level.
-	 * This allows ICE to operate in legacy mode.
-	 */
-	msm_host->mmc->host_disable_cqe = !of_property_read_bool(node,
-								 "supports-cqe");
-	ret = sdhci_msm_cqe_add_host(host, pdev);
+	if (of_property_read_bool(node, "supports-cqe"))
+		ret = sdhci_msm_cqe_add_host(host, pdev);
+	else
+		ret = sdhci_add_host(host);
 	if (ret)
 		goto pm_runtime_disable;
 
