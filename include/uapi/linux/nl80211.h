@@ -2880,6 +2880,8 @@ enum nl80211_commands {
  *
  * @NL80211_ATTR_MLO_AP_RECONFIG: whether the operation is MLO reconfiguration or not
  *
+ * @NL80211_ATTR_CHANNEL: (u8) Channel number of the given frequency.
+ *
  * @NUM_NL80211_ATTR: total number of nl80211_attrs available
  * @NL80211_ATTR_MAX: highest attribute number currently defined
  * @__NL80211_ATTR_AFTER_LAST: internal use
@@ -3434,6 +3436,7 @@ enum nl80211_attrs {
 	NL80211_ATTR_RADIO_IFACE = 350,
 	NL80211_ATTR_MLO_AP_RECONFIG,
 	NL80211_ATTR_MLO_AP_AFC,
+	NL80211_ATTR_CHANNEL,
 
 	/* add attributes here, update the policy in nl80211.c */
 
