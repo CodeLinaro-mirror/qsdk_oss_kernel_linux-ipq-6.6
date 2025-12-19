@@ -280,7 +280,8 @@ bool cfg80211_chandef_valid(const struct cfg80211_chan_def *chandef)
 		/* all checked above */
 		break;
 	case NL80211_CHAN_WIDTH_320:
-		if (chandef->center_freq1 == control_freq + 150 ||
+		if (chandef->center_freq1 == 0 ||
+		    chandef->center_freq1 == control_freq + 150 ||
 		    chandef->center_freq1 == control_freq + 130 ||
 		    chandef->center_freq1 == control_freq + 110 ||
 		    chandef->center_freq1 == control_freq + 90 ||
@@ -991,11 +992,17 @@ static bool cfg80211_secondary_chans_ok(struct wiphy *wiphy,
 	struct ieee80211_channel *c;
 	u32 freq, start_freq, end_freq;
 
+	if (bandwidth == 320) {
+		if (band == NL80211_BAND_5GHZ)
+			puncture_bitmap = FIXED_PUNCTURE_PATTERN;
+		else if (band == NL80211_BAND_6GHZ && center_freq == 0)
+			/* If the user does not specify a center frequency,
+			 * allow the driver to select a valid 320 MHz center frequency */
+			return true;
+	}
+
 	start_freq = cfg80211_get_start_freq(center_freq, bandwidth);
 	end_freq = cfg80211_get_end_freq(center_freq, bandwidth);
-
-	if ((band == NL80211_BAND_5GHZ) && (bandwidth == 320))
-		puncture_bitmap = FIXED_PUNCTURE_PATTERN;
 
 	for (freq = start_freq; freq <= end_freq; freq += MHZ_TO_KHZ(20)) {
 		if (DISABLED_SUB_CHAN(freq, start_freq, puncture_bitmap))
