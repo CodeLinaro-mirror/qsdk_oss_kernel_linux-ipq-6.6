@@ -53,9 +53,11 @@
 #include <linux/pm_clock.h>
 #include <linux/pm_runtime.h>
 #include <linux/regmap.h>
+#include <linux/string.h>
 
 #include <dt-bindings/clock/qcom,ipq-cmn-pll.h>
 #include <dt-bindings/clock/qcom,ipq5018-cmn-pll.h>
+#include <dt-bindings/clock/qcom,ipq5210-cmn-pll.h>
 #include <dt-bindings/clock/qcom,ipq5332-cmn-pll.h>
 #include <dt-bindings/clock/qcom,ipq5424-cmn-pll.h>
 
@@ -64,6 +66,18 @@
 
 #define CMN_PLL_LOCKED				0x64
 #define CMN_PLL_CLKS_LOCKED			BIT(8)
+
+#define CMN_PLL_NSS_PPE_FREQ_CTRL		0x98
+#define CMN_PLL_NSS_CLK_SEL			GENMASK(13, 8)
+#define CMN_PLL_PPE_CLK_SEL			GENMASK(5, 0)
+/* CMNPLL divider for NSS/PPE: 6-bit field, valid range 8-63. */
+#define CMN_PLL_NSS_PPE_DIV_MIN			8
+#define CMN_PLL_NSS_PPE_DIV_MAX			63
+
+#define CMN_PLL_PON_CONFIG			0x42c
+#define CMN_PLL_PON_MODE_SEL			BIT(9)
+#define CMN_PLL_PON_EN				BIT(8)
+#define CMN_PLL_PON_DIV_CTRL			GENMASK(7, 0)
 
 #define CMN_PLL_POWER_ON_AND_RESET		0x780
 #define CMN_ANA_EN_SW_RSTN			BIT(6)
@@ -79,33 +93,55 @@
 #define CMN_PLL_DIVIDER_CTRL			0x794
 #define CMN_PLL_DIVIDER_CTRL_FACTOR		GENMASK(9, 0)
 
+#define CMN_PLL_OUTPUT_RELATED_1		0x79c
+#define CLK25M_EN_BIT				15
+#define CLK50M_EN_BIT3_BIT			14
+#define CLK250M_EN_BIT				13
+#define CLK31P25M_EN_BIT			12
+#define CLK50M_EN_BIT				11
+#define CLK50M_EN_BIT2_BIT			10
+
 /**
  * struct cmn_pll_fixed_output_clk - CMN PLL output clocks information
  * @id:	Clock specifier to be supplied
  * @name: Clock name to be registered
  * @rate: Clock rate
+ * @enable_bit: Enable bit in register for gate clock, -1 if not a gate clock
  */
 struct cmn_pll_fixed_output_clk {
 	unsigned int id;
 	const char *name;
 	unsigned long rate;
+	int enable_bit;
 };
 
 /**
  * struct clk_cmn_pll - CMN PLL hardware specific data
  * @regmap: hardware regmap.
+ * @base: register base address for gate clock registration
  * @hw: handle between common and hardware-specific interfaces
+ *
+ * This structure is used for all CMN PLL-derived clocks including
+ * the main PLL, PON reference clock, NSS clock, and PPE clock.
  */
 struct clk_cmn_pll {
 	struct regmap *regmap;
+	void __iomem *base;
 	struct clk_hw hw;
 };
 
-#define CLK_PLL_OUTPUT(_id, _name, _rate) {		\
+#define CLK_PLL_OUTPUT_RAW(_id, _name, _rate, _bit) {		\
 	.id =		_id,				\
 	.name =		_name,				\
 	.rate =		_rate,				\
+	.enable_bit =	_bit,				\
 }
+
+#define CLK_PLL_OUTPUT(_id, _name, _rate)	\
+	CLK_PLL_OUTPUT_RAW(_id, _name, _rate, -1)
+
+#define CLK_PLL_GATE(_id, _name, _rate, _bit)	\
+	CLK_PLL_OUTPUT_RAW(_id, _name, _rate, _bit)
 
 #define to_clk_cmn_pll(_hw) container_of(_hw, struct clk_cmn_pll, hw)
 
@@ -156,6 +192,21 @@ static const struct cmn_pll_fixed_output_clk ipq9574_output_clks[] = {
 	CLK_PLL_OUTPUT(ETH1_50MHZ_CLK, "eth1-50mhz", 50000000UL),
 	CLK_PLL_OUTPUT(ETH2_50MHZ_CLK, "eth2-50mhz", 50000000UL),
 	CLK_PLL_OUTPUT(ETH_25MHZ_CLK, "eth-25mhz", 25000000UL),
+	{ /* Sentinel */ }
+};
+
+static const struct cmn_pll_fixed_output_clk ipq5210_output_clks[] = {
+	CLK_PLL_OUTPUT(IPQ5210_XO_24MHZ_CLK, "xo-24mhz", 24000000UL),
+	CLK_PLL_OUTPUT(IPQ5210_SLEEP_32KHZ_CLK, "sleep-32khz", 32000UL),
+	CLK_PLL_GATE(IPQ5210_PCS_31P25MHZ_CLK, "pcs-31p25mhz", 31250000UL, CLK31P25M_EN_BIT),
+	CLK_PLL_GATE(IPQ5210_ETH0_50MHZ_CLK, "eth0-50mhz", 50000000UL, CLK50M_EN_BIT),
+	CLK_PLL_GATE(IPQ5210_ETH1_50MHZ_CLK, "eth1-50mhz", 50000000UL, CLK50M_EN_BIT2_BIT),
+	CLK_PLL_GATE(IPQ5210_ETH2_50MHZ_CLK, "eth2-50mhz", 50000000UL, CLK50M_EN_BIT3_BIT),
+	CLK_PLL_GATE(IPQ5210_EPHY_50MHZ_CLK, "ephy-50mhz", 50000000UL, CLK250M_EN_BIT),
+	CLK_PLL_GATE(IPQ5210_ETH_25MHZ_CLK, "eth-25mhz", 25000000UL, CLK25M_EN_BIT),
+	CLK_PLL_OUTPUT(IPQ5210_NSS_CLK, "nss", 0),
+	CLK_PLL_OUTPUT(IPQ5210_PPE_CLK, "ppe", 0),
+	CLK_PLL_OUTPUT(IPQ5210_PON_REFCLK, "pon", 0),
 	{ /* Sentinel */ }
 };
 
@@ -307,6 +358,215 @@ static const struct clk_ops clk_cmn_pll_ops = {
 	.set_rate = clk_cmn_pll_set_rate,
 };
 
+/*
+ * PON (Passive Optical Network) reference clock operations.
+ * The PON refclk is derived from CMN PLL rate / 2, then divided by
+ * a configurable 8-bit divider (1-255).
+ */
+static int clk_pon_refclk_enable(struct clk_hw *hw)
+{
+	struct clk_cmn_pll *pon_clk = to_clk_cmn_pll(hw);
+
+	return regmap_set_bits(pon_clk->regmap, CMN_PLL_PON_CONFIG,
+			       CMN_PLL_PON_EN);
+}
+
+static void clk_pon_refclk_disable(struct clk_hw *hw)
+{
+	struct clk_cmn_pll *pon_clk = to_clk_cmn_pll(hw);
+
+	regmap_clear_bits(pon_clk->regmap, CMN_PLL_PON_CONFIG,
+			  CMN_PLL_PON_EN);
+}
+
+static int clk_pon_refclk_is_enabled(struct clk_hw *hw)
+{
+	struct clk_cmn_pll *pon_clk = to_clk_cmn_pll(hw);
+
+	return regmap_test_bits(pon_clk->regmap, CMN_PLL_PON_CONFIG,
+				CMN_PLL_PON_EN);
+}
+
+static unsigned long clk_pon_refclk_recalc_rate(struct clk_hw *hw,
+						unsigned long parent_rate)
+{
+	struct clk_cmn_pll *pon_clk = to_clk_cmn_pll(hw);
+	u32 val, div;
+
+	regmap_read(pon_clk->regmap, CMN_PLL_PON_CONFIG, &val);
+
+	/* Check if in UNIPHY mode (bit 9 = 0) - fixed 31.25 MHz */
+	if (!(val & CMN_PLL_PON_MODE_SEL))
+		return 31250000UL;
+
+	/* PON mode: calculate from divider */
+	div = FIELD_GET(CMN_PLL_PON_DIV_CTRL, val);
+	if (WARN_ON_ONCE(!div))
+		return 0;
+
+	return DIV_ROUND_CLOSEST_ULL(parent_rate, 2ULL * div);
+}
+
+static long clk_pon_refclk_round_rate(struct clk_hw *hw, unsigned long rate,
+				      unsigned long *parent_rate)
+{
+	unsigned long div;
+
+	if (!rate)
+		return 0;
+
+	div = DIV_ROUND_CLOSEST_ULL(*parent_rate, 2ULL * rate);
+
+	/* Clamp to valid range (1-255) */
+	div = clamp_t(unsigned long, div, 1, 255);
+
+	return DIV_ROUND_CLOSEST_ULL(*parent_rate, 2ULL * div);
+}
+
+static int clk_pon_refclk_set_rate(struct clk_hw *hw, unsigned long rate,
+				   unsigned long parent_rate)
+{
+	struct clk_cmn_pll *pon_clk = to_clk_cmn_pll(hw);
+	unsigned long div;
+	int ret;
+
+	/* Check if requesting UNIPHY fixed rate (31.25 MHz) */
+	if (rate == 31250000UL) {
+		return regmap_clear_bits(pon_clk->regmap,
+					 CMN_PLL_PON_CONFIG,
+					 CMN_PLL_PON_MODE_SEL);
+	}
+
+	div = DIV_ROUND_CLOSEST_ULL(parent_rate, 2ULL * rate);
+
+	/* Constrain divider to 8-bit register width: [1, 255]. */
+	if (div == 0 || div > 255)
+		return -EINVAL;
+
+	/* Switch to PON mode (bit 9 = 1) */
+	ret = regmap_set_bits(pon_clk->regmap, CMN_PLL_PON_CONFIG,
+			      CMN_PLL_PON_MODE_SEL);
+	if (ret)
+		return ret;
+
+	/* Update divider field */
+	return regmap_update_bits(pon_clk->regmap, CMN_PLL_PON_CONFIG,
+				  CMN_PLL_PON_DIV_CTRL,
+				  FIELD_PREP(CMN_PLL_PON_DIV_CTRL, div));
+}
+
+static const struct clk_ops clk_pon_refclk_ops = {
+	.enable = clk_pon_refclk_enable,
+	.disable = clk_pon_refclk_disable,
+	.is_enabled = clk_pon_refclk_is_enabled,
+	.recalc_rate = clk_pon_refclk_recalc_rate,
+	.round_rate = clk_pon_refclk_round_rate,
+	.set_rate = clk_pon_refclk_set_rate,
+};
+
+/*
+ * NSS (Network Subsystem) clock operations.
+ * The NSS clock is derived from CMN PLL rate / 2, then divided by
+ * a configurable 6-bit divider (8-63).
+ */
+static unsigned long clk_nss_recalc_rate(struct clk_hw *hw,
+					 unsigned long parent_rate)
+{
+	struct clk_cmn_pll *nss_clk = to_clk_cmn_pll(hw);
+	u32 val, div;
+
+	regmap_read(nss_clk->regmap, CMN_PLL_NSS_PPE_FREQ_CTRL, &val);
+	div = FIELD_GET(CMN_PLL_NSS_CLK_SEL, val);
+	if (WARN_ON_ONCE(!div))
+		return 0;
+
+	return DIV_ROUND_CLOSEST_ULL(parent_rate, 2ULL * div);
+}
+
+static long clk_nss_ppe_round_rate(struct clk_hw *hw, unsigned long rate,
+				   unsigned long *parent_rate)
+{
+	unsigned long div;
+
+	/* Calculate divider */
+	div = DIV_ROUND_CLOSEST_ULL(*parent_rate, 2ULL * rate);
+
+	/* Clamp to valid range (8-63) */
+	div = clamp_t(unsigned long, div, CMN_PLL_NSS_PPE_DIV_MIN,
+		      CMN_PLL_NSS_PPE_DIV_MAX);
+
+	return DIV_ROUND_CLOSEST_ULL(*parent_rate, 2ULL * div);
+}
+
+static int clk_nss_set_rate(struct clk_hw *hw, unsigned long rate,
+			    unsigned long parent_rate)
+{
+	struct clk_cmn_pll *nss_clk = to_clk_cmn_pll(hw);
+	unsigned long div;
+
+	/* Calculate divider */
+	div = DIV_ROUND_CLOSEST_ULL(parent_rate, 2ULL * rate);
+
+	/* Validate range */
+	if (div < CMN_PLL_NSS_PPE_DIV_MIN || div > CMN_PLL_NSS_PPE_DIV_MAX)
+		return -EINVAL;
+
+	/* Update divider field */
+	return regmap_update_bits(nss_clk->regmap, CMN_PLL_NSS_PPE_FREQ_CTRL,
+				  CMN_PLL_NSS_CLK_SEL,
+				  FIELD_PREP(CMN_PLL_NSS_CLK_SEL, div));
+}
+
+static const struct clk_ops clk_nss_ops = {
+	.recalc_rate = clk_nss_recalc_rate,
+	.round_rate = clk_nss_ppe_round_rate,
+	.set_rate = clk_nss_set_rate,
+};
+
+/*
+ * PPE (Packet Process Engine) clock operations.
+ * The PPE clock is derived from CMN PLL rate / 2, then divided by
+ * a configurable 6-bit divider (8-63).
+ */
+static unsigned long clk_ppe_recalc_rate(struct clk_hw *hw,
+					 unsigned long parent_rate)
+{
+	struct clk_cmn_pll *ppe_clk = to_clk_cmn_pll(hw);
+	u32 val, div;
+
+	regmap_read(ppe_clk->regmap, CMN_PLL_NSS_PPE_FREQ_CTRL, &val);
+	div = FIELD_GET(CMN_PLL_PPE_CLK_SEL, val);
+	if (WARN_ON_ONCE(!div))
+		return 0;
+
+	return DIV_ROUND_CLOSEST_ULL(parent_rate, 2ULL * div);
+}
+
+static int clk_ppe_set_rate(struct clk_hw *hw, unsigned long rate,
+			    unsigned long parent_rate)
+{
+	struct clk_cmn_pll *ppe_clk = to_clk_cmn_pll(hw);
+	unsigned long div;
+
+	/* Calculate divider */
+	div = DIV_ROUND_CLOSEST_ULL(parent_rate, 2ULL * rate);
+
+	/* Validate range */
+	if (div < CMN_PLL_NSS_PPE_DIV_MIN || div > CMN_PLL_NSS_PPE_DIV_MAX)
+		return -EINVAL;
+
+	/* Update divider field */
+	return regmap_update_bits(ppe_clk->regmap, CMN_PLL_NSS_PPE_FREQ_CTRL,
+				  CMN_PLL_PPE_CLK_SEL,
+				  FIELD_PREP(CMN_PLL_PPE_CLK_SEL, div));
+}
+
+static const struct clk_ops clk_ppe_ops = {
+	.recalc_rate = clk_ppe_recalc_rate,
+	.round_rate = clk_nss_ppe_round_rate,
+	.set_rate = clk_ppe_set_rate,
+};
+
 static struct clk_hw *ipq_cmn_pll_clk_hw_register(struct platform_device *pdev)
 {
 	struct clk_parent_data pdata = { .index = 0 };
@@ -336,6 +596,7 @@ static struct clk_hw *ipq_cmn_pll_clk_hw_register(struct platform_device *pdev)
 
 	cmn_pll->hw.init = &init;
 	cmn_pll->regmap = regmap;
+	cmn_pll->base = base;
 
 	ret = devm_clk_hw_register(dev, &cmn_pll->hw);
 	if (ret)
@@ -344,12 +605,118 @@ static struct clk_hw *ipq_cmn_pll_clk_hw_register(struct platform_device *pdev)
 	return &cmn_pll->hw;
 }
 
+/*
+ * Register PON reference clock with CMN PLL as parent.
+ * The PON refclk is derived from CMN PLL / 2, then divided by
+ * a configurable divider (default 129 for 46.512 MHz).
+ */
+static struct clk_hw *ipq_cmn_pll_pon_refclk_register(struct platform_device *pdev,
+						      struct regmap *regmap,
+						      struct clk_hw *cmn_pll_hw)
+{
+	struct clk_parent_data pdata = { .hw = cmn_pll_hw };
+	struct clk_cmn_pll *pon_clk;
+	struct device *dev = &pdev->dev;
+	struct clk_init_data init = {};
+	int ret;
+
+	pon_clk = devm_kzalloc(dev, sizeof(*pon_clk), GFP_KERNEL);
+	if (!pon_clk)
+		return ERR_PTR(-ENOMEM);
+
+	init.name = "pon-clk";
+	init.parent_data = &pdata;
+	init.num_parents = 1;
+	init.ops = &clk_pon_refclk_ops;
+	init.flags = 0;
+
+	pon_clk->hw.init = &init;
+	pon_clk->regmap = regmap;
+
+	ret = devm_clk_hw_register(dev, &pon_clk->hw);
+	if (ret)
+		return ERR_PTR(ret);
+
+	return &pon_clk->hw;
+}
+
+/*
+ * Register NSS clock with CMN PLL as parent.
+ * The NSS clock is derived from CMN PLL / 2, then divided by
+ * a configurable divider (default 14 for 428.57 MHz).
+ */
+static struct clk_hw *ipq_cmn_pll_nss_register(struct platform_device *pdev,
+					       struct regmap *regmap,
+					       struct clk_hw *cmn_pll_hw)
+{
+	struct clk_parent_data pdata = { .hw = cmn_pll_hw };
+	struct clk_cmn_pll *nss_clk;
+	struct device *dev = &pdev->dev;
+	struct clk_init_data init = {};
+	int ret;
+
+	nss_clk = devm_kzalloc(dev, sizeof(*nss_clk), GFP_KERNEL);
+	if (!nss_clk)
+		return ERR_PTR(-ENOMEM);
+
+	init.name = "nss-clk";
+	init.parent_data = &pdata;
+	init.num_parents = 1;
+	init.ops = &clk_nss_ops;
+	init.flags = 0;
+
+	nss_clk->hw.init = &init;
+	nss_clk->regmap = regmap;
+
+	ret = devm_clk_hw_register(dev, &nss_clk->hw);
+	if (ret)
+		return ERR_PTR(ret);
+
+	return &nss_clk->hw;
+}
+
+/*
+ * Register PPE clock with CMN PLL as parent.
+ * The PPE clock is derived from CMN PLL / 2, then divided by
+ * a configurable divider (default 16 for 375 MHz).
+ */
+static struct clk_hw *ipq_cmn_pll_ppe_register(struct platform_device *pdev,
+					       struct regmap *regmap,
+					       struct clk_hw *cmn_pll_hw)
+{
+	struct clk_parent_data pdata = { .hw = cmn_pll_hw };
+	struct clk_cmn_pll *ppe_clk;
+	struct device *dev = &pdev->dev;
+	struct clk_init_data init = {};
+	int ret;
+
+	ppe_clk = devm_kzalloc(dev, sizeof(*ppe_clk), GFP_KERNEL);
+	if (!ppe_clk)
+		return ERR_PTR(-ENOMEM);
+
+	init.name = "ppe-clk";
+	init.parent_data = &pdata;
+	init.num_parents = 1;
+	init.ops = &clk_ppe_ops;
+	init.flags = 0;
+
+	ppe_clk->hw.init = &init;
+	ppe_clk->regmap = regmap;
+
+	ret = devm_clk_hw_register(dev, &ppe_clk->hw);
+	if (ret)
+		return ERR_PTR(ret);
+
+	return &ppe_clk->hw;
+}
+
 static int ipq_cmn_pll_register_clks(struct platform_device *pdev)
 {
 	const struct cmn_pll_fixed_output_clk *p, *fixed_clk;
 	struct clk_hw_onecell_data *hw_data;
 	struct device *dev = &pdev->dev;
 	struct clk_hw *cmn_pll_hw;
+	struct clk_cmn_pll *cmn_pll;
 	unsigned int num_clks;
 	struct clk_hw *hw;
 	int ret, i;
@@ -358,14 +725,10 @@ static int ipq_cmn_pll_register_clks(struct platform_device *pdev)
 	if (!fixed_clk)
 		return -EINVAL;
 
+	/* Count fixed clocks from the array */
 	num_clks = 0;
 	for (p = fixed_clk; p->name; p++)
 		num_clks++;
-
-	hw_data = devm_kzalloc(dev, struct_size(hw_data, hws, num_clks + 1),
-			       GFP_KERNEL);
-	if (!hw_data)
-		return -ENOMEM;
 
 	/*
 	 * Register the CMN PLL clock, which is the parent clock of
@@ -375,11 +738,43 @@ static int ipq_cmn_pll_register_clks(struct platform_device *pdev)
 	if (IS_ERR(cmn_pll_hw))
 		return PTR_ERR(cmn_pll_hw);
 
-	/* Register the fixed rate output clocks. */
-	for (i = 0; i < num_clks; i++) {
-		hw = clk_hw_register_fixed_rate_parent_hw(dev, fixed_clk[i].name,
-							  cmn_pll_hw, 0,
-							  fixed_clk[i].rate);
+	cmn_pll = to_clk_cmn_pll(cmn_pll_hw);
+
+	/* Allocate hw_data for all clocks */
+	hw_data = devm_kzalloc(dev, struct_size(hw_data, hws, num_clks + 1),
+			       GFP_KERNEL);
+	if (!hw_data)
+		return -ENOMEM;
+
+	/* Register the fixed rate output clocks (common for all platforms) */
+	for (i = 0; fixed_clk[i].name; i++) {
+		if (fixed_clk[i].enable_bit != -1) {
+			hw = devm_clk_hw_register_gate(dev, fixed_clk[i].name,
+						       clk_hw_get_name(cmn_pll_hw),
+						       0,
+						       cmn_pll->base + CMN_PLL_OUTPUT_RELATED_1,
+						       fixed_clk[i].enable_bit,
+						       0,
+						       NULL);
+		} else if (fixed_clk[i].rate) {
+			hw = clk_hw_register_fixed_rate_parent_hw(dev,
+							fixed_clk[i].name,
+							cmn_pll_hw, 0,
+							fixed_clk[i].rate);
+		} else if (!strcmp(fixed_clk[i].name, "nss")) {
+			hw = ipq_cmn_pll_nss_register(pdev, cmn_pll->regmap,
+						      cmn_pll_hw);
+		} else if (!strcmp(fixed_clk[i].name, "ppe")) {
+			hw = ipq_cmn_pll_ppe_register(pdev, cmn_pll->regmap,
+						      cmn_pll_hw);
+		} else if (!strcmp(fixed_clk[i].name, "pon")) {
+			hw = ipq_cmn_pll_pon_refclk_register(pdev,
+							     cmn_pll->regmap,
+							     cmn_pll_hw);
+		} else {
+			continue;
+		}
+
 		if (IS_ERR(hw)) {
 			ret = PTR_ERR(hw);
 			goto unregister_fixed_clk;
@@ -393,6 +788,7 @@ static int ipq_cmn_pll_register_clks(struct platform_device *pdev)
 	 * is configured to 12 GHZ by DT property assigned-clock-rates-u64.
 	 */
 	hw_data->hws[CMN_PLL_CLK] = cmn_pll_hw;
+
 	hw_data->num = num_clks + 1;
 
 	ret = devm_of_clk_add_hw_provider(dev, of_clk_hw_onecell_get, hw_data);
@@ -470,6 +866,7 @@ static const struct dev_pm_ops ipq_cmn_pll_pm_ops = {
 
 static const struct of_device_id ipq_cmn_pll_clk_ids[] = {
 	{ .compatible = "qcom,ipq5018-cmn-pll", .data = &ipq5018_output_clks },
+	{ .compatible = "qcom,ipq5210-cmn-pll", .data = &ipq5210_output_clks },
 	{ .compatible = "qcom,ipq5332-cmn-pll", .data = &ipq5332_output_clks },
 	{ .compatible = "qcom,ipq5424-cmn-pll", .data = &ipq5424_output_clks },
 	{ .compatible = "qcom,ipq9574-cmn-pll", .data = &ipq9574_output_clks },
