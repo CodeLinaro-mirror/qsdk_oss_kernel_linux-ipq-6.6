@@ -1003,8 +1003,11 @@ static int prepare_bam_async_desc(struct qcom_nand_controller *nandc,
 	struct dma_async_tx_descriptor *dma_desc;
 
 	desc = kzalloc(sizeof(*desc), GFP_KERNEL);
-	if (!desc)
+	if (!desc) {
+		dev_err(nandc->dev, "%s: kzalloc failed for %zu bytes\n",
+			__func__, sizeof(*desc));
 		return -ENOMEM;
+	}
 
 	if (chan == nandc->cmd_chan) {
 		sgl = &bam_txn->cmd_sgl[bam_txn->cmd_sgl_start];
