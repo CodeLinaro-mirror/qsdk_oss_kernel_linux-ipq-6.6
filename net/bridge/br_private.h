@@ -179,6 +179,7 @@ struct net_bridge_mcast {
 #if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
 	struct hlist_head		ip_mac_map[BR_IP_MAC_HASH_SIZE];
 	struct hlist_head		shared_mac_state[BR_SHARED_MAC_STATE_HASH_SIZE];
+	struct timer_list		ip_mac_map_timer;
 #endif
 #endif /* CONFIG_BRIDGE_IGMP_SNOOPING */
 };

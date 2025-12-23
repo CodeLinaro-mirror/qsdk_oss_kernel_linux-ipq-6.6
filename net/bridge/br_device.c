@@ -17,6 +17,9 @@
 
 #include <linux/uaccess.h>
 #include "br_private.h"
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+#include "br_mcast_offload.h"
+#endif
 
 #define COMMON_FEATURES (NETIF_F_SG | NETIF_F_FRAGLIST | NETIF_F_HIGHDMA | \
 			 NETIF_F_GSO_MASK | NETIF_F_HW_CSUM)
@@ -108,6 +111,13 @@ netdev_tx_t br_dev_xmit(struct sk_buff *skb, struct net_device *dev)
 		}
 
 		mdst = br_mdb_get(brmctx, skb, vid);
+
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+		if (br_mcast_offload_should_force_flood(br, skb, mdst)) {
+			br_flood(br, skb, BR_PKT_MULTICAST, false, true, vid);
+			goto out;
+		}
+#endif
 		if ((mdst || BR_INPUT_SKB_CB_MROUTERS_ONLY(skb)) &&
 		    br_multicast_querier_exists(brmctx, eth_hdr(skb), mdst))
 			br_multicast_flood(mdst, skb, brmctx, false, true);

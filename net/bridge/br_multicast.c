@@ -3880,23 +3880,14 @@ static int br_multicast_ipv4_rcv(struct net_bridge_mcast *brmctx,
 	src = eth_hdr(skb)->h_source;
 	BR_INPUT_SKB_CB(skb)->igmp = ih->type;
 
+
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
 	/*
 	 * Add IP-MAC mapping for hardware offload
 	 */
-#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
-	if (pmctx && (pmctx->port->flags & BR_MCAST_MCUC_HW_OFFLOAD)) {
-		int ifindex = pmctx->port->dev->ifindex;
-		struct net_bridge *br = brmctx->br;
-		struct br_ip host;
-
-		br_mcast_offload_get_br_ip(skb, &host);
-		err = br_mcast_offload_map_add(&br->multicast_ctx, &host, src, ifindex, vid);
-		if (err) {
-			pr_debug("br_multicast: Failed to add IP-MAC mapping: %d\n", err);
-		}
-	}
-
+	br_mcast_offload_map_add(pmctx, brmctx, skb, src, vid);
 #endif
+
 	switch (ih->type) {
 	case IGMP_HOST_MEMBERSHIP_REPORT:
 	case IGMPV2_HOST_MEMBERSHIP_REPORT:
@@ -3975,24 +3966,13 @@ static int br_multicast_ipv6_rcv(struct net_bridge_mcast *brmctx,
 	BR_INPUT_SKB_CB(skb)->igmp = mld->mld_type;
 
 #if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
-
 	/*
 	 * Add IP-MAC mapping for hardware offload
 	 */
-	if (pmctx && (pmctx->port->flags & BR_MCAST_MCUC_HW_OFFLOAD)) {
-		int ifindex = pmctx->port->dev->ifindex;
-		struct net_bridge *br = brmctx->br;
-		struct br_ip host;
-
-		src = eth_hdr(skb)->h_source;
-		br_mcast_offload_get_br_ip(skb, &host);
-		err = br_mcast_offload_map_add(&br->multicast_ctx, &host, src, ifindex, vid);
-		if (err) {
-			pr_debug("br_multicast: Failed to add IP-MAC mapping: %d\n", err);
-		}
-	}
-
+	src = eth_hdr(skb)->h_source;
+	br_mcast_offload_map_add(pmctx, brmctx, skb, src, vid);
 #endif
+
 	switch (mld->mld_type) {
 	case ICMPV6_MGM_REPORT:
 		src = eth_hdr(skb)->h_source;

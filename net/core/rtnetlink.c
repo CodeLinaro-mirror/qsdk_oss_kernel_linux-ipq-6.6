@@ -6153,6 +6153,11 @@ static int rtnl_stats_set(struct sk_buff *skb, struct nlmsghdr *nlh,
 	return 0;
 }
 
+/* Policy for MDB dump request attributes: allow only MDBA_MDB_EHT_DUMP as u32 */
+static const struct nla_policy mdb_dump_policy[MDBA_MAX + 1] = {
+	[MDBA_MDB_EHT_DUMP] = { .type = NLA_U32 },
+};
+
 static int rtnl_mdb_valid_dump_req(const struct nlmsghdr *nlh,
 				   struct netlink_ext_ack *extack)
 {
@@ -6178,7 +6183,7 @@ static int rtnl_mdb_valid_dump_req(const struct nlmsghdr *nlh,
 		int err;
 
 		err = nlmsg_parse_deprecated_strict(nlh, sizeof(*bpm), tb,
-				MDBA_MAX, NULL, extack);
+				MDBA_MAX, mdb_dump_policy, extack);
 		if (err)
 			return err;
 
