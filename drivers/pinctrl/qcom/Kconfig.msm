@@ -53,13 +53,13 @@ config PINCTRL_IPQ5424
 	  Qualcomm Technologies Inc. IPQ5424 platform. Select this for
 	  IPQ5424.
 
-config PINCTRL_IPQ5200
-	tristate "Qualcomm Technologies, Inc. IPQ5200 pin controller driver"
+config PINCTRL_IPQ5210
+	tristate "Qualcomm Technologies, Inc. IPQ5210 pin controller driver"
 	help
 	  This is the pinctrl, pinmux, pinconf and gpiolib driver for
 	  the Qualcomm Technologies Inc. TLMM block found on the
-	  Qualcomm Technologies Inc. IPQ5200 platform. Select this for
-	  IPQ5200.
+	  Qualcomm Technologies Inc. IPQ5210 platform. Select this for
+	  IPQ5210.
 
 config PINCTRL_IPQ8074
 	tristate "Qualcomm Technologies, Inc. IPQ8074 pin controller driver"

@@ -3597,7 +3597,7 @@ struct scm_priv_data ipq9679_data = {
 	.milestone_mask = BIT(8)
 };
 
-struct scm_priv_data ipq5200_data = {
+struct scm_priv_data ipq5210_data = {
 	.milestone_mask = BIT(8)
 };
 
@@ -3608,7 +3608,7 @@ static const struct of_device_id qcom_scm_dt_match[] = {
 	{ .compatible = "qcom,scm-apq8064" },
 	{ .compatible = "qcom,scm-apq8084" },
 	{ .compatible = "qcom,scm-ipq4019" },
-	{ .compatible = "qcom,scm-ipq5200", .data = &ipq5200_data },
+	{ .compatible = "qcom,scm-ipq5210", .data = &ipq5210_data },
 	{ .compatible = "qcom,scm-ipq5424", .data = &ipq5424_data},
 	{ .compatible = "qcom,scm-ipq9574", .data = &ipq9574_data},
 	{ .compatible = "qcom,scm-ipq9679", .data = &ipq9679_data },
