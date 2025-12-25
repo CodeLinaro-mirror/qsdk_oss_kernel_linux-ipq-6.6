@@ -60,6 +60,7 @@
 #include <dt-bindings/clock/qcom,ipq5210-cmn-pll.h>
 #include <dt-bindings/clock/qcom,ipq5332-cmn-pll.h>
 #include <dt-bindings/clock/qcom,ipq5424-cmn-pll.h>
+#include <dt-bindings/clock/qcom,ipq9650-cmn-pll.h>
 
 #define CMN_PLL_REFCLK_SRC_SELECTION		0x28
 #define CMN_PLL_REFCLK_SRC_DIV			GENMASK(9, 8)
@@ -73,6 +74,14 @@
 /* CMNPLL divider for NSS/PPE: 6-bit field, valid range 8-63. */
 #define CMN_PLL_NSS_PPE_DIV_MIN			8
 #define CMN_PLL_NSS_PPE_DIV_MAX			63
+
+#define CMN_PLL_PCS_CLK_CTRL			0x41c
+#define CMN_PLL_PCS2_CLK_DIVSEL			GENMASK(8, 7)
+#define CMN_PLL_PCS1_CLK_DIVSEL			GENMASK(6, 5)
+#define CMN_PLL_PCS0_CLK_DIVSEL			GENMASK(4, 3)
+#define CMN_PLL_PCS2_CLK_EN			BIT(2)
+#define CMN_PLL_PCS1_CLK_EN			BIT(1)
+#define CMN_PLL_PCS0_CLK_EN			BIT(0)
 
 #define CMN_PLL_PON_CONFIG			0x42c
 #define CMN_PLL_PON_MODE_SEL			BIT(9)
@@ -101,6 +110,9 @@
 #define CLK50M_EN_BIT				11
 #define CLK50M_EN_BIT2_BIT			10
 
+#define CMN_PLL_OUTPUT_RELATED_2		0x7a0
+#define CMN_PLL_OUTPUT_MUX_SEL			BIT(4)
+
 /**
  * struct cmn_pll_fixed_output_clk - CMN PLL output clocks information
  * @id:	Clock specifier to be supplied
@@ -122,7 +134,7 @@ struct cmn_pll_fixed_output_clk {
  * @hw: handle between common and hardware-specific interfaces
  *
  * This structure is used for all CMN PLL-derived clocks including
- * the main PLL, PON reference clock, NSS clock, and PPE clock.
+ * the main PLL, PON reference clock, NSS clock, PPE clock, and PCS clocks.
  */
 struct clk_cmn_pll {
 	struct regmap *regmap;
@@ -207,6 +219,22 @@ static const struct cmn_pll_fixed_output_clk ipq5210_output_clks[] = {
 	CLK_PLL_OUTPUT(IPQ5210_NSS_CLK, "nss", 0),
 	CLK_PLL_OUTPUT(IPQ5210_PPE_CLK, "ppe", 0),
 	CLK_PLL_OUTPUT(IPQ5210_PON_REFCLK, "pon", 0),
+	{ /* Sentinel */ }
+};
+
+static const struct cmn_pll_fixed_output_clk ipq9650_output_clks[] = {
+	CLK_PLL_OUTPUT(IPQ9650_XO_24MHZ_CLK, "xo-24mhz", 24000000UL),
+	CLK_PLL_OUTPUT(IPQ9650_SLEEP_32KHZ_CLK, "sleep-32khz", 32000UL),
+	CLK_PLL_OUTPUT(IPQ9650_NSS_CLK, "nss", 0),
+	CLK_PLL_OUTPUT(IPQ9650_PPE_CLK, "ppe", 0),
+	CLK_PLL_OUTPUT(IPQ9650_PCS0_CLK, "pcs0", 0),
+	CLK_PLL_OUTPUT(IPQ9650_PCS1_CLK, "pcs1", 0),
+	CLK_PLL_OUTPUT(IPQ9650_PCS2_CLK, "pcs2", 0),
+	CLK_PLL_OUTPUT(IPQ9650_ETH_PON_CLK, "eth-pon", 0),
+	CLK_PLL_GATE(IPQ9650_ETH0_50MHZ_CLK, "eth0-50mhz", 50000000, CLK50M_EN_BIT),
+	CLK_PLL_GATE(IPQ9650_ETH1_50MHZ_CLK, "eth1-50mhz", 50000000, CLK50M_EN_BIT2_BIT),
+	CLK_PLL_GATE(IPQ9650_ETH2_50MHZ_CLK, "eth2-50mhz", 50000000, CLK50M_EN_BIT3_BIT),
+	CLK_PLL_GATE(IPQ9650_ETH_25MHZ_CLK, "eth-25mhz", 25000000, CLK25M_EN_BIT),
 	{ /* Sentinel */ }
 };
 
@@ -567,6 +595,379 @@ static const struct clk_ops clk_ppe_ops = {
 	.set_rate = clk_ppe_set_rate,
 };
 
+/*
+ * ETH/PON clock operations.
+ * The output clock rate is determined by the bit 4 of CMN_PLL_OUTPUT_RELATED_2.
+ * 0: 25 MHz
+ * 1: 31.25 MHz
+ */
+static int clk_eth_pon_enable(struct clk_hw *hw)
+{
+	struct clk_cmn_pll *cmn_pll = to_clk_cmn_pll(hw);
+	unsigned long rate = clk_hw_get_rate(hw);
+	u32 enable_bit;
+
+	if (rate == 25000000) {
+		enable_bit = CLK25M_EN_BIT;
+		regmap_clear_bits(cmn_pll->regmap, CMN_PLL_OUTPUT_RELATED_2,
+				  CMN_PLL_OUTPUT_MUX_SEL);
+	} else {
+		enable_bit = CLK31P25M_EN_BIT;
+		regmap_set_bits(cmn_pll->regmap, CMN_PLL_OUTPUT_RELATED_2,
+				CMN_PLL_OUTPUT_MUX_SEL);
+	}
+
+	return regmap_set_bits(cmn_pll->regmap, CMN_PLL_OUTPUT_RELATED_1,
+			       BIT(enable_bit));
+}
+
+static void clk_eth_pon_disable(struct clk_hw *hw)
+{
+	struct clk_cmn_pll *cmn_pll = to_clk_cmn_pll(hw);
+
+	regmap_clear_bits(cmn_pll->regmap, CMN_PLL_OUTPUT_RELATED_1,
+			  BIT(CLK25M_EN_BIT) | BIT(CLK31P25M_EN_BIT));
+}
+
+static int clk_eth_pon_is_enabled(struct clk_hw *hw)
+{
+	struct clk_cmn_pll *cmn_pll = to_clk_cmn_pll(hw);
+	u32 val;
+
+	regmap_read(cmn_pll->regmap, CMN_PLL_OUTPUT_RELATED_2, &val);
+	if (val & CMN_PLL_OUTPUT_MUX_SEL)
+		return regmap_test_bits(cmn_pll->regmap, CMN_PLL_OUTPUT_RELATED_1,
+					BIT(CLK31P25M_EN_BIT));
+
+	return regmap_test_bits(cmn_pll->regmap, CMN_PLL_OUTPUT_RELATED_1,
+				BIT(CLK25M_EN_BIT));
+}
+
+static unsigned long clk_eth_pon_recalc_rate(struct clk_hw *hw,
+					     unsigned long parent_rate)
+{
+	struct clk_cmn_pll *cmn_pll = to_clk_cmn_pll(hw);
+	u32 val;
+
+	regmap_read(cmn_pll->regmap, CMN_PLL_OUTPUT_RELATED_2, &val);
+
+	if (val & CMN_PLL_OUTPUT_MUX_SEL)
+		return 31250000UL;
+
+	return 25000000UL;
+}
+
+static int clk_eth_pon_determine_rate(struct clk_hw *hw,
+				       struct clk_rate_request *req)
+{
+	if (req->rate <= 25000000UL)
+		req->rate = 25000000UL;
+	else
+		req->rate = 31250000UL;
+
+	return 0;
+}
+
+static int clk_eth_pon_set_rate(struct clk_hw *hw, unsigned long rate,
+				unsigned long parent_rate)
+{
+	struct clk_cmn_pll *cmn_pll = to_clk_cmn_pll(hw);
+
+	if (clk_eth_pon_is_enabled(hw)) {
+		if (rate == 25000000) {
+			regmap_clear_bits(cmn_pll->regmap, CMN_PLL_OUTPUT_RELATED_1,
+					  BIT(CLK31P25M_EN_BIT));
+			regmap_clear_bits(cmn_pll->regmap, CMN_PLL_OUTPUT_RELATED_2,
+					  CMN_PLL_OUTPUT_MUX_SEL);
+			return regmap_set_bits(cmn_pll->regmap, CMN_PLL_OUTPUT_RELATED_1,
+					       BIT(CLK25M_EN_BIT));
+		} else {
+			regmap_clear_bits(cmn_pll->regmap, CMN_PLL_OUTPUT_RELATED_1,
+					  BIT(CLK25M_EN_BIT));
+			regmap_set_bits(cmn_pll->regmap, CMN_PLL_OUTPUT_RELATED_2,
+					CMN_PLL_OUTPUT_MUX_SEL);
+			return regmap_set_bits(cmn_pll->regmap, CMN_PLL_OUTPUT_RELATED_1,
+					       BIT(CLK31P25M_EN_BIT));
+		}
+	}
+
+	if (rate == 25000000)
+		return regmap_clear_bits(cmn_pll->regmap,
+					 CMN_PLL_OUTPUT_RELATED_2,
+					 CMN_PLL_OUTPUT_MUX_SEL);
+	else
+		return regmap_set_bits(cmn_pll->regmap,
+				       CMN_PLL_OUTPUT_RELATED_2,
+				       CMN_PLL_OUTPUT_MUX_SEL);
+}
+
+static const struct clk_ops clk_eth_pon_ops = {
+	.enable = clk_eth_pon_enable,
+	.disable = clk_eth_pon_disable,
+	.is_enabled = clk_eth_pon_is_enabled,
+	.recalc_rate = clk_eth_pon_recalc_rate,
+	.determine_rate = clk_eth_pon_determine_rate,
+	.set_rate = clk_eth_pon_set_rate,
+};
+
+/*
+ * PCS clock operations for IPQ9650.
+ * The PCS clocks are controlled via the UPHY_REFCLK_CTRL register (0x41C).
+ * Each of the three PCS clocks (PCS0/1/2) can be independently enabled and
+ * configured to output one of four frequencies: 46.875, 93.75, 31.25, or 62.5 MHz.
+ *
+ * Hardware divsel encoding:
+ *   0b00 (0) -> 46.875 MHz
+ *   0b01 (1) -> 93.75 MHz
+ *   0b10 (2) -> 31.25 MHz
+ *   0b11 (3) -> 62.5 MHz
+ */
+
+/**
+ * struct pcs_freq_map - PCS frequency to divsel mapping
+ * @freq: Output frequency in Hz
+ * @divsel: Hardware divider select value (0-3)
+ */
+struct pcs_freq_map {
+	unsigned long freq;
+	u32 divsel;
+};
+
+/* Supported PCS frequencies sorted by frequency for efficient lookup */
+static const struct pcs_freq_map pcs_freq_table[] = {
+	{ 31250000UL, 2 },  /* 31.25 MHz */
+	{ 46875000UL, 0 },  /* 46.875 MHz */
+	{ 62500000UL, 3 },  /* 62.5 MHz */
+	{ 93750000UL, 1 },  /* 93.75 MHz */
+};
+
+/**
+ * pcs_parse_index - Extract PCS index from clock name
+ * @name: Clock name (e.g., "pcs0", "pcs1", "pcs2")
+ *
+ * Return: PCS index (0-2) on success, -EINVAL on error
+ */
+static int pcs_parse_index(const char *name)
+{
+	size_t len;
+
+	if (!name)
+		return -EINVAL;
+
+	len = strlen(name);
+
+	/* Expected format: "pcs" followed by single digit 0-2 */
+	if (len == 4 && !strncmp(name, "pcs", 3)) {
+		int idx = name[3] - '0';
+		if (idx >= 0 && idx <= 2)
+			return idx;
+	}
+
+	return -EINVAL;
+}
+
+/**
+ * pcs_get_enable_bit - Get PCS clock enable bit
+ * @name: Clock name
+ * @enable_bit: Output parameter for enable bit
+ *
+ * Return: 0 on success, -EINVAL on error
+ */
+static int pcs_get_enable_bit(const char *name, u32 *enable_bit)
+{
+	static const u32 enable_bits[] = {
+		CMN_PLL_PCS0_CLK_EN,
+		CMN_PLL_PCS1_CLK_EN,
+		CMN_PLL_PCS2_CLK_EN,
+	};
+	int idx;
+
+	idx = pcs_parse_index(name);
+	if (idx < 0)
+		return idx;
+
+	*enable_bit = enable_bits[idx];
+	return 0;
+}
+
+/**
+ * pcs_get_divsel_mask - Get PCS clock divsel mask
+ * @name: Clock name
+ * @divsel_mask: Output parameter for divsel mask
+ *
+ * Return: 0 on success, -EINVAL on error
+ */
+static int pcs_get_divsel_mask(const char *name, u32 *divsel_mask)
+{
+	static const u32 divsel_masks[] = {
+		CMN_PLL_PCS0_CLK_DIVSEL,
+		CMN_PLL_PCS1_CLK_DIVSEL,
+		CMN_PLL_PCS2_CLK_DIVSEL,
+	};
+	int idx;
+
+	idx = pcs_parse_index(name);
+	if (idx < 0)
+		return idx;
+
+	*divsel_mask = divsel_masks[idx];
+	return 0;
+}
+
+/**
+ * pcs_divsel_to_freq - Convert divsel value to frequency
+ * @divsel: Hardware divider select value (0-3)
+ *
+ * Return: Frequency in Hz, or 0 if divsel is invalid
+ */
+static unsigned long pcs_divsel_to_freq(u32 divsel)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(pcs_freq_table); i++) {
+		if (pcs_freq_table[i].divsel == divsel)
+			return pcs_freq_table[i].freq;
+	}
+
+	return 0;
+}
+
+/**
+ * pcs_freq_to_divsel - Convert frequency to divsel value
+ * @rate: Requested frequency in Hz
+ * @divsel: Output parameter for divsel value
+ *
+ * Return: 0 on success, -EINVAL if frequency is not supported
+ */
+static int pcs_freq_to_divsel(unsigned long rate, u32 *divsel)
+{
+	int i;
+
+	for (i = 0; i < ARRAY_SIZE(pcs_freq_table); i++) {
+		if (pcs_freq_table[i].freq == rate) {
+			*divsel = pcs_freq_table[i].divsel;
+			return 0;
+		}
+	}
+
+	return -EINVAL;
+}
+
+static int clk_pcs_clk_enable(struct clk_hw *hw)
+{
+	struct clk_cmn_pll *pcs_clk = to_clk_cmn_pll(hw);
+	const char *name = clk_hw_get_name(hw);
+	u32 enable_bit;
+	int ret;
+
+	ret = pcs_get_enable_bit(name, &enable_bit);
+	if (ret)
+		return ret;
+
+	return regmap_set_bits(pcs_clk->regmap, CMN_PLL_PCS_CLK_CTRL, enable_bit);
+}
+
+static void clk_pcs_clk_disable(struct clk_hw *hw)
+{
+	struct clk_cmn_pll *pcs_clk = to_clk_cmn_pll(hw);
+	const char *name = clk_hw_get_name(hw);
+	u32 enable_bit;
+
+	if (pcs_get_enable_bit(name, &enable_bit))
+		return;
+
+	regmap_clear_bits(pcs_clk->regmap, CMN_PLL_PCS_CLK_CTRL, enable_bit);
+}
+
+static int clk_pcs_clk_is_enabled(struct clk_hw *hw)
+{
+	struct clk_cmn_pll *pcs_clk = to_clk_cmn_pll(hw);
+	const char *name = clk_hw_get_name(hw);
+	u32 enable_bit;
+	int ret;
+
+	ret = pcs_get_enable_bit(name, &enable_bit);
+	if (ret)
+		return 0;
+
+	return regmap_test_bits(pcs_clk->regmap, CMN_PLL_PCS_CLK_CTRL,
+				enable_bit);
+}
+
+static unsigned long clk_pcs_clk_recalc_rate(struct clk_hw *hw,
+					     unsigned long parent_rate)
+{
+	struct clk_cmn_pll *pcs_clk = to_clk_cmn_pll(hw);
+	const char *name = clk_hw_get_name(hw);
+	u32 val, divsel, divsel_mask;
+	unsigned long freq;
+	int ret;
+
+	ret = pcs_get_divsel_mask(name, &divsel_mask);
+	if (ret)
+		return 0;
+
+	regmap_read(pcs_clk->regmap, CMN_PLL_PCS_CLK_CTRL, &val);
+	divsel = (val & divsel_mask) >> __ffs(divsel_mask);
+
+	/* Convert divsel to frequency using lookup table */
+	freq = pcs_divsel_to_freq(divsel);
+	if (WARN_ON_ONCE(!freq))
+		return 0;
+
+	return freq;
+}
+
+static long clk_pcs_clk_round_rate(struct clk_hw *hw, unsigned long rate,
+				   unsigned long *parent_rate)
+{
+	int i;
+	unsigned long best_freq = pcs_freq_table[0].freq;
+	unsigned long min_diff = ULONG_MAX;
+
+	/* Find the closest supported frequency */
+	for (i = 0; i < ARRAY_SIZE(pcs_freq_table); i++) {
+		unsigned long diff = abs((long)(rate - pcs_freq_table[i].freq));
+
+		if (diff < min_diff) {
+			min_diff = diff;
+			best_freq = pcs_freq_table[i].freq;
+		}
+	}
+
+	return best_freq;
+}
+
+static int clk_pcs_clk_set_rate(struct clk_hw *hw, unsigned long rate,
+				unsigned long parent_rate)
+{
+	struct clk_cmn_pll *pcs_clk = to_clk_cmn_pll(hw);
+	const char *name = clk_hw_get_name(hw);
+	u32 divsel, divsel_mask;
+	int ret;
+
+	/* Convert frequency to divsel value using lookup table */
+	ret = pcs_freq_to_divsel(rate, &divsel);
+	if (ret)
+		return ret;
+
+	ret = pcs_get_divsel_mask(name, &divsel_mask);
+	if (ret)
+		return ret;
+
+	return regmap_update_bits(pcs_clk->regmap, CMN_PLL_PCS_CLK_CTRL,
+				  divsel_mask, (divsel << __ffs(divsel_mask)));
+}
+
+static const struct clk_ops clk_pcs_clk_ops = {
+	.enable = clk_pcs_clk_enable,
+	.disable = clk_pcs_clk_disable,
+	.is_enabled = clk_pcs_clk_is_enabled,
+	.recalc_rate = clk_pcs_clk_recalc_rate,
+	.round_rate = clk_pcs_clk_round_rate,
+	.set_rate = clk_pcs_clk_set_rate,
+};
+
 static struct clk_hw *ipq_cmn_pll_clk_hw_register(struct platform_device *pdev)
 {
 	struct clk_parent_data pdata = { .index = 0 };
@@ -710,6 +1111,78 @@ static struct clk_hw *ipq_cmn_pll_ppe_register(struct platform_device *pdev,
 	return &ppe_clk->hw;
 }
 
+/*
+ * Register PCS clock with CMN PLL as parent.
+ * The PCS clocks are controlled via the UPHY_REFCLK_CTRL register (0x41C).
+ */
+static struct clk_hw *ipq_cmn_pll_pcs_register(struct platform_device *pdev,
+					       struct regmap *regmap,
+					       struct clk_hw *cmn_pll_hw,
+					       const char *name)
+{
+	struct clk_parent_data pdata = { .hw = cmn_pll_hw };
+	struct clk_cmn_pll *pcs_clk;
+	struct device *dev = &pdev->dev;
+	struct clk_init_data init = {};
+	int ret;
+
+	pcs_clk = devm_kzalloc(dev, sizeof(*pcs_clk), GFP_KERNEL);
+	if (!pcs_clk)
+		return ERR_PTR(-ENOMEM);
+
+	init.name = name;
+	init.parent_data = &pdata;
+	init.num_parents = 1;
+	init.ops = &clk_pcs_clk_ops;
+	init.flags = 0;
+
+	pcs_clk->hw.init = &init;
+	pcs_clk->regmap = regmap;
+
+	ret = devm_clk_hw_register(dev, &pcs_clk->hw);
+	if (ret)
+		return ERR_PTR(ret);
+
+	return &pcs_clk->hw;
+}
+
+/*
+ * Register ETH/PON clock with CMN PLL as parent.
+ * The ETH/PON clock can switch between 25 MHz and 31.25 MHz.
+ */
+static struct clk_hw *ipq_cmn_pll_eth_pon_register(struct platform_device *pdev,
+						   struct regmap *regmap,
+						   void __iomem *base,
+						   struct clk_hw *cmn_pll_hw,
+						   const struct cmn_pll_fixed_output_clk *fixed_clk)
+{
+	struct clk_parent_data pdata = { .hw = cmn_pll_hw };
+	struct clk_cmn_pll *eth_pon_clk;
+	struct device *dev = &pdev->dev;
+	struct clk_init_data init = {};
+	int ret;
+
+	eth_pon_clk = devm_kzalloc(dev, sizeof(*eth_pon_clk), GFP_KERNEL);
+	if (!eth_pon_clk)
+		return ERR_PTR(-ENOMEM);
+
+	init.name = fixed_clk->name;
+	init.parent_data = &pdata;
+	init.num_parents = 1;
+	init.ops = &clk_eth_pon_ops;
+	init.flags = 0;
+
+	eth_pon_clk->hw.init = &init;
+	eth_pon_clk->regmap = regmap;
+	eth_pon_clk->base = base;
+
+	ret = devm_clk_hw_register(dev, &eth_pon_clk->hw);
+	if (ret)
+		return ERR_PTR(ret);
+
+	return &eth_pon_clk->hw;
+}
+
 static int ipq_cmn_pll_register_clks(struct platform_device *pdev)
 {
 	const struct cmn_pll_fixed_output_clk *p, *fixed_clk;
@@ -761,6 +1234,15 @@ static int ipq_cmn_pll_register_clks(struct platform_device *pdev)
 							fixed_clk[i].name,
 							cmn_pll_hw, 0,
 							fixed_clk[i].rate);
+		} else if (!strcmp(fixed_clk[i].name, "eth-pon")) {
+			hw = ipq_cmn_pll_eth_pon_register(pdev, cmn_pll->regmap,
+							  cmn_pll->base,
+							  cmn_pll_hw,
+							  &fixed_clk[i]);
+		} else if (!strcmp(fixed_clk[i].name, "pcs")) {
+			hw = ipq_cmn_pll_pcs_register(pdev, cmn_pll->regmap,
+						      cmn_pll_hw,
+						      fixed_clk[i].name);
 		} else if (!strcmp(fixed_clk[i].name, "nss")) {
 			hw = ipq_cmn_pll_nss_register(pdev, cmn_pll->regmap,
 						      cmn_pll_hw);
@@ -870,6 +1352,7 @@ static const struct of_device_id ipq_cmn_pll_clk_ids[] = {
 	{ .compatible = "qcom,ipq5332-cmn-pll", .data = &ipq5332_output_clks },
 	{ .compatible = "qcom,ipq5424-cmn-pll", .data = &ipq5424_output_clks },
 	{ .compatible = "qcom,ipq9574-cmn-pll", .data = &ipq9574_output_clks },
+	{ .compatible = "qcom,ipq9650-cmn-pll", .data = &ipq9650_output_clks },
 	{ }
 };
 MODULE_DEVICE_TABLE(of, ipq_cmn_pll_clk_ids);
