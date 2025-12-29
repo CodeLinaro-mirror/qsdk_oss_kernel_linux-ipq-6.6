@@ -224,13 +224,13 @@ config IPQ_GCC_9574
 	  i2c, USB, SD/eMMC, etc. Select this for the root clock
 	  of ipq9574.
 
-config IPQ_GCC_9679
-	tristate "IPQ9574 Global Clock Controller"
+config IPQ_GCC_9650
+	tristate "IPQ9650 Global Clock Controller"
 	help
-	  Support for global clock controller on ipq9679 devices.
+	  Support for global clock controller on ipq9650 devices.
 	  Say Y if you want to use peripheral devices such as UART, SPI,
 	  i2c, USB, SD/eMMC, etc. Select this for the root clock
-	  of ipq9679.
+	  of ipq9650.
 
 config IPQ_NSSCC_5210
         tristate "IPQ5210 NSS Clock Controller"
@@ -256,11 +256,11 @@ config IPQ_NSSCC_5424
         help
           Support for NSS clock controller on ipq5424 devices.
 
-config IPQ_NSSCC_9679
-	tristate "IPQ9679 NSS Clock Controller"
-	depends on IPQ_GCC_9679
+config IPQ_NSSCC_9650
+	tristate "IPQ9650 NSS Clock Controller"
+	depends on IPQ_GCC_9650
 	help
-	  Support for NSS clock controller on ipq9679 devices.
+	  Support for NSS clock controller on ipq9650 devices.
 	  Say Y or M if you want to enable the Network SubSystem
 	  for the Ethernet functions.
 
