@@ -37,6 +37,7 @@
 #define MHIDATABASE_HIGHER		0x9c
 #define MHIDATALIMIT_LOWER		0xa0
 #define MHIDATALIMIT_HIGHER		0xa4
+#define BHIE_DEBUG_OFFS(n)		(0xc0 + (0x4 * (n)))
 
 /* MHI BHI registers */
 #define BHI_BHIVERSION_MINOR		0x00

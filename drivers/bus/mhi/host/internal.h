@@ -18,6 +18,7 @@ extern struct bus_type mhi_bus_type;
 #define QCN9XXX_FAMILY_NUM				(0x4)
 #define QCN9224_DEVICE_NUM				(0x1A)
 #define QCN9625_DEVICE_NUM				(0x47)
+#define QCN9589_DEVICE_NUM				(0x49)
 #define SOC_HW_VERSION_OFFS				0x224
 #define SOC_HW_VERSION_FAM_NUM_BMSK			GENMASK(31, 28)
 #define SOC_HW_VERSION_DEV_NUM_BMSK			GENMASK(27, 16)
