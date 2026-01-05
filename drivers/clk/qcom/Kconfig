@@ -161,10 +161,10 @@ config IPQ_GCC_5018
 	  Say Y if you want to use peripheral devices such as UART, SPI,
 	  i2c, USB, SD/eMMC, etc.
 
-config IPQ_GCC_5200
-	tristate "IPQ5200 Global Clock Controller"
+config IPQ_GCC_5210
+	tristate "IPQ5210 Global Clock Controller"
 	help
-	  Support for the global clock controller on ipq5200 devices.
+	  Support for the global clock controller on ipq5210 devices.
 	  Say Y if you want to use peripheral devices such as UART, SPI,
 	  i2c, USB, SD/eMMC, etc.
 
@@ -232,11 +232,11 @@ config IPQ_GCC_9679
 	  i2c, USB, SD/eMMC, etc. Select this for the root clock
 	  of ipq9679.
 
-config IPQ_NSSCC_5200
-        tristate "IPQ5200 NSS Clock Controller"
-        depends on IPQ_GCC_5200
+config IPQ_NSSCC_5210
+        tristate "IPQ5210 NSS Clock Controller"
+        depends on IPQ_GCC_5210
         help
-          Support for NSS clock controller on ipq5200 devices.
+          Support for NSS clock controller on ipq5210 devices.
 
 config IPQ_NSSCC_5332
         tristate "IPQ5332 NSS Clock Controller"

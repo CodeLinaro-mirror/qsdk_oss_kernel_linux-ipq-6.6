@@ -2250,7 +2250,7 @@ static const struct of_device_id qmp_usb_of_match_table[] = {
 		.compatible = "qcom,ipq5424-qmp-usb3-phy",
 		.data = &ipq9574_usb3phy_cfg,
 	}, {
-		.compatible = "qcom,ipq5200-qmp-usb3-phy",
+		.compatible = "qcom,ipq5210-qmp-usb3-phy",
 		.data = &ipq9574_usb3phy_cfg,
 	}, {
 		.compatible = "qcom,msm8996-qmp-usb3-phy",
