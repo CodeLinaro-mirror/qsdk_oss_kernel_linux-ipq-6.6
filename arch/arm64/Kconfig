@@ -2289,6 +2289,16 @@ config IPQ_PROFILE_MINENT
 	  Enable/Disable MINENT profile. Based on this UBI is enabled
 	  or disabled in device tree.
 
+config SCID_LLCC
+	bool "SCID LLCC support"
+        depends on CGROUP_SCID_LLCC
+	default n
+	help
+	  Enable SCID (Sub Cache ID) support for LLCC (Last Level Cache Controller).
+	  This adds per-thread fields to track SCID assignment and enables context switch
+	  code to program SYS_CLUSTERTHREADSID_EL1 with the mapped SID value. Per-CPU
+	  default SID values are captured at boot.
+
 endmenu # "Kernel Features"
 
 menu "Boot options"
@@ -2398,4 +2408,3 @@ endmenu # "CPU Power Management"
 source "drivers/acpi/Kconfig"
 
 source "arch/arm64/kvm/Kconfig"
-

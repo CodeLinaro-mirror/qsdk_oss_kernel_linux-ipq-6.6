@@ -1177,6 +1177,19 @@ config CGROUP_MISC
 	  For more information, please check misc cgroup section in
 	  /Documentation/admin-guide/cgroup-v2.rst.
 
+config CGROUP_SCID_LLCC
+	bool "SCID LLCC cgroup controller"
+	depends on CGROUPS && CGROUP_MISC
+	select  SCID_LLCC
+	default n
+	help
+	  Provides a cgroup subsystem to assign SCID (cache partition selection)
+	  via SID register encoding per cgroup. Exposes:
+	    - scid: write "default" or 0/2/3
+	    - status: show current setting and mapped SID value
+	  This subsystem sets per-task thread_struct fields that are consumed
+	  by the ARM64 context switch path to program SYS_CLUSTERTHREADSID_EL1.
+
 config CGROUP_DEBUG
 	bool "Debug controller"
 	default n

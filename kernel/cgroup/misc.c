@@ -12,6 +12,7 @@
 #include <linux/atomic.h>
 #include <linux/slab.h>
 #include <linux/misc_cgroup.h>
+#include <linux/capability.h>
 
 #define MAX_STR "max"
 #define MAX_NUM U64_MAX
@@ -420,3 +421,212 @@ struct cgroup_subsys misc_cgrp_subsys = {
 	.legacy_cftypes = misc_cg_files,
 	.dfl_cftypes = misc_cg_files,
 };
+
+#ifdef CONFIG_CGROUP_SCID_LLCC
+/*
+ * SCID LLCC cgroup controller
+ *
+ * Manages SCID (Slice ID) assignments for LLCC (Last Level Cache Controller)
+ */
+
+struct llcc_scid {
+	struct cgroup_subsys_state css;
+	u32 scid;
+	bool scid_set;
+};
+
+static inline struct llcc_scid *llcc_scid_css(struct cgroup_subsys_state *css)
+{
+	return css ? container_of(css, struct llcc_scid, css) : NULL;
+}
+
+/* Map SCID to SID register value
+ * Only SCID 0, 2, and 3 are valid
+ */
+static inline int scid_map_to_sid(int scid)
+{
+	switch (scid) {
+	case 0:
+		return 2;  /* SCID 0 needs SID register value 2 */
+	case 2:
+		return 0;  /* SCID 2 needs SID register value 0 */
+	case 3:
+		return 1;  /* SCID 3 needs SID register value 1 */
+	default:
+		return 2;  /* Default to SCID 0 (SID value 2) */
+	}
+}
+
+/* Allocate memory */
+static struct cgroup_subsys_state *
+scid_llcc_css_alloc(struct cgroup_subsys_state *parent_css)
+{
+	struct llcc_scid *llcc;
+
+	llcc = kzalloc(sizeof(*llcc), GFP_KERNEL);
+	if (!llcc)
+		return ERR_PTR(-ENOMEM);
+	llcc->scid = 0;
+	llcc->scid_set = false;
+	return &llcc->css;
+}
+
+/* free memory */
+static void scid_llcc_css_free(struct cgroup_subsys_state *css)
+{
+	struct llcc_scid *llcc = llcc_scid_css(css);
+
+	kfree(llcc);
+}
+
+/*  Attach process to cgroup. Sets the scid_enable and sid_value for that task
+ *  based on cgroup configuration
+ */
+static void scid_llcc_attach(struct cgroup_taskset *tset)
+{
+	struct task_struct *task;
+	struct cgroup_subsys_state *css;
+
+	cgroup_taskset_for_each(task, css, tset) {
+		struct llcc_scid *llcc = llcc_scid_css(css);
+		int sid_value;
+
+		task_lock(task);
+
+		if (llcc->scid_set) {
+			/* Enable SCID for this task */
+			task->thread.scid_enable = 1;
+
+			/* Map user SCID to SID register value */
+			sid_value = scid_map_to_sid(llcc->scid);
+			task->thread.sid_value = sid_value;
+
+			pr_info("SCID: PID %d assigned SCID %u (SID value: %d)\n",
+				task->pid, llcc->scid, sid_value);
+		} else {
+			/* Default - use CPU default SID */
+			task->thread.scid_enable = 0;
+			pr_debug("SCID: PID %d using default SID\n", task->pid);
+		}
+		task_unlock(task);
+	}
+}
+
+/* check if the process can attach to the cgroup  */
+static int scid_llcc_can_attach(struct cgroup_taskset *tset)
+{
+	return 0;
+}
+
+/* llcc_scid_show()- display the scid */
+static int llcc_scid_show(struct seq_file *sf, void *v)
+{
+	struct llcc_scid *llcc = llcc_scid_css(seq_css(sf));
+
+
+	if (llcc->scid_set)
+		seq_printf(sf, "%u\n", llcc->scid);
+	else
+		seq_puts(sf, "default\n");
+
+	return 0;
+}
+
+/**
+ * llcc_scid_write - Set SCID for cgroup
+ * Only allows SCID values 0, 2, and 3
+ */
+static ssize_t llcc_scid_write(struct kernfs_open_file *of, char *buf,
+			       size_t nbytes, loff_t off)
+{
+	struct llcc_scid *llcc = llcc_scid_css(of_css(of));
+	u32 scid;
+	int ret;
+
+
+	/* Parse input */
+	buf = strstrip(buf);
+
+	/* Handle "default" keyword */
+	if (strcmp(buf, "default") == 0) {
+		llcc->scid_set = false;
+		pr_info("SCID: cgroup set to default\n");
+		return nbytes;
+	}
+
+	/* Parse numeric SCID */
+	ret = kstrtou32(buf, 0, &scid);
+	if (ret)
+		return ret;
+
+	/* Validate SCID value - only 0, 2, and 3 are valid */
+	if (scid != 0 && scid != 2 && scid != 3) {
+		pr_err("SCID: Invalid SCID %u (must be 0, 2, or 3)\n", scid);
+		return -EINVAL;
+	}
+
+	/* Set SCID */
+	llcc->scid = scid;
+	llcc->scid_set = true;
+
+	pr_info("SCID: cgroup SCID set to %u\n", scid);
+
+	return nbytes;
+}
+
+/**
+ * llcc_status_show - Show detailed status
+ */
+static int llcc_status_show(struct seq_file *sf, void *v)
+{
+	struct llcc_scid *llcc = llcc_scid_css(seq_css(sf));
+	int sid_value;
+
+
+	seq_printf(sf, "SCID configured: %s\n",
+		llcc->scid_set ? "yes" : "no");
+
+	if (llcc->scid_set) {
+		/* Show user SCID */
+		seq_printf(sf, "User SCID: %u\n", llcc->scid);
+
+		/* Show SID register value */
+		sid_value = scid_map_to_sid(llcc->scid);
+		seq_printf(sf, "SID register value: %d\n", sid_value);
+	}
+
+	return 0;
+}
+
+/**
+ * scid_llcc_files - cgroup control files
+ */
+static struct cftype scid_llcc_files[] = {
+	{
+		.name = "scid",
+		.seq_show = llcc_scid_show,
+		.write = llcc_scid_write,
+		.flags = CFTYPE_NOT_ON_ROOT,
+	},
+	{
+		.name = "status",
+		.seq_show = llcc_status_show,
+		.flags = CFTYPE_NOT_ON_ROOT,
+	},
+	{ }  /* terminate */
+};
+
+/**
+ * scid_llcc_cgrp_subsys - SCID LLCC cgroup subsystem definition
+ */
+struct cgroup_subsys scid_llcc_cgrp_subsys = {
+	.css_alloc = scid_llcc_css_alloc,
+	.css_free = scid_llcc_css_free,
+	.can_attach = scid_llcc_can_attach,
+	.attach = scid_llcc_attach,
+	.legacy_cftypes = scid_llcc_files,
+	.dfl_cftypes = scid_llcc_files,
+	.threaded = true,  /* Allow per-thread control */
+};
+
+#endif /* CONFIG_CGROUP_SCID_LLCC */
