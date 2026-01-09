@@ -2758,6 +2758,9 @@ static int sdhci_msm_probe(struct platform_device *pdev)
 
 	msm_host->mmc->caps |= MMC_CAP_WAIT_WHILE_BUSY | MMC_CAP_NEED_RSP_BUSY;
 
+	if (!device_property_read_bool(&pdev->dev, "mmc-hs200-1_8v"))
+		host->quirks2 |= SDHCI_QUIRK2_BROKEN_HS200;
+
 #ifdef CONFIG_MMC_CRYPTO
 	host->mmc_host_ops.request = sdhci_msm_request;
 #endif
