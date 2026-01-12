@@ -931,6 +931,8 @@ static int ipq_mdio_reset(struct mii_bus *bus)
 		gpiod_set_array_value_cansleep(priv->reset_gpios->ndescs, priv->reset_gpios->desc,
 				priv->reset_gpios->info, values);
 		bitmap_free(values);
+
+		fsleep(IPQ_PHY_SET_DELAY_US);
 	}
 
 	/* Configure MDIO clock source frequency if clock is specified in the device tree */
