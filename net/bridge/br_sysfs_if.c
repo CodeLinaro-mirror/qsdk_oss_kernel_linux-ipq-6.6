@@ -283,6 +283,7 @@ static BRPORT_ATTR(multicast_router, 0644, show_multicast_router,
 
 BRPORT_ATTR_FLAG(multicast_fast_leave, BR_MULTICAST_FAST_LEAVE);
 BRPORT_ATTR_FLAG(multicast_to_unicast, BR_MULTICAST_TO_UNICAST);
+BRPORT_ATTR_FLAG(mcast_mcuc_hw_offload, BR_MCAST_MCUC_HW_OFFLOAD);
 #endif
 
 static const struct brport_attribute *brport_attrs[] = {
@@ -310,6 +311,7 @@ static const struct brport_attribute *brport_attrs[] = {
 	&brport_attr_multicast_router,
 	&brport_attr_multicast_fast_leave,
 	&brport_attr_multicast_to_unicast,
+	&brport_attr_mcast_mcuc_hw_offload,
 #endif
 	&brport_attr_proxyarp,
 	&brport_attr_proxyarp_wifi,
