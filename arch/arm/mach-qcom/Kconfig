@@ -21,8 +21,8 @@ config ARCH_IPQ5424
 	bool "Enable support for IPQ5424"
 	select ARM_GIC_V3
 
-config ARCH_IPQ9679
-	bool "Enable support for IPQ9679"
+config ARCH_IPQ9650
+	bool "Enable support for IPQ9650"
 	select ARM_GIC_V3
 
 config ARCH_MSM8X60
