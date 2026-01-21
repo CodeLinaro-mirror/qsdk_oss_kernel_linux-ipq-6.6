@@ -53,6 +53,7 @@
 #include <asm/efi.h>
 #include <asm/xen/hypervisor.h>
 #include <asm/mmu_context.h>
+#include <asm/processor.h>
 
 static int num_standard_resources;
 static struct resource *standard_resources;
@@ -383,6 +384,8 @@ void __init __no_sanitize_address setup_arch(char **cmdline_p)
 	 */
 	init_task.thread_info.ttbr0 = phys_to_ttbr(__pa_symbol(reserved_pg_dir));
 #endif
+
+	scid_cpu_setup();
 
 	if (boot_args[1] || boot_args[2] || boot_args[3]) {
 		pr_err("WARNING: x1-x3 nonzero in violation of boot protocol:\n"

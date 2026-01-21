@@ -187,6 +187,40 @@ static void init_gic_priority_masking(void)
 
 	gic_write_pmr(GIC_PRIO_IRQON | GIC_PRIO_PSR_I_SET);
 }
+#ifdef CONFIG_SCID_LLCC
+static int sid_cpu_default[NR_CPUS];
+
+int get_sid_cpu(int cpu)
+{
+	return sid_cpu_default[cpu];
+}
+
+void scid_cpu_setup(void)
+{
+	int cpu = smp_processor_id();
+	int sid_value;
+
+	/* Read current SID register value for this CPU (boot/secondary) */
+	sid_value = (int)read_sysreg_s(SYS_CLUSTERTHREADSID_EL1);
+
+	/* Store as default SID for this CPU */
+	sid_cpu_default[cpu] = sid_value;
+
+	pr_info("SCID: CPU %d default SID = %d\n", cpu, sid_value);
+}
+
+#else
+
+void scid_cpu_setup(void)
+{
+	return;
+}
+
+int get_sid_cpu(int cpu)
+{
+	return 0;
+}
+#endif
 
 /*
  * This is the secondary CPU boot entry.  We're using this CPUs
@@ -239,6 +273,8 @@ asmlinkage notrace void secondary_start_kernel(void)
 	 * Enable GIC and timers.
 	 */
 	notify_cpu_starting(cpu);
+
+	scid_cpu_setup();
 
 	ipi_setup(cpu);
 

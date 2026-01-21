@@ -516,6 +516,24 @@ void update_sctlr_el1(u64 sctlr)
 	isb();
 }
 
+#ifdef CONFIG_SCID_LLCC
+static inline void scid_thread_switch(struct task_struct *prev, struct task_struct *next)
+{
+	if (next->thread.scid_enable) {
+		/* Next task has SCID enabled - use its specific SID */
+		write_sysreg_s(next->thread.sid_value, SYS_CLUSTERTHREADSID_EL1);
+	} else if (prev->thread.scid_enable) {
+		/* Switching away from SCID-enabled task - revert to default */
+		write_sysreg_s(get_sid_cpu(current_thread_info()->cpu), SYS_CLUSTERTHREADSID_EL1);
+	}
+}
+
+#else
+static inline void scid_thread_switch(struct task_struct *prev, struct task_struct *next)
+{
+	return;
+}
+#endif
 /*
  * Thread switching.
  */
@@ -533,6 +551,7 @@ struct task_struct *__switch_to(struct task_struct *prev,
 	ssbs_thread_switch(next);
 	erratum_1418040_thread_switch(next);
 	ptrauth_thread_switch_user(next);
+	scid_thread_switch(prev, next);
 
 	/*
 	 * Complete any pending TLB or cache maintenance on this CPU in case

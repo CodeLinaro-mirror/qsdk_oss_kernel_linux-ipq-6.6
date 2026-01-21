@@ -176,6 +176,11 @@ struct thread_struct {
 #ifdef CONFIG_ARM64_MTE
 	u64			mte_ctrl;
 #endif
+
+#ifdef CONFIG_SCID_LLCC
+	int			scid_enable;	/* SCID enabled flag */
+	int			sid_value;	/* SID Value pre-mapped */
+#endif
 	u64			sctlr_user;
 	u64			svcr;
 	u64			tpidr2_el0;
@@ -394,6 +399,9 @@ long get_tagged_addr_ctrl(struct task_struct *task);
 #define SET_TAGGED_ADDR_CTRL(arg)	set_tagged_addr_ctrl(current, arg)
 #define GET_TAGGED_ADDR_CTRL()		get_tagged_addr_ctrl(current)
 #endif
+
+extern void scid_cpu_setup(void);
+extern int get_sid_cpu(int cpu);
 
 #endif /* __ASSEMBLY__ */
 #endif /* __ASM_PROCESSOR_H */
