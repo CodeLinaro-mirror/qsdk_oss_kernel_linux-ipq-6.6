@@ -6,4 +6,4 @@ ifdef CONFIG_NET_DSA_QCA8K_LEDS_SUPPORT
 qca8k-y				+= qca8k-leds.o
 endif
 obj-$(CONFIG_NET_DSA_QCE2204)	+= qce2204_dsa.o
-qce2204_dsa-y			+= qce2204.o qce2204_ppe.o qce2204_clk.o
+qce2204_dsa-y			+= qce2204.o qce2204_ppe.o qce2204_clk.o qce2204_ppe_mac.o

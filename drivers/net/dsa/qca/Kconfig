@@ -29,6 +29,7 @@ config NET_DSA_QCE2204
 	tristate "Qualcomm QCE2204 Ethernet switch support"
 	depends on NET_DSA
 	select NET_DSA_TAG_QCA
+	select PCS_QCE2204
 	select REGMAP
 	help
 	  This enables support for the Qualcomm QCE2204 Ethernet switch chip.
