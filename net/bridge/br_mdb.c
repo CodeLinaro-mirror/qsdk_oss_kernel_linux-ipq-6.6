@@ -607,10 +607,10 @@ void br_mdb_notify(struct net_device *dev,
 
 #if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
 	/*
-	 * Notification should only be generated for a (*,G) MDB entry
-	 * having a valid Port-Group pointer.
+	 * Notification should be generated for a (*,G) MDB entry or
+	 * an entry with STAR_EXCL flag, having a valid Port-Group pointer.
 	 */
-	if (br_multicast_is_star_g(&mp->addr) && pg)
+	if (pg && (br_multicast_is_star_g(&mp->addr) || (pg->flags & MDB_PG_FLAGS_STAR_EXCL)))
 		ret = br_mcast_offload_mdb_send_event_notify(dev, mp, type);
 
 	if (ret)
