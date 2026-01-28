@@ -1945,6 +1945,9 @@ static const char * const dsa_switches_apply_workarounds[] = {
 #if IS_ENABLED(CONFIG_NET_DSA_QCA8K)
 	"qca,qca8386",
 #endif
+#if IS_ENABLED(CONFIG_NET_DSA_QCE2204)
+	"qcom,qce2204",
+#endif
 	NULL,
 };
 
