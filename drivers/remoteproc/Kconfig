@@ -254,6 +254,13 @@ config QCOM_Q6V5_MPD
 	  for the Hexagon based MultiPD model remote processors on e.g. IPQ5018.
 	  This is trustZone wireless subsystem.
 
+config QCOM_Q6V5_UPD
+	tristate "Qualcomm Hexagon User PD loader test driver"
+	depends on QCOM_Q6V5_WCSS_SEC
+	help
+	  Say y here to UserPD test driver for Hexagon based UserPD model
+	  remote processors.
+
 config QCOM_NON_SECURE_PIL
 	tristate "Qualcomm Non secure Peripheral Image Loader"
 	depends on OF && ARCH_QCOM
