@@ -589,9 +589,6 @@ void br_mdb_notify(struct net_device *dev,
 	struct net *net = dev_net(dev);
 	struct sk_buff *skb;
 	int err = -ENOBUFS;
-#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
-	int ret = 0;
-#endif
 
 	br_switchdev_mdb_notify(dev, mp, pg, type);
 
@@ -606,6 +603,8 @@ void br_mdb_notify(struct net_device *dev,
 	}
 
 #if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	int ret = 0;
+
 	/*
 	 * Notification should be generated for a (*,G) MDB entry or
 	 * an entry with STAR_EXCL flag, having a valid Port-Group pointer.

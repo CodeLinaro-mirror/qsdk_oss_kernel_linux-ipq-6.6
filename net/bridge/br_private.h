@@ -140,6 +140,9 @@ struct net_bridge_mcast_port {
 	unsigned char			multicast_router;
 	u32				mdb_n_entries;
 	u32				mdb_max_entries;
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	bool				mcast_flush_all;
+#endif
 #endif /* CONFIG_BRIDGE_IGMP_SNOOPING */
 };
 
@@ -431,7 +434,6 @@ struct net_bridge_port {
 	u8				sub_br_id;
 	u8				priority;
 	u8				state;
-	bool				mcast_flush_all;
 	u16				mac_lrn_cnt;
 	u16				mac_lrn_limit;
 	u16				port_no;
@@ -525,6 +527,10 @@ enum net_bridge_opts {
 	BROPT_MCAST_IGNORE_T_BIT,
 };
 
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+#include "br_mcast_offload.h"
+#endif
+
 struct net_bridge {
 	spinlock_t			lock;
 	spinlock_t			hash_lock;
@@ -591,6 +597,7 @@ struct net_bridge {
 	struct work_struct		mcast_gc_work;
 #if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
 	struct hlist_head		mcast_rule_list;
+	struct br_mcast_global_params	g_mcast_params;
 #endif
 #endif
 

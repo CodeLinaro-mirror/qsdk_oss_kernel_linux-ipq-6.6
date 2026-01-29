@@ -37,8 +37,9 @@ enum br_mcast_event_type {
 struct br_mcast_event {
 	/* MCAST Group & Port */
 	u32 ifindex;
+	u16 inner_vid;	/* Inner VLAN ID */
+	u16 outer_vid;	/* Outer VLAN ID */
 	bool is_v4;
-	bool is_vlan;
 	union nf_inet_addr grp_ip;
 
 	/* Source list for IGMPv3/MLDv2 */
