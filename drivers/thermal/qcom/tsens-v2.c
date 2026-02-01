@@ -281,6 +281,14 @@ static const struct tsens_ops ops_ipq5332 = {
 	.calibrate	= tsens_v2_calibration,
 };
 
+struct tsens_plat_data data_ipq5210 = {
+	.num_sensors	= 5,
+	.ops		= &ops_ipq5332,
+	.hw_ids		= (unsigned int []){11, 12, 13, 14, 15},
+	.feat		= &ipq5332_feat,
+	.fields		= tsens_v2_regfields,
+};
+
 struct tsens_plat_data data_ipq5332 = {
 	.num_sensors	= 5,
 	.ops		= &ops_ipq5332,
