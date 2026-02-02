@@ -872,6 +872,28 @@ int qcom_smem_get_soc_id(u32 *id)
 }
 EXPORT_SYMBOL_GPL(qcom_smem_get_soc_id);
 
+/**
+ * qcom_smem_get_soc_major_version() - return the SoC major version
+ * @id:	On success, we return the SoC major version
+ *
+ * Look up SoC major version from HW/SW build ID and return it.
+ *
+ * Return: 0 on success, negative errno on failure.
+ */
+int qcom_smem_get_soc_major_version(u32 *version)
+{
+	struct socinfo *info;
+
+	info = qcom_smem_get(QCOM_SMEM_HOST_ANY, SMEM_HW_SW_BUILD_ID, NULL);
+	if (IS_ERR(info))
+		return PTR_ERR(info);
+
+	*version = SOCINFO_MAJOR(le32_to_cpu(info->ver));
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(qcom_smem_get_soc_major_version);
+
 static int qcom_smem_get_sbl_version(struct qcom_smem *smem)
 {
 	struct smem_header *header;
