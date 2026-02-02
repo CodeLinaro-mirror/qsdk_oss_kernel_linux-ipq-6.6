@@ -37,6 +37,7 @@ const char * const mhi_ee_str[MHI_EE_MAX] = {
 	[MHI_EE_DISABLE_TRANSITION] = "DISABLE",
 	[MHI_EE_NOT_SUPPORTED] = "NOT SUPPORTED",
 };
+EXPORT_SYMBOL(mhi_ee_str);
 
 const char * const dev_state_tran_str[DEV_ST_TRANSITION_MAX] = {
 	[DEV_ST_TRANSITION_PBL] = "PBL",
