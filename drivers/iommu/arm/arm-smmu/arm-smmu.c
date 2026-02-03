@@ -34,6 +34,7 @@
 #include <linux/pm_runtime.h>
 #include <linux/ratelimit.h>
 #include <linux/slab.h>
+#include <linux/soc/qcom/smem.h>
 
 #include <linux/fsl/mc.h>
 
@@ -1023,13 +1024,27 @@ static int arm_smmu_master_alloc_smes(struct device *dev)
 	struct arm_smmu_master_cfg *cfg = dev_iommu_priv_get(dev);
 	struct arm_smmu_device *smmu = cfg->smmu;
 	struct arm_smmu_smr *smrs = smmu->smrs;
-	int i, idx, ret;
+	int i, idx, ret, ver;
 
 	mutex_lock(&smmu->stream_map_mutex);
 	/* Figure out a viable stream map entry allocation */
 	for_each_cfg_sme(cfg, fwspec, i, idx) {
 		u16 sid = FIELD_GET(ARM_SMMU_SMR_ID, fwspec->ids[i]);
 		u16 mask = FIELD_GET(ARM_SMMU_SMR_MASK, fwspec->ids[i]);
+
+		/*
+		 * For PCIe devices, 2 SIDs are allocated. So mask the LSB
+		 * to match the both the SIDs to same CB. From 2.0 onwards, we
+		 * will have only one SID. So only for 1.0, add the WAR as
+		 * below.
+		 */
+		if (dev_is_pci(dev) && of_machine_is_compatible("qcom,ipq9650")) {
+			ret = qcom_smem_get_soc_major_version(&ver);
+			if (ret)
+				dev_err(dev, "Failed to get SoC version details\n");
+			else if (ver == 1)
+				mask = 0x1;
+		}
 
 		if (idx != INVALID_SMENDX) {
 			ret = -EEXIST;
