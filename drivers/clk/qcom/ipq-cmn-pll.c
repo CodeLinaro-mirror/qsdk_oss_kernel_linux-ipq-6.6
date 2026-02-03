@@ -45,6 +45,7 @@
 
 #include <linux/bitfield.h>
 #include <linux/clk-provider.h>
+#include <linux/clk.h>
 #include <linux/delay.h>
 #include <linux/err.h>
 #include <linux/mod_devicetable.h>
@@ -113,6 +114,13 @@
 
 #define CMN_PLL_OUTPUT_RELATED_2		0x7a0
 #define CMN_PLL_OUTPUT_MUX_SEL			BIT(4)
+
+#define GCC_ADDR_BASE				0x1800000
+#define GCC_ADDR_SIZE				0x40000
+#define GCC_CMN_12GPLL_AHB_CBCR			0x3a004
+#define GCC_CMN_12GPLL_SYS_CBCR			0x3a008
+#define GCC_CMN_12GPLL_AHB_CLK_RATE		100000000
+#define GCC_CMN_12GPLL_SYS_CLK_RATE		24000000
 
 /**
  * struct cmn_pll_fixed_output_clk - CMN PLL output clocks information
@@ -1304,6 +1312,65 @@ static struct clk_hw *ipq_cmn_pll_eth_pon_register(struct platform_device *pdev,
 	return &eth_pon_clk->hw;
 }
 
+/**
+ * ipq_cmn_pll_enable_clocks - Enable AHB and SYS clocks
+ * @dev: Device pointer
+ *
+ * Checks if AHB and SYS clocks are available and enabled. If either
+ * clock has a rate of 0, manually enables it via GCC registers.
+ *
+ * Return: true if PM clock framework should be used, false if manual
+ *         register access was needed
+ */
+static bool ipq_cmn_pll_enable_clocks(struct device *dev)
+{
+	struct clk *ahb_clk, *sys_clk;
+	void __iomem *gcc_base;
+	unsigned long ahb_rate = 0, sys_rate = 0;
+	u32 val;
+
+	/* Try to get clocks and check their rates */
+	ahb_clk = devm_clk_get(dev, "ahb");
+	if (!IS_ERR(ahb_clk))
+		ahb_rate = clk_get_rate(ahb_clk);
+
+	sys_clk = devm_clk_get(dev, "sys");
+	if (!IS_ERR(sys_clk))
+		sys_rate = clk_get_rate(sys_clk);
+
+	/* If both clocks have valid rates, use PM clock framework */
+	if (ahb_rate == GCC_CMN_12GPLL_AHB_CLK_RATE &&
+	    sys_rate == GCC_CMN_12GPLL_SYS_CLK_RATE) {
+		dev_info(dev, "Using PM clock framework with AHB clock rate %lu, SYS clock rate %lu\n",
+			 ahb_rate, sys_rate);
+		return true;
+	}
+
+	/* One or both clocks unavailable - manually enable via registers */
+	gcc_base = devm_ioremap(dev, GCC_ADDR_BASE, GCC_ADDR_SIZE);
+	if (!gcc_base) {
+		dev_err(dev, "Failed to map GCC registers\n");
+		return false;
+	}
+
+	if (ahb_rate != GCC_CMN_12GPLL_AHB_CLK_RATE) {
+		val = readl(gcc_base + GCC_CMN_12GPLL_AHB_CBCR);
+		val |= BIT(0);
+		writel(val, gcc_base + GCC_CMN_12GPLL_AHB_CBCR);
+		dev_info(dev, "Manually enabled AHB clock via GCC_CMN_12GPLL_AHB_CBCR\n");
+	}
+
+	if (sys_rate != GCC_CMN_12GPLL_SYS_CLK_RATE) {
+		val = readl(gcc_base + GCC_CMN_12GPLL_SYS_CBCR);
+		val |= BIT(0);
+		writel(val, gcc_base + GCC_CMN_12GPLL_SYS_CBCR);
+		dev_info(dev, "Manually enabled SYS clock via GCC_CMN_12GPLL_SYS_CBCR\n");
+	}
+
+	/* Don't use PM clock framework since we manually enabled */
+	return false;
+}
+
 static int ipq_cmn_pll_register_clks(struct platform_device *pdev)
 {
 	const struct cmn_pll_fixed_output_clk *p, *fixed_clk;
@@ -1416,35 +1483,44 @@ unregister_fixed_clk:
 static int ipq_cmn_pll_clk_probe(struct platform_device *pdev)
 {
 	struct device *dev = &pdev->dev;
+	bool use_pm_clk;
 	int ret;
 
-	ret = devm_pm_runtime_enable(dev);
-	if (ret)
-		return ret;
+	/* Check clock availability and enable if needed */
+	use_pm_clk = ipq_cmn_pll_enable_clocks(dev);
+	if (use_pm_clk) {
+		/* Clocks available - use PM clock framework */
+		ret = devm_pm_runtime_enable(dev);
+		if (ret)
+			return ret;
 
-	ret = devm_pm_clk_create(dev);
-	if (ret)
-		return ret;
+		ret = devm_pm_clk_create(dev);
+		if (ret)
+			return ret;
 
-	/*
-	 * To access the CMN PLL registers, the GCC AHB & SYS clocks
-	 * of CMN PLL block need to be enabled.
-	 */
-	ret = pm_clk_add(dev, "ahb");
-	if (ret)
-		return dev_err_probe(dev, ret, "Failed to add AHB clock\n");
+		/*
+		 * To access the CMN PLL registers, the GCC AHB & SYS clocks
+		 * of CMN PLL block need to be enabled.
+		 */
+		ret = pm_clk_add(dev, "ahb");
+		if (ret)
+			return dev_err_probe(dev, ret, "Failed to add AHB clock\n");
 
-	ret = pm_clk_add(dev, "sys");
-	if (ret)
-		return dev_err_probe(dev, ret, "Failed to add SYS clock\n");
+		ret = pm_clk_add(dev, "sys");
+		if (ret)
+			return dev_err_probe(dev, ret, "Failed to add SYS clock\n");
 
-	ret = pm_runtime_resume_and_get(dev);
-	if (ret)
-		return ret;
+		ret = pm_runtime_resume_and_get(dev);
+		if (ret)
+			return ret;
+	}
 
-	/* Register CMN PLL clock and fixed rate output clocks. */
+	/* Register CMN PLL clock and fixed rate output clocks */
 	ret = ipq_cmn_pll_register_clks(pdev);
-	pm_runtime_put(dev);
+
+	if (use_pm_clk)
+		pm_runtime_put(dev);
+
 	if (ret)
 		return dev_err_probe(dev, ret,
 				     "Failed to register CMN PLL clocks\n");
