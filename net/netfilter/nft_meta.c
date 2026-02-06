@@ -404,6 +404,9 @@ void nft_meta_get_eval(const struct nft_expr *expr,
 	case NFT_META_SDIFNAME:
 		nft_meta_get_eval_sdifname(dest, pkt);
 		break;
+	case NFT_META_INT_PRI:
+		*dest = skb->int_pri;
+		break;
 	default:
 		WARN_ON(1);
 		goto err;
@@ -450,6 +453,9 @@ void nft_meta_set_eval(const struct nft_expr *expr,
 		skb->secmark = value;
 		break;
 #endif
+	case NFT_META_INT_PRI:
+		skb->int_pri = value;
+		break;
 	default:
 		WARN_ON(1);
 	}
@@ -525,6 +531,9 @@ int nft_meta_get_init(const struct nft_ctx *ctx,
 		break;
 	case NFT_META_TIME_HOUR:
 		len = sizeof(u32);
+		break;
+	case NFT_META_INT_PRI:
+		len = sizeof(u8);
 		break;
 	default:
 		return -EOPNOTSUPP;
@@ -650,6 +659,9 @@ int nft_meta_set_init(const struct nft_ctx *ctx,
 		len = sizeof(u8);
 		break;
 	case NFT_META_PKTTYPE:
+		len = sizeof(u8);
+		break;
+	case NFT_META_INT_PRI:
 		len = sizeof(u8);
 		break;
 	default:
