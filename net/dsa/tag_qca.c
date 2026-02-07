@@ -52,13 +52,14 @@ static struct sk_buff *_qca_tag_xmit(struct sk_buff *skb, struct net_device *dev
 	 * BPDU only has ath hdr contains from_cpu to bypass resv fdb (both VLAN/ATH base).
 	 */
 	if (likely(hdr_len == QCA_4B_HDR_LEN && is_v2 == false)) {
+		/* Set the version field, and set destination port information */
+		*phdr = FIELD_PREP(QCA_HDR_XMIT_VERSION, QCA_HDR_VERSION3);
+
 		if (unlikely(dp->ds->fc_group != NULL)) {
 			skb->mark = ((HOLB_MHT_VALID_TAG << HOLB_MHT_TAG_SHIFT) | (dp->index - 1));
 			*phdr |= FIELD_PREP(QCA_HDR_XMIT_VCHANNEL, dp->ds->fc_group[dp->index - 1]);
 		}
 
-		/* Set the version field, and set destination port information */
-		*phdr = FIELD_PREP(QCA_HDR_XMIT_VERSION, QCA_HDR_VERSION3);
 		if (unlikely(dp->cpu_dp->tag_ops->proto == DSA_TAG_PROTO_4B_QCA || is_bpdu)) {
 			*phdr |= QCA_HDR_XMIT_FROM_CPU;
 			*phdr |= FIELD_PREP(QCA_HDR_XMIT_DP_ID, dp->index);
