@@ -169,6 +169,13 @@ static int qcom_cpufreq_kryo_name_version(struct device *cpu_dev,
 	case QCOM_ID_IPQ5404:
 		drv->versions =  (*speedbin != 0x3b) ? BIT(0) : BIT(1);
 		break;
+	case QCOM_ID_IPQ5200:
+	case QCOM_ID_IPQ5210:
+	case QCOM_ID_QCF2200:
+	case QCOM_ID_QCF3200:
+	case QCOM_ID_QCF3210:
+		drv->versions =  (~(*speedbin) != 0x32) ? BIT(0) : BIT(1);
+		break;
 	case QCOM_ID_MSM8996SG:
 	case QCOM_ID_APQ8096SG:
 		drv->versions = 1 << ((unsigned int)(*speedbin) + 4);
@@ -368,6 +375,7 @@ static const struct of_device_id qcom_cpufreq_match_list[] __initconst = {
 	{ .compatible = "qcom,apq8096", .data = &match_data_kryo },
 	{ .compatible = "qcom,msm8996", .data = &match_data_kryo },
 	{ .compatible = "qcom,qcs404", .data = &match_data_qcs404 },
+	{ .compatible = "qcom,ipq5210", .data = &match_data_kryo },
 	{ .compatible = "qcom,ipq5332", .data = &match_data_kryo },
 	{ .compatible = "qcom,ipq5424", .data = &match_data_kryo },
 	{ .compatible = "qcom,ipq8064", .data = &match_data_krait },
