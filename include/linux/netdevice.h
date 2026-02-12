@@ -5527,4 +5527,20 @@ int netdev_hw_offload_ops_unregister(struct net_device *dev, struct netdev_hw_of
 		atomic_long_add((VAL), &(DEV)->stats.__##FIELD)
 #define DEV_STATS_READ(DEV, FIELD) atomic_long_read(&(DEV)->stats.__##FIELD)
 
+/* This structure is passed to the PON trap handler to provide context
+ * about which transmit path is being used, allowing the handler to make
+ * path-specific decisions.
+ */
+
+#ifdef CONFIG_IPQ_PON
+#define __DEV_QUEUE_XMIT 0
+#define DEV_FAST_XMIT 1
+#define DEV_FAST_XMIT_VP 2
+#define DEV_FAST_XMIT_QDISC 3
+
+struct pon_iftrap_devq_uni_tx_meta {
+	unsigned char calling_id;
+};
+#endif
+
 #endif	/* _LINUX_NETDEVICE_H */

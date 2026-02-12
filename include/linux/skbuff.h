@@ -1018,6 +1018,11 @@ struct sk_buff {
 	__u8			int_pri:4;
 	/* Priority info for hardware qdiscs */
 
+#ifdef CONFIG_IPQ_PON
+	/* packets processed by pon_iftrap_......() */
+	__u8			pon_softpath:2;
+#endif
+
 #if defined(CONFIG_NET_SCHED) || defined(CONFIG_NET_XGRESS)
 	__u16			tc_index;	/* traffic control index */
 #endif
