@@ -23,7 +23,11 @@ static inline bool kfence_protect_page(unsigned long addr, bool protect)
 extern bool kfence_early_init;
 static inline bool arm64_kfence_can_set_direct_map(void)
 {
-	return !kfence_early_init;
+	/*
+	 * To avoid NO_{BLOCK|FLAT}_MAPPINGS when kfence is not enabled
+	 * during bootup time.
+	 */
+	return false;
 }
 #else /* CONFIG_KFENCE */
 static inline bool arm64_kfence_can_set_direct_map(void) { return false; }
