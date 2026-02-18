@@ -619,14 +619,67 @@ void br_mdb_notify(struct net_device *dev,
 	int ret = 0;
 
 	/*
-	 * Notification should be generated for a (*,G) MDB entry or
-	 * an entry with STAR_EXCL flag, having a valid Port-Group pointer.
+	 * Notification should be generated for a ADD/DEL event types, provided it is a valid Port-Group pointer.
 	 */
-	if (pg && (br_multicast_is_star_g(&mp->addr) || (pg->flags & MDB_PG_FLAGS_STAR_EXCL)))
-		ret = br_mcast_offload_mdb_send_event_notify(dev, mp, type);
+	if (pg) {
+		bool eht_enabled = !!(pg->key.port->flags & (BR_MULTICAST_FAST_LEAVE | BR_MCAST_MCUC_HW_OFFLOAD));
 
-	if (ret)
-		pr_debug("bridge: Failed to Send Bridge MDB notification(%d)\n", ret);
+		switch (type) {
+		case RTM_NEWMDB:
+		{
+			/*
+			 * Provided it is a (*,G) MDB entry, send notification if PG has EXCLUDE as filter mode
+			 * or has a non-zero Source List.
+			 */
+			if (br_multicast_is_star_g(&mp->addr) && (pg->src_ents || (pg->filter_mode == MCAST_EXCLUDE)))
+				break;
+
+			/*
+			 * If it is an (S,G) MDB entry, send notification only for Port groups with EXCLUDE / BLOCKED source lists.
+			 * This is triggered when we have 2 Hosts part of the same LAN port (H1-> INCL{S1} & H2 -> EXCL{S1}),
+			 * and H1 leaves the multicast group.
+			 */
+			if (pg->flags & MDB_PG_FLAGS_BLOCKED)
+				break;
+
+			goto skip_notify;
+		}
+		case RTM_DELMDB:
+		{
+			/*
+			 * Send notification if it is a (*,G) MDB entry.
+			 */
+			if (br_multicast_is_star_g(&mp->addr))
+				break;
+
+			/*
+			 * If it is an (S,G) MDB entry, send notification only for Port groups with STAR_EXCL flag.
+			 * This is triggered when we have 2 Hosts part of the different LAN ports (H1-> LAN1 -> INCL{S1}) and (H2 -> LAN2 -> EXCL{None}),
+			 * and H2 leaves the multicast group.
+			 */
+			if (pg->flags & MDB_PG_FLAGS_STAR_EXCL)
+				break;
+
+			/*
+			 * Send notification if EHT database tracking is not enabled in Linux.
+			 * This is required as Linux doesn't generate (RTM_NEWMDB) for notifying updated (*,G) state.
+			 * Hence, Need to handle the state change event for those scenarios.
+			 */
+			if (!eht_enabled)
+				break;
+
+			goto skip_notify;
+		}
+		default:
+			goto skip_notify;
+		}
+
+		ret = br_mcast_offload_mdb_send_event_notify(dev, mp, type);
+		if (ret)
+			pr_debug("bridge: Failed to Send Bridge MDB notification(%d)\n", ret);
+
+skip_notify:
+	}
 #endif
 
 	rtnl_notify(skb, net, 0, RTNLGRP_MDB, NULL, GFP_ATOMIC);
