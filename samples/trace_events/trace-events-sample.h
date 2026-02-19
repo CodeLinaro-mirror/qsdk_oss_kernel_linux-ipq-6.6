@@ -302,7 +302,6 @@ TRACE_EVENT(foo_bar,
 		__bitmask(	cpus,	num_possible_cpus()	)
 		__cpumask(	cpum				)
 		__dynamic_array(char,   vstr,	512		)
-		__vstring(	vstr,	fmt,	va		)
 		__string_len(	lstr,	foo,	bar / 2 < strlen(foo) ? bar / 2 : strlen(foo) )
 	),
 
