@@ -226,7 +226,8 @@ config QCOM_Q6V5_PAS
 	select QCOM_MDT_LOADER
 	select QCOM_Q6V5_COMMON
 	select QCOM_RPROC_COMMON
-	select QCOM_SCM
+	select QCOM_PAS
+	select QCOM_PAS_TEE if TEE
 	help
 	  Say y here to support the TrustZone based Peripheral Image Loader
 	  for the Qualcomm Hexagon v5 based remote processors. This is commonly
