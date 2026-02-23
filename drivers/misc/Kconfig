@@ -163,6 +163,16 @@ config ENCLOSURE_SERVICES
 	  driver (SCSI/ATA) which supports enclosures
 	  or a SCSI enclosure device (SES) to use these services.
 
+config SYSREGISTER
+        tristate "System Register Driver"
+        depends on OF && HAS_IOMEM
+        depends on QCOM_SCM
+        help
+          This driver provides sysfs access to memory-mapped system registers.
+          It supports both secure and non-secure registers with optional
+          bit-level access. It creates sysfs entries for each configured
+          register allowing userspace to read and write register values.
+
 config SGI_XP
 	tristate "Support communication between SGI SSIs"
 	depends on NET
