@@ -323,12 +323,13 @@ static int qfprom_reg_read(void *context,
 	struct qfprom_priv *priv = context;
 	u8 *val = _val;
 	int i = 0, words = bytes;
+
 	void __iomem *base = priv->qfpcorrected;
 
 	if (read_raw_data && priv->qfpraw)
 		base = priv->qfpraw;
 
-	while (words--)
+	while(words--)
 		*val++ = readb(base + reg + i++);
 
 	return 0;

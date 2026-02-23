@@ -228,7 +228,6 @@ struct xfrm_state {
 
 	/* Data for encapsulator */
 	struct xfrm_encap_tmpl	*encap;
-	struct sock __rcu	*encap_sk;
 
 	/* Data for care-of address */
 	xfrm_address_t	*coaddr;
@@ -315,9 +314,22 @@ static inline struct net *xs_net(struct xfrm_state *x)
 }
 
 /* xflags - make enum if more show up */
-#define XFRM_TIME_DEFER	1
-#define XFRM_SOFT_EXPIRE 2
-#define XFRM_STATE_OFFLOAD_NSS 4
+#define XFRM_TIME_DEFER		0x1
+#define XFRM_SOFT_EXPIRE	0x2
+#define XFRM_STATE_OFFLOAD_HW	0x4 /* State offloaded */
+#define XFRM_STATE_OFFLOAD_HW_INNER	0x8 /* Inner flow offloaded to HW */
+
+/*
+ * TODO: After user switches to XFRM_STATE_OFFLOAD_HW, remove XFRM_STATE_OFFLOAD_NSS alias.
+ */
+#define XFRM_STATE_OFFLOAD_NSS XFRM_STATE_OFFLOAD_HW
+
+/*
+ * Inline hardware offload: supports accelerating both
+ * the outer IPsec and the inner plaintext flow.
+ */
+#define XFRM_STATE_OFFLOAD_HW_INLINE \
+(XFRM_STATE_OFFLOAD_HW | XFRM_STATE_OFFLOAD_HW_INNER)
 
 enum {
 	XFRM_STATE_VOID,

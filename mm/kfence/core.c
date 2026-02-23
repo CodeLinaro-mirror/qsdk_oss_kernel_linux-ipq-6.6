@@ -78,7 +78,7 @@ static int param_set_sample_interval(const char *val, const struct kernel_param 
 	*((unsigned long *)kp->arg) = num;
 
 	if (num && !READ_ONCE(kfence_enabled) && system_state != SYSTEM_BOOTING)
-		return disabled_by_warn ? -EINVAL : kfence_enable_late();
+		return disabled_by_warn ? -EINVAL : -EOPNOTSUPP;
 	return 0;
 }
 
@@ -908,7 +908,7 @@ void __init kfence_init(void)
 	kfence_init_enable();
 }
 
-static int kfence_init_late(void)
+static int __maybe_unused kfence_init_late(void)
 {
 	const unsigned long nr_pages_pool = KFENCE_POOL_SIZE / PAGE_SIZE;
 	const unsigned long nr_pages_meta = KFENCE_METADATA_SIZE / PAGE_SIZE;
@@ -975,7 +975,7 @@ free_pool:
 	return err;
 }
 
-static int kfence_enable_late(void)
+static int __maybe_unused kfence_enable_late(void)
 {
 	if (!__kfence_pool)
 		return kfence_init_late();

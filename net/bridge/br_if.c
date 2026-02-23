@@ -912,3 +912,27 @@ int br_port_set_mac_lrn_limit(struct net_bridge_port *p, unsigned long new_mac_l
 
 	return 0;
 }
+
+/**
+ * br_port_get_sub_br_id - Retrieve sub-bridge ID from a bridge port
+ * @dev: net_device pointer
+ *
+ * Returns the sub_br_id if the device is a bridge port, error otherwise.
+ */
+int br_port_get_sub_br_id(struct net_device *dev)
+{
+	struct net_bridge_port *p;
+	int sub_id = -ENODEV;
+
+	if (!netif_is_bridge_port(dev))
+		return -ENODEV;
+
+	rcu_read_lock();
+	p = br_port_get_rcu(dev);
+	if (p && !(p->flags & BR_UPSTREAM_PORT))
+		sub_id = p->sub_br_id;
+	rcu_read_unlock();
+
+	return sub_id;
+}
+EXPORT_SYMBOL_GPL(br_port_get_sub_br_id);
