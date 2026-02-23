@@ -3016,34 +3016,6 @@ static const struct qmp_phy_cfg ipq5210_gen3x1_pciephy_cfg = {
 	.pipe_clock_rate	= 250000000,
 };
 
-static const struct qmp_phy_cfg ipq5210_gen3x2_pciephy_cfg = {
-	.lanes			= 2,
-
-	.offsets		= &qmp_pcie_offsets_9574_v4x2,
-
-	.tbls = {
-		.serdes		= ipq9574_gen3x1_pcie_serdes_tbl,
-		.serdes_num	= ARRAY_SIZE(ipq9574_gen3x1_pcie_serdes_tbl),
-		.tx		= ipq9574_pcie_tx_tbl,
-		.tx_num		= ARRAY_SIZE(ipq9574_pcie_tx_tbl),
-		.rx		= ipq9574_pcie_rx_tbl,
-		.rx_num		= ARRAY_SIZE(ipq9574_pcie_rx_tbl),
-		.pcs		= ipq9574_gen3x1_pcie_pcs_tbl,
-		.pcs_num	= ARRAY_SIZE(ipq9574_gen3x1_pcie_pcs_tbl),
-		.pcs_misc	= ipq9574_gen3x1_pcie_pcs_misc_tbl,
-		.pcs_misc_num	= ARRAY_SIZE(ipq9574_gen3x1_pcie_pcs_misc_tbl),
-	},
-	.reset_list		= ipq8074_pciephy_reset_l,
-	.num_resets		= ARRAY_SIZE(ipq8074_pciephy_reset_l),
-	.vreg_list		= NULL,
-	.num_vregs		= 0,
-	.regs			= pciephy_v4_regs_layout,
-
-	.pwrdn_ctrl		= SW_PWRDN | REFCLK_DRV_DSBL,
-	.phy_status		= PHYSTATUS,
-	.pipe_clock_rate	= 250000000,
-};
-
 static const struct qmp_phy_cfg ipq9574_gen3x1_pciephy_cfg = {
 	.lanes			= 1,
 
@@ -4468,9 +4440,6 @@ static const struct of_device_id qmp_pcie_of_match_table[] = {
 	{
 		.compatible = "qcom,ipq5210-qmp-gen3x1-pcie-phy",
 		.data = &ipq5210_gen3x1_pciephy_cfg,
-	}, {
-		.compatible = "qcom,ipq5210-qmp-gen3x2-pcie-phy",
-		.data = &ipq5210_gen3x2_pciephy_cfg,
 	}, {
 		.compatible = "qcom,ipq6018-qmp-pcie-phy",
 		.data = &ipq6018_pciephy_cfg,
