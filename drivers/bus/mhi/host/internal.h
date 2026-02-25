@@ -17,6 +17,7 @@ extern struct bus_type mhi_bus_type;
 
 #define QCN9XXX_FAMILY_NUM				(0x4)
 #define QCN9224_DEVICE_NUM				(0x1A)
+#define QCC2072_DEVICE_NUM				(0x29)
 #define QCN9625_DEVICE_NUM				(0x2F)
 #define QCN9589_DEVICE_NUM				(0x31)
 #define SOC_HW_VERSION_OFFS				0x224
@@ -26,10 +27,6 @@ extern struct bus_type mhi_bus_type;
 #define SOC_HW_VERSION_MINOR_VER_BMSK			GENMASK(7, 0)
 #define QCN9224_SOC_HW_VERSION_MAJOR_VER_BMSK		GENMASK(11, 8)
 #define QCN9224_SOC_HW_VERSION_MINOR_VER_BMSK		GENMASK(7, 4)
-
-#define IS_QCN9224_DEV(mhi_cntrl) \
-	((mhi_cntrl->family_number == QCN9XXX_FAMILY_NUM && \
-	  mhi_cntrl->device_number == QCN9224_DEVICE_NUM) ? true : false)
 
 #define IS_LICENSE_DOWN_REQ(mhi_cntrl) \
 	((mhi_cntrl->family_number == QCN9XXX_FAMILY_NUM && \

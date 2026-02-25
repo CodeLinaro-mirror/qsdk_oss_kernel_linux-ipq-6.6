@@ -1829,7 +1829,8 @@ void mhi_debug_reg_dump(struct mhi_controller *mhi_cntrl)
 	}
 
 	if (mhi_cntrl->device_number == QCN9625_DEVICE_NUM ||
-	    mhi_cntrl->device_number == QCN9589_DEVICE_NUM) {
+	    mhi_cntrl->device_number == QCN9589_DEVICE_NUM ||
+	    mhi_cntrl->device_number == QCC2072_DEVICE_NUM) {
 		for (i = 0; debug_reg_extended[i].name; i++) {
 			if (!debug_reg_extended[i].base)
 				continue;

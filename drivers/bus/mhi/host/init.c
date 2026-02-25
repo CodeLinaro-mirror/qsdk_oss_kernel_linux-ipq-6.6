@@ -1064,7 +1064,8 @@ int mhi_register_controller(struct mhi_controller *mhi_cntrl,
 	mhi_cntrl->family_number = FIELD_GET(SOC_HW_VERSION_FAM_NUM_BMSK, soc_info);
 	mhi_cntrl->device_number = FIELD_GET(SOC_HW_VERSION_DEV_NUM_BMSK, soc_info);
 
-	if (IS_QCN9224_DEV(mhi_cntrl)) {
+	if (mhi_cntrl->device_number == QCN9224_DEVICE_NUM ||
+	    mhi_cntrl->device_number == QCC2072_DEVICE_NUM) {
 		mhi_cntrl->major_version =
 			FIELD_GET(QCN9224_SOC_HW_VERSION_MAJOR_VER_BMSK,
 				  soc_info);
