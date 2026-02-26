@@ -2115,8 +2115,6 @@ static int sdhci_msm_cqe_add_host(struct sdhci_host *host,
 	struct cqhci_host *cq_host;
 	bool dma64;
 	u32 cqcfg;
-	u32 config = 0x0;
-	u32 ice_cap = 0x0;
 	int ret;
 
 	/*
@@ -2171,7 +2169,11 @@ static int sdhci_msm_cqe_add_host(struct sdhci_host *host,
 	if (ret)
 		goto cleanup;
 
+#ifdef CONFIG_MMC_CRYPTO
 	/* Initalize the ICE for NON-CMDQ eMMC devices */
+	u32 config = 0x0;
+	u32 ice_cap = 0x0;
+
 	config = sdhci_readl(host, HC_VENDOR_SPECIFIC_FUNC4);
 	config &= ~DISABLE_CRYPTO;
 	sdhci_writel(host, config, HC_VENDOR_SPECIFIC_FUNC4);
@@ -2183,6 +2185,7 @@ static int sdhci_msm_cqe_add_host(struct sdhci_host *host,
 		cqhci_writel(cq_host, config, CQHCI_CFG);
 	}
 	sdhci_msm_ice_enable(msm_host);
+#endif
 
 	dev_info(&pdev->dev, "%s: CQE init: success\n",
 			mmc_hostname(host->mmc));
