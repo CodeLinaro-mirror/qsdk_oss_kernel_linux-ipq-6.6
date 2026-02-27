@@ -42,6 +42,14 @@
 
 #define IPQ_PHY_SET_DELAY_US	100000
 
+/* GCC MDIO AHB clock registers */
+#define GCC_BASE_ADDR				0x1800000
+#define GCC_PCNOC_BFDCD_CMD_RCGR_OFFSET		0x31004
+#define GCC_PCNOC_BFDCD_CFG_RCGR_OFFSET		0x31008
+#define GCC_MDIO_AHB_CBCR_OFFSET		0x17040
+#define GCC_MDIO_GEPHY_AHB_CBCR_OFFSET		0x17098
+#define GCC_RCG_UPDATE_TIMEOUT_US		1000
+
 #define IPQ_HIGH_ADDR_PREFIX	0x18
 #define IPQ_LOW_ADDR_PREFIX	0x10
 
@@ -866,6 +874,59 @@ static void ipq_cmn_clk_reset(struct mii_bus *bus)
 	}
 }
 
+static int ipq_mdio_ahb_clk_init_direct(struct device *dev)
+{
+	void __iomem *gcc_base;
+	u32 val;
+	int timeout;
+	int ret = 0;
+
+	gcc_base = ioremap(GCC_BASE_ADDR, 0x80000);
+	if (!gcc_base) {
+		dev_err(dev, "Failed to map GCC registers\n");
+		return -ENOMEM;
+	}
+
+	/* Configure RCG to 100MHz (0x10f) */
+	writel(0x10f, gcc_base + GCC_PCNOC_BFDCD_CFG_RCGR_OFFSET);
+
+	/* Trigger RCG update */
+	val = readl(gcc_base + GCC_PCNOC_BFDCD_CMD_RCGR_OFFSET);
+	val |= BIT(0);  /* Set UPDATE bit */
+	writel(val, gcc_base + GCC_PCNOC_BFDCD_CMD_RCGR_OFFSET);
+
+	/* Poll for update completion */
+	timeout = GCC_RCG_UPDATE_TIMEOUT_US;
+	while (timeout-- > 0) {
+		val = readl(gcc_base + GCC_PCNOC_BFDCD_CMD_RCGR_OFFSET);
+		if (!(val & BIT(0)))  /* UPDATE bit cleared */
+			break;
+		udelay(1);
+	}
+
+	if (timeout <= 0) {
+		dev_err(dev, "RCG update timeout\n");
+		ret = -ETIMEDOUT;
+		goto unmap;
+	}
+
+	/* Enable MDIO AHB clock branch */
+	val = readl(gcc_base + GCC_MDIO_AHB_CBCR_OFFSET);
+	val |= BIT(0);  /* Set CLK_ENABLE bit */
+	writel(val, gcc_base + GCC_MDIO_AHB_CBCR_OFFSET);
+
+	/* Enable MDIO AHB clock branch */
+	val = readl(gcc_base + GCC_MDIO_GEPHY_AHB_CBCR_OFFSET);
+	val |= BIT(0);  /* Set CLK_ENABLE bit */
+	writel(val, gcc_base + GCC_MDIO_GEPHY_AHB_CBCR_OFFSET);
+
+	dev_info(dev, "MDIO AHB clock configured via direct register access\n");
+
+unmap:
+	iounmap(gcc_base);
+	return ret;
+}
+
 static int ipq_mdio_reset(struct mii_bus *bus)
 {
 	struct ipq4019_mdio_data *priv = bus->priv;
@@ -935,20 +996,29 @@ static int ipq_mdio_reset(struct mii_bus *bus)
 		fsleep(IPQ_PHY_SET_DELAY_US);
 	}
 
-	/* Configure MDIO clock source frequency if clock is specified in the device tree */
-	ret = clk_set_rate(priv->clk[MDIO_CLK_MDIO_AHB], IPQ_MDIO_CLK_RATE);
-	if (ret)
-		return ret;
+	/* Configure MDIO clock source frequency */
+	if (!priv->clk[MDIO_CLK_MDIO_AHB]) {
+		/* Use direct register access when clock handle is NULL */
+		ret = ipq_mdio_ahb_clk_init_direct(bus->parent);
+		if (ret)
+			return ret;
+	} else {
+		/* Use clock framework */
+		ret = clk_set_rate(priv->clk[MDIO_CLK_MDIO_AHB], IPQ_MDIO_CLK_RATE);
+		if (ret)
+			return ret;
 
-	ret = clk_prepare_enable(priv->clk[MDIO_CLK_MDIO_AHB]);
-	if (ret == 0) {
-		mdelay(10);
-
-		/* Configure the fixup PHY address and clocks for qca8386 chip if specified */
-		priv->preinit(bus);
+		ret = clk_prepare_enable(priv->clk[MDIO_CLK_MDIO_AHB]);
+		if (ret)
+			return ret;
 	}
 
-	return ret;
+	mdelay(10);
+
+	/* Configure the fixup PHY address and clocks for qca8386 chip if specified */
+	priv->preinit(bus);
+
+	return 0;
 }
 
 static int ipq4019_mdio_probe(struct platform_device *pdev)
