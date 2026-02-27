@@ -19,6 +19,7 @@
 #include <linux/platform_device.h>
 #include <linux/pm_domain.h>
 #include <linux/pm_runtime.h>
+#include <linux/firmware/qcom/qcom_pas.h>
 #include <linux/firmware/qcom/qcom_scm.h>
 #include <linux/regulator/consumer.h>
 #include <linux/remoteproc.h>
@@ -102,8 +103,8 @@ struct qcom_adsp {
 	struct qcom_rproc_ssr ssr_subdev;
 	struct qcom_sysmon *sysmon;
 
-	struct qcom_scm_pas_metadata pas_metadata;
-	struct qcom_scm_pas_metadata dtb_pas_metadata;
+	struct qcom_pas_metadata pas_metadata;
+	struct qcom_pas_metadata dtb_pas_metadata;
 };
 
 static void adsp_segment_dump(struct rproc *rproc, struct rproc_dump_segment *segment,
@@ -179,7 +180,7 @@ static int adsp_shutdown_poll_decrypt(struct qcom_adsp *adsp)
 
 	do {
 		msleep(ADSP_DECRYPT_SHUTDOWN_DELAY_MS);
-		ret = qcom_scm_pas_shutdown(adsp->pas_id);
+		ret = qcom_pas_shutdown(adsp->pas_id);
 	} while (ret == -EINVAL && --retry_num);
 
 	return ret;
@@ -195,9 +196,9 @@ static int adsp_unprepare(struct rproc *rproc)
 	 * auth_and_reset() was successful, but in other cases clean it up
 	 * here.
 	 */
-	qcom_scm_pas_metadata_release(&adsp->pas_metadata);
+	qcom_pas_metadata_release(&adsp->pas_metadata);
 	if (adsp->dtb_pas_id)
-		qcom_scm_pas_metadata_release(&adsp->dtb_pas_metadata);
+		qcom_pas_metadata_release(&adsp->dtb_pas_metadata);
 
 	return 0;
 }
@@ -235,7 +236,7 @@ static int adsp_load(struct rproc *rproc, const struct firmware *fw)
 	return 0;
 
 release_dtb_metadata:
-	qcom_scm_pas_metadata_release(&adsp->dtb_pas_metadata);
+	qcom_pas_metadata_release(&adsp->dtb_pas_metadata);
 
 release_dtb_firmware:
 	release_firmware(adsp->dtb_firmware);
@@ -277,7 +278,7 @@ static int adsp_start(struct rproc *rproc)
 	}
 
 	if (adsp->dtb_pas_id) {
-		ret = qcom_scm_pas_auth_and_reset(adsp->dtb_pas_id);
+		ret = qcom_pas_auth_and_reset(adsp->dtb_pas_id);
 		if (ret) {
 			dev_err(adsp->dev,
 				"failed to authenticate dtb image and release reset\n");
@@ -298,7 +299,7 @@ static int adsp_start(struct rproc *rproc)
 
 	qcom_pil_info_store(adsp->info_name, adsp->mem_phys, adsp->mem_size);
 
-	ret = qcom_scm_pas_auth_and_reset(adsp->pas_id);
+	ret = qcom_pas_auth_and_reset(adsp->pas_id);
 	if (ret) {
 		dev_err(adsp->dev,
 			"failed to authenticate image and release reset\n");
@@ -308,13 +309,13 @@ static int adsp_start(struct rproc *rproc)
 	ret = qcom_q6v5_wait_for_start(&adsp->q6v5, msecs_to_jiffies(5000));
 	if (ret == -ETIMEDOUT) {
 		dev_err(adsp->dev, "start timed out\n");
-		qcom_scm_pas_shutdown(adsp->pas_id);
+		qcom_pas_shutdown(adsp->pas_id);
 		goto release_pas_metadata;
 	}
 
-	qcom_scm_pas_metadata_release(&adsp->pas_metadata);
+	qcom_pas_metadata_release(&adsp->pas_metadata);
 	if (adsp->dtb_pas_id)
-		qcom_scm_pas_metadata_release(&adsp->dtb_pas_metadata);
+		qcom_pas_metadata_release(&adsp->dtb_pas_metadata);
 
 	/* Remove pointer to the loaded firmware, only valid in adsp_load() & adsp_start() */
 	adsp->firmware = NULL;
@@ -322,9 +323,9 @@ static int adsp_start(struct rproc *rproc)
 	return 0;
 
 release_pas_metadata:
-	qcom_scm_pas_metadata_release(&adsp->pas_metadata);
+	qcom_pas_metadata_release(&adsp->pas_metadata);
 	if (adsp->dtb_pas_id)
-		qcom_scm_pas_metadata_release(&adsp->dtb_pas_metadata);
+		qcom_pas_metadata_release(&adsp->dtb_pas_metadata);
 disable_px_supply:
 	if (adsp->px_supply)
 		regulator_disable(adsp->px_supply);
@@ -369,7 +370,7 @@ static int adsp_stop(struct rproc *rproc)
 	if (ret == -ETIMEDOUT)
 		dev_err(adsp->dev, "timed out on wait\n");
 
-	ret = qcom_scm_pas_shutdown(adsp->pas_id);
+	ret = qcom_pas_shutdown(adsp->pas_id);
 	if (ret && adsp->decrypt_shutdown)
 		ret = adsp_shutdown_poll_decrypt(adsp);
 
@@ -377,7 +378,7 @@ static int adsp_stop(struct rproc *rproc)
 		dev_err(adsp->dev, "failed to shutdown: %d\n", ret);
 
 	if (adsp->dtb_pas_id) {
-		ret = qcom_scm_pas_shutdown(adsp->dtb_pas_id);
+		ret = qcom_pas_shutdown(adsp->dtb_pas_id);
 		if (ret)
 			dev_err(adsp->dev, "failed to shutdown dtb: %d\n", ret);
 	}
@@ -658,7 +659,7 @@ static int adsp_probe(struct platform_device *pdev)
 	if (!desc)
 		return -EINVAL;
 
-	if (!qcom_scm_is_available())
+	if (!qcom_pas_is_available())
 		return -EPROBE_DEFER;
 
 	fw_name = desc->firmware_name;

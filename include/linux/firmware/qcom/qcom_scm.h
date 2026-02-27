@@ -269,23 +269,10 @@ extern int qcom_scm_derive_and_share_key(uint32_t key_len, uint8_t *sw_context,
 				u32 sw_context_len, uint8_t *derived_key,
 				u32 derived_key_len);
 
-struct qcom_scm_pas_metadata {
-	void *ptr;
-	dma_addr_t phys;
-	ssize_t size;
-};
-
-extern int qcom_scm_pas_init_image(u32 peripheral, const void *metadata,
-				   size_t size,
-				   struct qcom_scm_pas_metadata *ctx);
-extern void qcom_scm_pas_metadata_release(struct qcom_scm_pas_metadata *ctx);
-extern int qcom_scm_pas_mem_setup(u32 peripheral, phys_addr_t addr,
-				  phys_addr_t size);
 extern long qcom_scm_is_feature_available(u32 feature_id);
 extern int qcom_scm_break_q6_start(u32 reset_cmd_id);
 extern int qcom_scm_pas_auth_and_reset(u32 peripheral);
 extern int qcom_scm_pas_shutdown(u32 peripheral);
-extern bool qcom_scm_pas_supported(u32 peripheral);
 int qti_scm_int_radio_powerup(u32 peripheral);
 int qti_scm_int_radio_powerdown(u32 peripheral);
 int qti_scm_pdseg_memcpy_v2(u32 peripheral, int phno, dma_addr_t dma, int seg_cnt);
