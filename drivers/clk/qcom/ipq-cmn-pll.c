@@ -84,6 +84,7 @@
 #define CMN_PLL_PCS0_CLK_EN			BIT(0)
 
 #define CMN_PLL_PON_CONFIG			0x42c
+#define CMN_PLL_GEPHY_312P5M_125M_SEL		BIT(10)
 #define CMN_PLL_PON_MODE_SEL			BIT(9)
 #define CMN_PLL_PON_EN				BIT(8)
 #define CMN_PLL_PON_DIV_CTRL			GENMASK(7, 0)
@@ -219,6 +220,7 @@ static const struct cmn_pll_fixed_output_clk ipq5210_output_clks[] = {
 	CLK_PLL_OUTPUT(IPQ5210_NSS_CLK, "nss", 0),
 	CLK_PLL_OUTPUT(IPQ5210_PPE_CLK, "ppe", 0),
 	CLK_PLL_OUTPUT(IPQ5210_PON_REFCLK, "pon", 0),
+	CLK_PLL_OUTPUT(IPQ5210_EPHY_RAW_CLK, "ephy-raw", 0),
 	{ /* Sentinel */ }
 };
 
@@ -711,6 +713,65 @@ static const struct clk_ops clk_eth_pon_ops = {
 };
 
 /*
+ * EPHY raw clock operations for IPQ5210.
+ * The output clock rate is determined by bit 10 of CMN_PLL_PON_CONFIG.
+ * 0: 125 MHz (for link speeds other than 2.5G)
+ * 1: 312.5 MHz (for 2.5G link speed)
+ */
+static unsigned long clk_ephy_raw_recalc_rate(struct clk_hw *hw,
+					      unsigned long parent_rate)
+{
+	struct clk_cmn_pll *ephy_raw_clk = to_clk_cmn_pll(hw);
+	u32 val;
+
+	regmap_read(ephy_raw_clk->regmap, CMN_PLL_PON_CONFIG, &val);
+
+	if (val & CMN_PLL_GEPHY_312P5M_125M_SEL)
+		return 312500000UL;
+
+	return 125000000UL;
+}
+
+static int clk_ephy_raw_determine_rate(struct clk_hw *hw,
+					struct clk_rate_request *req)
+{
+	if (req->rate <= 125000000UL)
+		req->rate = 125000000UL;
+	else
+		req->rate = 312500000UL;
+
+	return 0;
+}
+
+static int clk_ephy_raw_set_rate(struct clk_hw *hw, unsigned long rate,
+				 unsigned long parent_rate)
+{
+	struct clk_cmn_pll *ephy_raw_clk = to_clk_cmn_pll(hw);
+	int ret;
+
+	/* Set the clock rate based on bit 10 */
+	if (rate == 125000000UL)
+		ret = regmap_clear_bits(ephy_raw_clk->regmap,
+					CMN_PLL_PON_CONFIG,
+					CMN_PLL_GEPHY_312P5M_125M_SEL);
+	else
+		ret = regmap_set_bits(ephy_raw_clk->regmap,
+				      CMN_PLL_PON_CONFIG,
+				      CMN_PLL_GEPHY_312P5M_125M_SEL);
+
+	if (ret)
+		return ret;
+
+	return clk_cmn_pll_ana_soft_reset(ephy_raw_clk->regmap);
+}
+
+static const struct clk_ops clk_ephy_raw_ops = {
+	.recalc_rate = clk_ephy_raw_recalc_rate,
+	.determine_rate = clk_ephy_raw_determine_rate,
+	.set_rate = clk_ephy_raw_set_rate,
+};
+
+/*
  * PCS clock operations for IPQ9650.
  * The PCS clocks are controlled via the UPHY_REFCLK_CTRL register (0x41C).
  * Each of the three PCS clocks (PCS0/1/2) can be independently enabled and
@@ -1147,6 +1208,40 @@ static struct clk_hw *ipq_cmn_pll_pcs_register(struct platform_device *pdev,
 }
 
 /*
+ * Register EPHY raw clock with CMN PLL as parent.
+ * The EPHY raw clock can switch between 125 MHz and 312.5 MHz.
+ */
+static struct clk_hw *ipq_cmn_pll_ephy_raw_register(struct platform_device *pdev,
+						    struct regmap *regmap,
+						    struct clk_hw *cmn_pll_hw)
+{
+	struct clk_parent_data pdata = { .hw = cmn_pll_hw };
+	struct clk_cmn_pll *ephy_raw_clk;
+	struct device *dev = &pdev->dev;
+	struct clk_init_data init = {};
+	int ret;
+
+	ephy_raw_clk = devm_kzalloc(dev, sizeof(*ephy_raw_clk), GFP_KERNEL);
+	if (!ephy_raw_clk)
+		return ERR_PTR(-ENOMEM);
+
+	init.name = "ephy-raw";
+	init.parent_data = &pdata;
+	init.num_parents = 1;
+	init.ops = &clk_ephy_raw_ops;
+	init.flags = 0;
+
+	ephy_raw_clk->hw.init = &init;
+	ephy_raw_clk->regmap = regmap;
+
+	ret = devm_clk_hw_register(dev, &ephy_raw_clk->hw);
+	if (ret)
+		return ERR_PTR(ret);
+
+	return &ephy_raw_clk->hw;
+}
+
+/*
  * Register ETH/PON clock with CMN PLL as parent.
  * The ETH/PON clock can switch between 25 MHz and 31.25 MHz.
  */
@@ -1253,6 +1348,10 @@ static int ipq_cmn_pll_register_clks(struct platform_device *pdev)
 			hw = ipq_cmn_pll_pon_refclk_register(pdev,
 							     cmn_pll->regmap,
 							     cmn_pll_hw);
+		} else if (!strcmp(fixed_clk[i].name, "ephy-raw")) {
+			hw = ipq_cmn_pll_ephy_raw_register(pdev,
+							   cmn_pll->regmap,
+							   cmn_pll_hw);
 		} else {
 			continue;
 		}
