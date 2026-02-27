@@ -367,10 +367,25 @@ struct ffa_mem_ops {
 	int (*memory_lend)(struct ffa_mem_ops_args *args);
 };
 
+typedef void (*ffa_sched_recv_cb)(u16 vcpu, bool is_per_vcpu, void *cb_data);
+typedef void (*ffa_notifier_cb)(int notify_id, void *cb_data);
+
+struct ffa_notifier_ops {
+	int (*sched_recv_cb_register)(struct ffa_device *dev,
+				      ffa_sched_recv_cb cb, void *cb_data);
+	int (*sched_recv_cb_unregister)(struct ffa_device *dev);
+	int (*notify_request)(struct ffa_device *dev, bool per_vcpu,
+			      ffa_notifier_cb cb, void *cb_data, int notify_id);
+	int (*notify_relinquish)(struct ffa_device *dev, int notify_id);
+	int (*notify_send)(struct ffa_device *dev, int notify_id, bool per_vcpu,
+			   u16 vcpu);
+};
+
 struct ffa_ops {
 	const struct ffa_info_ops *info_ops;
 	const struct ffa_msg_ops *msg_ops;
 	const struct ffa_mem_ops *mem_ops;
+	const struct ffa_notifier_ops *notifier_ops;
 };
 
 #endif /* _LINUX_ARM_FFA_H */
