@@ -312,6 +312,28 @@ static int clk_cmn_pll_determine_rate(struct clk_hw *hw,
 	return ret < 0 ? ret : 0;
 }
 
+static int clk_cmn_pll_ana_soft_reset(struct regmap *regmap)
+{
+	int ret;
+	u32 val;
+
+	ret = regmap_clear_bits(regmap, CMN_PLL_POWER_ON_AND_RESET,
+				CMN_ANA_EN_SW_RSTN);
+	if (ret)
+		return ret;
+
+	usleep_range(1000, 1200);
+	ret = regmap_set_bits(regmap, CMN_PLL_POWER_ON_AND_RESET,
+			      CMN_ANA_EN_SW_RSTN);
+	if (ret)
+		return ret;
+
+	/* Stability check of CMN PLL output clocks. */
+	return regmap_read_poll_timeout(regmap, CMN_PLL_LOCKED, val,
+					(val & CMN_PLL_CLKS_LOCKED),
+					100, 100 * USEC_PER_MSEC);
+}
+
 /*
  * This function is used to initialize the CMN PLL to enable the fixed
  * rate output clocks. It is expected to be configured once.
@@ -321,7 +343,6 @@ static int clk_cmn_pll_set_rate(struct clk_hw *hw, unsigned long rate,
 {
 	struct clk_cmn_pll *cmn_pll = to_clk_cmn_pll(hw);
 	int ret, index;
-	u32 val;
 
 	/*
 	 * Configure the reference input clock selection as per the given
@@ -365,21 +386,7 @@ static int clk_cmn_pll_set_rate(struct clk_hw *hw, unsigned long rate,
 	 * Reset the CMN PLL block to ensure the updated configurations
 	 * take effect.
 	 */
-	ret = regmap_clear_bits(cmn_pll->regmap, CMN_PLL_POWER_ON_AND_RESET,
-				CMN_ANA_EN_SW_RSTN);
-	if (ret)
-		return ret;
-
-	usleep_range(1000, 1200);
-	ret = regmap_set_bits(cmn_pll->regmap, CMN_PLL_POWER_ON_AND_RESET,
-			      CMN_ANA_EN_SW_RSTN);
-	if (ret)
-		return ret;
-
-	/* Stability check of CMN PLL output clocks. */
-	return regmap_read_poll_timeout(cmn_pll->regmap, CMN_PLL_LOCKED, val,
-					(val & CMN_PLL_CLKS_LOCKED),
-					100, 100 * USEC_PER_MSEC);
+	return clk_cmn_pll_ana_soft_reset(cmn_pll->regmap);
 }
 
 static const struct clk_ops clk_cmn_pll_ops = {
@@ -480,9 +487,13 @@ static int clk_pon_refclk_set_rate(struct clk_hw *hw, unsigned long rate,
 		return ret;
 
 	/* Update divider field */
-	return regmap_update_bits(pon_clk->regmap, CMN_PLL_PON_CONFIG,
-				  CMN_PLL_PON_DIV_CTRL,
-				  FIELD_PREP(CMN_PLL_PON_DIV_CTRL, div));
+	ret = regmap_update_bits(pon_clk->regmap, CMN_PLL_PON_CONFIG,
+				 CMN_PLL_PON_DIV_CTRL,
+				 FIELD_PREP(CMN_PLL_PON_DIV_CTRL, div));
+	if (ret)
+		return ret;
+
+	return clk_cmn_pll_ana_soft_reset(pon_clk->regmap);
 }
 
 static const struct clk_ops clk_pon_refclk_ops = {
@@ -533,6 +544,7 @@ static int clk_nss_set_rate(struct clk_hw *hw, unsigned long rate,
 {
 	struct clk_cmn_pll *nss_clk = to_clk_cmn_pll(hw);
 	unsigned long div;
+	int ret;
 
 	/* Calculate divider */
 	div = DIV_ROUND_CLOSEST_ULL(parent_rate, 2ULL * rate);
@@ -542,9 +554,13 @@ static int clk_nss_set_rate(struct clk_hw *hw, unsigned long rate,
 		return -EINVAL;
 
 	/* Update divider field */
-	return regmap_update_bits(nss_clk->regmap, CMN_PLL_NSS_PPE_FREQ_CTRL,
-				  CMN_PLL_NSS_CLK_SEL,
-				  FIELD_PREP(CMN_PLL_NSS_CLK_SEL, div));
+	ret = regmap_update_bits(nss_clk->regmap, CMN_PLL_NSS_PPE_FREQ_CTRL,
+				 CMN_PLL_NSS_CLK_SEL,
+				 FIELD_PREP(CMN_PLL_NSS_CLK_SEL, div));
+	if (ret)
+		return ret;
+
+	return clk_cmn_pll_ana_soft_reset(nss_clk->regmap);
 }
 
 static const struct clk_ops clk_nss_ops = {
@@ -577,6 +593,7 @@ static int clk_ppe_set_rate(struct clk_hw *hw, unsigned long rate,
 {
 	struct clk_cmn_pll *ppe_clk = to_clk_cmn_pll(hw);
 	unsigned long div;
+	int ret;
 
 	/* Calculate divider */
 	div = DIV_ROUND_CLOSEST_ULL(parent_rate, 2ULL * rate);
@@ -586,9 +603,13 @@ static int clk_ppe_set_rate(struct clk_hw *hw, unsigned long rate,
 		return -EINVAL;
 
 	/* Update divider field */
-	return regmap_update_bits(ppe_clk->regmap, CMN_PLL_NSS_PPE_FREQ_CTRL,
-				  CMN_PLL_PPE_CLK_SEL,
-				  FIELD_PREP(CMN_PLL_PPE_CLK_SEL, div));
+	ret = regmap_update_bits(ppe_clk->regmap, CMN_PLL_NSS_PPE_FREQ_CTRL,
+				 CMN_PLL_PPE_CLK_SEL,
+				 FIELD_PREP(CMN_PLL_PPE_CLK_SEL, div));
+	if (ret)
+		return ret;
+
+	return clk_cmn_pll_ana_soft_reset(ppe_clk->regmap);
 }
 
 static const struct clk_ops clk_ppe_ops = {
@@ -675,32 +696,33 @@ static int clk_eth_pon_set_rate(struct clk_hw *hw, unsigned long rate,
 {
 	struct clk_cmn_pll *cmn_pll = to_clk_cmn_pll(hw);
 
+	/* Disable clock output if enabled. */
 	if (clk_eth_pon_is_enabled(hw)) {
-		if (rate == 25000000) {
-			regmap_clear_bits(cmn_pll->regmap, CMN_PLL_OUTPUT_RELATED_1,
-					  BIT(CLK31P25M_EN_BIT));
-			regmap_clear_bits(cmn_pll->regmap, CMN_PLL_OUTPUT_RELATED_2,
-					  CMN_PLL_OUTPUT_MUX_SEL);
-			return regmap_set_bits(cmn_pll->regmap, CMN_PLL_OUTPUT_RELATED_1,
-					       BIT(CLK25M_EN_BIT));
-		} else {
-			regmap_clear_bits(cmn_pll->regmap, CMN_PLL_OUTPUT_RELATED_1,
-					  BIT(CLK25M_EN_BIT));
-			regmap_set_bits(cmn_pll->regmap, CMN_PLL_OUTPUT_RELATED_2,
-					CMN_PLL_OUTPUT_MUX_SEL);
-			return regmap_set_bits(cmn_pll->regmap, CMN_PLL_OUTPUT_RELATED_1,
-					       BIT(CLK31P25M_EN_BIT));
-		}
+		regmap_clear_bits(cmn_pll->regmap, CMN_PLL_OUTPUT_RELATED_1,
+				  BIT(CLK31P25M_EN_BIT));
+		regmap_clear_bits(cmn_pll->regmap, CMN_PLL_OUTPUT_RELATED_1,
+				  BIT(CLK25M_EN_BIT));
 	}
 
+	/* Set the clock rate. */
 	if (rate == 25000000)
-		return regmap_clear_bits(cmn_pll->regmap,
-					 CMN_PLL_OUTPUT_RELATED_2,
-					 CMN_PLL_OUTPUT_MUX_SEL);
+		regmap_clear_bits(cmn_pll->regmap, CMN_PLL_OUTPUT_RELATED_2,
+				  CMN_PLL_OUTPUT_MUX_SEL);
 	else
-		return regmap_set_bits(cmn_pll->regmap,
-				       CMN_PLL_OUTPUT_RELATED_2,
-				       CMN_PLL_OUTPUT_MUX_SEL);
+		regmap_set_bits(cmn_pll->regmap, CMN_PLL_OUTPUT_RELATED_2,
+				CMN_PLL_OUTPUT_MUX_SEL);
+
+	/* Enable clock output if enabled. */
+	if (clk_eth_pon_is_enabled(hw)) {
+		if (rate == 25000000)
+			regmap_set_bits(cmn_pll->regmap, CMN_PLL_OUTPUT_RELATED_1,
+					BIT(CLK25M_EN_BIT));
+		else
+			regmap_set_bits(cmn_pll->regmap, CMN_PLL_OUTPUT_RELATED_1,
+					BIT(CLK31P25M_EN_BIT));
+	}
+
+	return clk_cmn_pll_ana_soft_reset(cmn_pll->regmap);
 }
 
 static const struct clk_ops clk_eth_pon_ops = {
@@ -1016,8 +1038,12 @@ static int clk_pcs_clk_set_rate(struct clk_hw *hw, unsigned long rate,
 	if (ret)
 		return ret;
 
-	return regmap_update_bits(pcs_clk->regmap, CMN_PLL_PCS_CLK_CTRL,
-				  divsel_mask, (divsel << __ffs(divsel_mask)));
+	ret = regmap_update_bits(pcs_clk->regmap, CMN_PLL_PCS_CLK_CTRL,
+				 divsel_mask, (divsel << __ffs(divsel_mask)));
+	if (ret)
+		return ret;
+
+	return clk_cmn_pll_ana_soft_reset(pcs_clk->regmap);
 }
 
 static const struct clk_ops clk_pcs_clk_ops = {
