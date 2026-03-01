@@ -1371,6 +1371,76 @@ static bool ipq_cmn_pll_enable_clocks(struct device *dev)
 	return false;
 }
 
+/*
+ * Register a composite clock that combines a fixed-rate clock with a gate.
+ * This is used for clocks that need both a specific fixed rate and gate control.
+ */
+static struct clk_hw *ipq_cmn_pll_register_fixed_gate(struct device *dev,
+						      const char *name,
+						      struct clk_hw *parent_hw,
+						      unsigned long rate,
+						      void __iomem *base,
+						      u8 enable_bit)
+{
+	struct clk_hw *gate_hw, *fixed_hw;
+	struct clk_fixed_rate *fixed;
+	const char *parent_name;
+	struct clk_gate *gate;
+	struct clk_hw *hw;
+	spinlock_t *lock;
+	int ret;
+
+	/* Allocate and initialize spinlock for gate protection */
+	lock = devm_kzalloc(dev, sizeof(*lock), GFP_KERNEL);
+	if (!lock)
+		return ERR_PTR(-ENOMEM);
+
+	spin_lock_init(lock);
+
+	/* Get parent clock name */
+	parent_name = clk_hw_get_name(parent_hw);
+
+	/* Allocate gate structure */
+	gate = devm_kzalloc(dev, sizeof(*gate), GFP_KERNEL);
+	if (!gate)
+		return ERR_PTR(-ENOMEM);
+
+	/* Allocate fixed-rate structure */
+	fixed = devm_kzalloc(dev, sizeof(*fixed), GFP_KERNEL);
+	if (!fixed)
+		return ERR_PTR(-ENOMEM);
+
+	/* Setup gate */
+	gate->reg = base + CMN_PLL_OUTPUT_RELATED_1;
+	gate->bit_idx = enable_bit;
+	gate->flags = 0;
+	gate->lock = lock;
+	gate_hw = &gate->hw;
+
+	/* Setup fixed-rate */
+	fixed->fixed_rate = rate;
+	fixed->fixed_accuracy = 0;
+	fixed->flags = 0;
+	fixed_hw = &fixed->hw;
+
+	/* Register composite clock */
+	hw = clk_hw_register_composite(dev, name, &parent_name, 1,
+				       NULL, NULL,
+				       fixed_hw, &clk_fixed_rate_ops,
+				       gate_hw, &clk_gate_ops,
+				       0);
+	if (IS_ERR(hw))
+		return hw;
+
+	ret = devm_add_action_or_reset(dev,
+				       (void (*)(void *))clk_hw_unregister_composite,
+				       hw);
+	if (ret)
+		return ERR_PTR(ret);
+
+	return hw;
+}
+
 static int ipq_cmn_pll_register_clks(struct platform_device *pdev)
 {
 	const struct cmn_pll_fixed_output_clk *p, *fixed_clk;
@@ -1410,13 +1480,12 @@ static int ipq_cmn_pll_register_clks(struct platform_device *pdev)
 	/* Register the fixed rate output clocks (common for all platforms) */
 	for (i = 0; fixed_clk[i].name; i++) {
 		if (fixed_clk[i].enable_bit != -1) {
-			hw = devm_clk_hw_register_gate(dev, fixed_clk[i].name,
-						       clk_hw_get_name(cmn_pll_hw),
-						       0,
-						       cmn_pll->base + CMN_PLL_OUTPUT_RELATED_1,
-						       fixed_clk[i].enable_bit,
-						       0,
-						       NULL);
+			hw = ipq_cmn_pll_register_fixed_gate(dev,
+							     fixed_clk[i].name,
+							     cmn_pll_hw,
+							     fixed_clk[i].rate,
+							     cmn_pll->base,
+							     fixed_clk[i].enable_bit);
 		} else if (fixed_clk[i].rate) {
 			hw = clk_hw_register_fixed_rate_parent_hw(dev,
 							fixed_clk[i].name,
