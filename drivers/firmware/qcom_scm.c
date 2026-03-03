@@ -708,7 +708,7 @@ static void qcom_scm_set_download_mode(bool enable)
  */
 static int qcom_scm_pas_init_image(struct device *dev, u32 peripheral,
 				   const void *metadata, size_t size,
-				   struct qcom_pas_metadata *ctx)
+				   struct qcom_pas_context *ctx)
 {
 	dma_addr_t mdata_phys;
 	void *mdata_buf;
@@ -774,7 +774,7 @@ out:
  * @ctx:	metadata context
  */
 static void qcom_scm_pas_metadata_release(struct device *dev,
-					  struct qcom_pas_metadata *ctx)
+					  struct qcom_pas_context *ctx)
 {
 	if (!ctx->ptr)
 		return;
