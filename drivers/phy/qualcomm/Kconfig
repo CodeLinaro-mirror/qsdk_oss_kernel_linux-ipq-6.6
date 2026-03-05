@@ -163,6 +163,17 @@ config PHY_QCOM_USB_HS
 	  Support for the USB high-speed ULPI compliant phy on Qualcomm
 	  chipsets.
 
+config PHY_QCOM_USB_FEMTO_HS
+	tristate "Qualcomm USB Femto HS PHY driver"
+	depends on OF && (ARCH_QCOM || COMPILE_TEST)
+	select GENERIC_PHY
+	help
+	  Enable support for the USB High-Speed Femto PHY on Qualcomm SoCs.
+	  This driver implements the femto PHY initialization sequence with
+	  table-based configuration for easy support of multiple SoCs with
+	  the same register space. Currently supports IPQ9650. The PHY is
+	  paired with a Synopsys DWC3 USB controller.
+
 config PHY_QCOM_USB_SNPS_FEMTO_V2
 	tristate "Qualcomm SNPS FEMTO USB HS PHY V2 module"
 	depends on OF && (ARCH_QCOM || COMPILE_TEST)
