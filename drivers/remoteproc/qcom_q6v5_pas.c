@@ -103,8 +103,8 @@ struct qcom_adsp {
 	struct qcom_rproc_ssr ssr_subdev;
 	struct qcom_sysmon *sysmon;
 
-	struct qcom_pas_metadata pas_metadata;
-	struct qcom_pas_metadata dtb_pas_metadata;
+	struct qcom_pas_context pas_metadata;
+	struct qcom_pas_context dtb_pas_metadata;
 };
 
 static void adsp_segment_dump(struct rproc *rproc, struct rproc_dump_segment *segment,

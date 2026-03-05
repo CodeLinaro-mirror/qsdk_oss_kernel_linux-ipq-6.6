@@ -220,9 +220,10 @@ config QCOM_PAS
 	  TEE bus based PAS service implementation.
 
 config QCOM_PAS_TEE
-	tristate "QCOM PAS framework provided by TEE"
+	tristate
 	depends on TEE
 	select QCOM_PAS
+	default m
 	help
 	  Enable the generic Peripheral Authentication Service (PAS) provided
 	  by the firmware TEE implementation as the backend.

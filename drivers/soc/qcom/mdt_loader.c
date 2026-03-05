@@ -313,7 +313,7 @@ EXPORT_SYMBOL_GPL(qcom_mdt_read_metadata);
  */
 int qcom_mdt_pas_init(struct device *dev, const struct firmware *fw,
 		      const char *fw_name, int pas_id, phys_addr_t mem_phys,
-		      struct qcom_pas_metadata *ctx)
+		      struct qcom_pas_context *ctx)
 {
 	const struct elf32_phdr *phdrs;
 	const struct elf32_phdr *phdr;
