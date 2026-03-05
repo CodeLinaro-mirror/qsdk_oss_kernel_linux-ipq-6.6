@@ -2305,7 +2305,7 @@ static void __grp_src_query_marked_and_rexmit(struct net_bridge_mcast *brmctx,
 	hlist_for_each_entry(ent, &pg->src_list, node) {
 		if (ent->flags & BR_SGRP_F_SEND) {
 			ent->flags &= ~BR_SGRP_F_SEND;
-			if (ent->timer.expires > lmqt) {
+			if (time_after(ent->timer.expires, lmqt)) {
 				if (brmctx->multicast_querier &&
 				    other_query &&
 				    !timer_pending(&other_query->timer))
