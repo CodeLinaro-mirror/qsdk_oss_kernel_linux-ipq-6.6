@@ -70,8 +70,8 @@
 #define CMN_PLL_CLKS_LOCKED			BIT(8)
 
 #define CMN_PLL_NSS_PPE_FREQ_CTRL		0x98
-#define CMN_PLL_NSS_CLK_SEL			GENMASK(13, 8)
-#define CMN_PLL_PPE_CLK_SEL			GENMASK(5, 0)
+#define CMN_PLL_PPE_CLK_SEL			GENMASK(13, 8)
+#define CMN_PLL_NSS_CLK_SEL			GENMASK(5, 0)
 /* CMNPLL divider for NSS/PPE: 6-bit field, valid range 8-63. */
 #define CMN_PLL_NSS_PPE_DIV_MIN			8
 #define CMN_PLL_NSS_PPE_DIV_MAX			63
