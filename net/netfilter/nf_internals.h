@@ -19,7 +19,9 @@
 #define CTA_FILTER_F_CTA_PROTO_ICMPV6_TYPE	(1 << 9)
 #define CTA_FILTER_F_CTA_PROTO_ICMPV6_CODE	(1 << 10)
 #define CTA_FILTER_F_CTA_PROTO_ICMPV6_ID	(1 << 11)
-#define CTA_FILTER_F_MAX			(1 << 12)
+#define CTA_FILTER_F_CTA_PROTO_SRC_ESP_ID	(1 << 12)
+#define CTA_FILTER_F_CTA_PROTO_DST_ESP_ID	(1 << 13)
+#define CTA_FILTER_F_MAX			(1 << 14)
 #define CTA_FILTER_F_ALL			(CTA_FILTER_F_MAX-1)
 #define CTA_FILTER_FLAG(ctattr) CTA_FILTER_F_ ## ctattr
 
@@ -40,4 +42,10 @@ void nf_hook_entries_delete_raw(struct nf_hook_entries __rcu **pp,
 				const struct nf_hook_ops *reg);
 int nf_hook_entries_insert_raw(struct nf_hook_entries __rcu **pp,
 				const struct nf_hook_ops *reg);
+
+/* nf_conntrack_standalone.c */
+#ifdef CONFIG_NF_CT_PROTO_ESP
+extern int nf_ct_esp_enabled;
+#endif
+
 #endif
