@@ -352,6 +352,22 @@ config QCOM_WCNSS_PIL
 	  verified and booted with the help of the Peripheral Authentication
 	  System (PAS) in TrustZone.
 
+config QCOM_PRIMESS
+	tristate "Qualcomm PRIME Subsystem Driver"
+	depends on OF && ARCH_QCOM
+	select DMA_SHARED_BUFFER
+	select QCOM_MDT_LOADER
+	select QCOM_SCM
+	select QCOM_TMELCOM
+	select TMEL_QMP
+	help
+	  Say y here to enable Prime Subsystem driver for loading firmware
+	  and boot the Prime Subsystem core. The firmware is verified and booted
+	  with the help of Peripheral Authentication System (PAS) in TrustZone/
+	  TME-L depending on the root of trust. The driver also enables the
+	  IOCTL interface for the userspace Prime Subsystem framework to
+	  allocate DMA memory and interact with Prime FW.
+
 config RCAR_REMOTEPROC
 	tristate "Renesas R-Car Gen3 remoteproc support"
 	depends on ARCH_RENESAS || COMPILE_TEST
