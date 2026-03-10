@@ -318,4 +318,12 @@ extern br_get_dst_hook_t __rcu *br_get_dst_hook;
 
 typedef void (br_notify_hook_t)(int group, int event, const void *ptr);
 extern br_notify_hook_t __rcu *br_notify_hook;
+
+/**
+ * br_port_get_sub_br_id - Retrieve sub-bridge ID from a bridge port
+ * @dev: net_device pointer
+ *
+ * Returns the sub_br_id if the device is a bridge port, -ENODEV otherwise.
+ */
+int br_port_get_sub_br_id(struct net_device *dev);
 #endif

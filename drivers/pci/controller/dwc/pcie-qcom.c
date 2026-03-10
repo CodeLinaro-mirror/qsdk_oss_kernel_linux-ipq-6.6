@@ -34,6 +34,7 @@
 #include <linux/nvmem-consumer.h>
 
 #include "../../pci.h"
+#include "../pci-host-common.h"
 #include "pcie-designware.h"
 
 /* PARF registers */
@@ -136,6 +137,7 @@
 #define PARF_INT_ALL_STATUS			0x224
 #define PARF_INT_ALL_CLEAR			0x228
 #define PARF_INT_ALL_MASK			0x22c
+#define PARF_STATUS                             0x230
 
 /* PARF_INT_ALL_{STATUS/CLEAR/MASK} register fields */
 #define PARF_INT_ALL_LINK_DOWN                  BIT(1)
@@ -167,12 +169,17 @@
 
 /* PARF_LTSSM register fields */
 #define LTSSM_EN				BIT(8)
+#define SW_CLEAR_FLUSH_MODE			BIT(10)
+#define FLUSH_MODE				BIT(11)
 
 /* PARF_DEVICE_TYPE register fields */
 #define DEVICE_TYPE_RC				0x4
 
 /* PARF_BDF_TO_SID_CFG fields */
 #define BDF_TO_SID_BYPASS			BIT(0)
+
+/* PARF_STATUS fields */
+#define FLUSH_COMPLETED				BIT(9)
 
 /* ELBI_SYS_CTRL register fields */
 #define ELBI_SYS_CTRL_LT_ENABLE			BIT(0)
@@ -198,6 +205,7 @@
 						PCIE_CAP_SLOT_POWER_LIMIT_SCALE)
 
 #define PERST_DELAY_US				1000
+#define FLUSH_TIMEOUT_US                        100
 
 #define QCOM_PCIE_CRC8_POLYNOMIAL		(BIT(2) | BIT(1) | BIT(0))
 
@@ -342,6 +350,10 @@ struct qcom_pcie {
 	uint32_t domain;
 	uint32_t num_lanes;
 	int global_irq;
+#if IS_ENABLED(CONFIG_PCIEAER)
+	int wake_irq;
+	struct completion wake_event;
+#endif
 	bool enable_vc;
 	bool enable_iatu;
 	u32 iatu_ib0_base_addr[3];	/* Low , High, Limit */
@@ -359,6 +371,12 @@ struct qcom_pcie_info{
 LIST_HEAD(qcom_pcie_list);
 
 #define to_qcom_pcie(x)		dev_get_drvdata((x)->dev)
+
+#if IS_ENABLED(CONFIG_PCIEAER)
+#define WAKE_EVENT_MSEC_DELAY 5000
+static int qcom_pcie_reset_slot(struct pci_host_bridge *bridge,
+				struct pci_dev *pdev);
+#endif
 
 static void qcom_ep_reset_assert(struct qcom_pcie *pcie)
 {
@@ -385,9 +403,23 @@ static int qcom_pcie_start_link(struct dw_pcie *pci)
 	return 0;
 }
 
+#if IS_ENABLED(CONFIG_PCIEAER)
+static irqreturn_t qcom_pcie_wake_irq_handler(int irq, void *data)
+{
+	struct qcom_pcie *pcie = data;
+
+	complete(&pcie->wake_event);
+
+	return IRQ_HANDLED;
+}
+#endif
+
 static irqreturn_t qcom_pcie_global_irq_thread_fn(int irq, void *data)
 {
 	struct qcom_pcie *pcie = data;
+#if IS_ENABLED(CONFIG_PCIEAER)
+	struct dw_pcie_rp *pp = &pcie->pci->pp;
+#endif
 	u32 status, mask;
 
 	status = readl_relaxed(pcie->parf + PARF_INT_ALL_STATUS);
@@ -397,10 +429,22 @@ static irqreturn_t qcom_pcie_global_irq_thread_fn(int irq, void *data)
 
 	status &= mask;
 
-	if (status & PARF_INT_ALL_LINK_DOWN)
+	if (status & PARF_INT_ALL_LINK_DOWN) {
 		dev_info(pcie->pci->dev, "Received Link down event\n");
-	else if (status & PARF_INT_ALL_LINK_UP)
+		/* We should skip pci_host_handle_link_down() for legacy devices
+		 * where AER is not enabled. Else it reset's the secondary or
+		 * sub-ordinate bus, subsequently EP get reset.
+		 * Hence It should be avoided.
+		 *
+		 * To Do: After the upstream patch is merged, remove the AER check
+		 * and verify the behavior with both AER enabled and disabled.
+		 */
+#if IS_ENABLED(CONFIG_PCIEAER)
+		pci_host_handle_link_down(pp->bridge);
+#endif
+	} else if (status & PARF_INT_ALL_LINK_UP) {
 		dev_info(pcie->pci->dev, "Received Link up event\n");
+	}
 
 	return IRQ_HANDLED;
 }
@@ -1445,6 +1489,16 @@ static int qcom_pcie_host_init(struct dw_pcie_rp *pp)
 			goto err_assert_reset;
 	}
 
+	/* reset_slot() callback is required only if AER enabled.
+	 * For non AER case, reset_slot() may reset the endpoint
+	 * if user executes "echo 1 > /sys/bus/pci/devices/<device>/reset"
+	 *
+	 * To Do: After the upstream patch is merged, remove the AER check
+	 * and verify the behavior with both AER enabled and disabled.
+	 */
+#if IS_ENABLED(CONFIG_PCIEAER)
+	pp->bridge->reset_slot = qcom_pcie_reset_slot;
+#endif
 	return 0;
 
 err_assert_reset:
@@ -1825,6 +1879,84 @@ static void qcom_pcie_init_debugfs(struct qcom_pcie *pcie)
 				    qcom_pcie_link_transition_count);
 }
 
+#if IS_ENABLED(CONFIG_PCIEAER)
+static int qcom_pcie_reset_slot(struct pci_host_bridge *bridge,
+				struct pci_dev *pdev)
+{
+	struct pci_bus *bus = bridge->bus;
+	struct dw_pcie_rp *pp = bus->sysdata;
+	struct dw_pcie *pci = to_dw_pcie_from_pp(pp);
+	struct qcom_pcie *pcie = to_qcom_pcie(pci);
+	struct device *dev = pcie->pci->dev;
+	u32 val;
+	int ret;
+
+	/* assert perst to move to RDDM state */
+	qcom_ep_reset_assert(pcie);
+
+	/* Wait for wake IRQ event or WAKE_EVENT_MSEC_DELAY timeout */
+	wait_for_completion_timeout(&pcie->wake_event, msecs_to_jiffies(WAKE_EVENT_MSEC_DELAY));
+
+	/* Reset completion for next use */
+	reinit_completion(&pcie->wake_event);
+
+	/* Wait for the pending transactions to be completed */
+	ret = readl_relaxed_poll_timeout(pcie->parf + PARF_STATUS, val,
+					 val & FLUSH_COMPLETED, 10,
+					 FLUSH_TIMEOUT_US);
+	if (ret) {
+		dev_err(dev, "Flush completion failed: %d\n", ret);
+		goto err_host_deinit;
+	}
+
+	/* Clear the FLUSH_MODE to allow the core to be reset */
+	val = readl(pcie->parf + PARF_LTSSM);
+	val |= SW_CLEAR_FLUSH_MODE;
+	writel(val, pcie->parf + PARF_LTSSM);
+
+	/* Wait for the FLUSH_MODE to clear */
+	ret = readl_relaxed_poll_timeout(pcie->parf + PARF_LTSSM, val,
+					 !(val & FLUSH_MODE), 10,
+					 FLUSH_TIMEOUT_US);
+	if (ret) {
+		dev_err(dev, "Flush mode clear failed: %d\n", ret);
+		goto err_host_deinit;
+	}
+
+	qcom_pcie_host_deinit(pp);
+
+	ret = qcom_pcie_host_init(pp);
+	if (ret) {
+		dev_err(dev, "Host init failed\n");
+		return ret;
+	}
+
+	ret = dw_pcie_setup_rc(pp);
+	if (ret)
+		goto err_host_deinit;
+
+	/*
+	 * Re-enable global IRQ events as the PARF_INT_ALL_MASK register is
+	 * non-sticky.
+	 */
+	if (pcie->global_irq)
+		writel_relaxed(PARF_INT_ALL_LINK_UP | PARF_INT_ALL_LINK_DOWN,
+			       pcie->parf + PARF_INT_ALL_MASK);
+
+	qcom_pcie_start_link(pci);
+	dw_pcie_wait_for_link(pci);
+
+	dev_dbg(dev, "Slot reset completed\n");
+
+	return 0;
+
+err_host_deinit:
+	qcom_pcie_host_deinit(pp);
+
+	return ret;
+}
+#endif
+
 int pcie_rescan(int val)
 {
 	int ret;
@@ -2128,6 +2260,22 @@ static int __qcom_pcie_probe(struct platform_device *pdev,
 			goto err_phy_exit;
 		}
 	}
+
+#if IS_ENABLED(CONFIG_PCIEAER)
+	init_completion(&pcie->wake_event);
+	pcie->wake_irq = platform_get_irq_byname_optional(pdev, "wake_irq");
+	if (pcie->wake_irq >= 0) {
+		ret = devm_request_irq(&pdev->dev, pcie->wake_irq,
+				       qcom_pcie_wake_irq_handler,
+				       IRQF_TRIGGER_FALLING,
+				       "pcie-wake", pcie);
+		if (ret) {
+			dev_err(&pdev->dev, "Unable to request wake irq\n");
+			pm_runtime_disable(&pdev->dev);
+			goto err_phy_exit;
+		}
+	}
+#endif
 
 	if (!rc_idx) {
 		ret = bus_create_file(&pci_bus_type, &bus_attr_slot_rescan);

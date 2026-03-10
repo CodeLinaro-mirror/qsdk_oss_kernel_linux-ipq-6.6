@@ -24,3 +24,15 @@ config NET_DSA_QCA8K_LEDS_SUPPORT
 	help
 	  This enabled support for LEDs present on the Qualcomm Atheros
 	  QCA8K Ethernet switch chips.
+
+config NET_DSA_QCE2204
+	tristate "Qualcomm QCE2204 Ethernet switch support"
+	depends on NET_DSA
+	select NET_DSA_TAG_QCA
+	select PCS_QCE2204
+	select REGMAP
+	help
+	  This enables support for the Qualcomm QCE2204 Ethernet switch chip.
+	  The QCE2204 is a high-performance Layer 2 switch with integrated
+	  PPE (Packet Processing Engine) for hardware offload features.
+

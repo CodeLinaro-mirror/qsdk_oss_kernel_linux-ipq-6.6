@@ -604,7 +604,7 @@ static int parse_xfer_event(struct mhi_controller *mhi_cntrl,
 	{
 		dma_addr_t ptr = MHI_TRE_GET_EV_PTR(event);
 		struct mhi_ring_element *local_rp, *ev_tre;
-		void *dev_rp;
+		void *dev_rp, *next_rp;
 		struct mhi_buf_info *buf_info;
 		u16 xfer_len;
 
@@ -623,6 +623,16 @@ static int parse_xfer_event(struct mhi_controller *mhi_cntrl,
 		result.dir = mhi_chan->dir;
 
 		local_rp = tre_ring->rp;
+
+		next_rp = local_rp + 1;
+		if (next_rp >= tre_ring->base + tre_ring->len)
+			next_rp = tre_ring->base;
+		if (dev_rp != next_rp && !MHI_TRE_DATA_GET_CHAIN(local_rp)) {
+			dev_err(&mhi_cntrl->mhi_dev->dev,
+				"Event element points to an unexpected TRE\n");
+			break;
+		}
+
 		while (local_rp != dev_rp) {
 			buf_info = buf_ring->rp;
 			/* If it's the last TRE, get length from the event */
@@ -1768,6 +1778,24 @@ void mhi_debug_reg_dump(struct mhi_controller *mhi_cntrl)
 		{ "BHIE_IMGTXDB", BHI_IMGTXDB, bhie_base},
 		{ NULL },
 	};
+	struct {
+		const char *name;
+		int offset;
+		void *base;
+	} debug_reg_extended[] = {
+		{ "BHIE_DEBUG_0", BHIE_DEBUG_OFFS(0), mhi_base},
+		{ "BHIE_DEBUG_1", BHIE_DEBUG_OFFS(1), mhi_base},
+		{ "BHIE_DEBUG_2", BHIE_DEBUG_OFFS(2), mhi_base},
+		{ "BHIE_DEBUG_3", BHIE_DEBUG_OFFS(3), mhi_base},
+		{ "BHIE_DEBUG_4", BHIE_DEBUG_OFFS(4), mhi_base},
+		{ "BHIE_DEBUG_5", BHIE_DEBUG_OFFS(5), mhi_base},
+		{ "BHIE_DEBUG_6", BHIE_DEBUG_OFFS(6), mhi_base},
+		{ "BHIE_DEBUG_7", BHIE_DEBUG_OFFS(7), mhi_base},
+		{ "BHIE_DEBUG_8", BHIE_DEBUG_OFFS(8), mhi_base},
+		{ "BHIE_DEBUG_9", BHIE_DEBUG_OFFS(9), mhi_base},
+		{ "BHIE_DEBUG_10", BHIE_DEBUG_OFFS(10), mhi_base},
+		{ NULL },
+	};
 
 	dev_info(&mhi_cntrl->mhi_dev->dev,
 		 "host pm_state:%s dev_state:%s ee:%s\n",
@@ -1798,6 +1826,19 @@ void mhi_debug_reg_dump(struct mhi_controller *mhi_cntrl)
 		dev_info(&mhi_cntrl->mhi_dev->dev,
 			 "reg:%s val:0x%x, ret:%d\n", debug_reg[i].name, val,
 			 ret);
+	}
+
+	if (mhi_cntrl->device_number == QCN9625_DEVICE_NUM ||
+	    mhi_cntrl->device_number == QCN9589_DEVICE_NUM) {
+		for (i = 0; debug_reg_extended[i].name; i++) {
+			if (!debug_reg_extended[i].base)
+				continue;
+
+			ret = mhi_read_reg(mhi_cntrl, debug_reg_extended[i].base,
+					   debug_reg_extended[i].offset, &val);
+			dev_info(&mhi_cntrl->mhi_dev->dev, "reg:%s val:0x%x, ret:%d\n",
+				 debug_reg_extended[i].name, val, ret);
+		}
 	}
 }
 EXPORT_SYMBOL_GPL(mhi_debug_reg_dump);

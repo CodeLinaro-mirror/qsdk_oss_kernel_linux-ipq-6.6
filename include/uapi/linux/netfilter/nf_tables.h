@@ -939,6 +939,7 @@ enum nft_exthdr_attributes {
  * @NFT_META_SDIF: slave device interface index
  * @NFT_META_SDIFNAME: slave device interface name
  * @NFT_META_BRI_BROUTE: packet br_netfilter_broute bit
+ * @NFT_META_INT_PRI: packet int_pri (skb->int_pri)
  */
 enum nft_meta_keys {
 	NFT_META_LEN,
@@ -979,6 +980,7 @@ enum nft_meta_keys {
 	NFT_META_SDIFNAME,
 	NFT_META_BRI_BROUTE,
 	__NFT_META_IIFTYPE,
+	NFT_META_INT_PRI,
 };
 
 /**

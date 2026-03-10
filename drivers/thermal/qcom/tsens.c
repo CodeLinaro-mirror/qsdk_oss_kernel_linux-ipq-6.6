@@ -921,6 +921,20 @@ static int __maybe_unused tsens_set_trips(struct thermal_zone_device *tz, int lo
 	return 0;
 }
 
+#ifdef CONFIG_CPU_THERMAL
+static void tsens_hot_trip(struct thermal_zone_device *tz)
+{
+	/* Do Nothing */
+}
+
+static int tsens_set_trip_hysteresis(struct thermal_zone_device *tz, int trip,
+				     int temperature)
+{
+	/* Do nothing */
+	return 0;
+}
+#endif
+
 static int tsens_enable_irq(struct tsens_priv *priv)
 {
 	int ret;
@@ -1305,6 +1319,9 @@ static const struct of_device_id tsens_table[] = {
 		.compatible = "qcom,ipq8074-tsens",
 		.data = &data_ipq8074,
 	}, {
+		.compatible = "qcom,ipq5210-tsens",
+		.data = &data_ipq5210,
+	}, {
 		.compatible = "qcom,ipq5332-tsens",
 		.data = &data_ipq5332,
 	}, {
@@ -1360,6 +1377,8 @@ static const struct thermal_zone_device_ops tsens_of_ops = {
 	.critical = tsens_critical,
 #ifdef CONFIG_CPU_THERMAL
 	.set_trips = tsens_set_trips,
+	.set_trip_hyst = tsens_set_trip_hysteresis,
+	.hot = tsens_hot_trip,
 #else
 	.set_trip_temp = tsens_set_trip_temp,
 	.set_trip_activate = tsens_set_trip_activate,

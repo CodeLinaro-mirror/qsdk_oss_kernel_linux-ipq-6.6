@@ -365,8 +365,11 @@ __clk_rcg2_select_conf(struct clk_hw *hw, const struct freq_multi_tbl *f,
 	 * due to parent not found in every config.
 	 */
 	if (unlikely(!best_conf)) {
-		WARN(1, "%s: can't find a configuration for rate %lu\n",
-		     name, req_rate);
+		/* Only warn on the valid parent clock. */
+		if (parent_rate != 0) {
+			WARN(1, "%s: can't find a configuration for rate %lu\n",
+			     name, req_rate);
+		}
 		return ERR_PTR(-EINVAL);
 	}
 

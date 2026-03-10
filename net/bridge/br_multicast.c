@@ -2053,6 +2053,12 @@ int br_multicast_add_port(struct net_bridge_port *port)
 	if (!port->mcast_stats)
 		return -ENOMEM;
 
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	struct net_bridge_mcast_port *pmctx = &port->multicast_ctx;
+
+	pmctx->mcast_flush_all = false;
+#endif
+
 	return 0;
 }
 
@@ -2066,11 +2072,13 @@ void br_multicast_del_port(struct net_bridge_port *port)
 	spin_lock_bh(&br->multicast_lock);
 
 #if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	struct net_bridge_mcast_port *pmctx = &port->multicast_ctx;
+
 	/*
 	 * Send Flush ALL Event for the given MCAST LAN port.
 	 */
-	if ((port->flags & BR_MCAST_MCUC_HW_OFFLOAD) && (!port->mcast_flush_all)) {
-		port->mcast_flush_all = true;
+	if ((port->flags & BR_MCAST_MCUC_HW_OFFLOAD) && (!pmctx->mcast_flush_all)) {
+		pmctx->mcast_flush_all = true;
 		br_mcast_offload_send_event((void *)port, NULL, BR_MCAST_EVENT_FLUSH_ALL);
 	}
 #endif
@@ -2131,12 +2139,22 @@ static void __br_multicast_enable_port_ctx(struct net_bridge_mcast_port *pmctx)
 	}
 }
 
-void br_multicast_enable_port(struct net_bridge_port *port)
+static void br_multicast_enable_port_ctx(struct net_bridge_mcast_port *pmctx)
 {
-	struct net_bridge *br = port->br;
+	struct net_bridge *br = pmctx->port->br;
 
 	spin_lock_bh(&br->multicast_lock);
-	__br_multicast_enable_port_ctx(&port->multicast_ctx);
+	if (br_multicast_port_ctx_is_vlan(pmctx) &&
+	    !(pmctx->vlan->priv_flags & BR_VLFLAG_MCAST_ENABLED)) {
+		spin_unlock_bh(&br->multicast_lock);
+		return;
+	}
+
+#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	pmctx->mcast_flush_all = false;
+#endif
+
+	__br_multicast_enable_port_ctx(pmctx);
 	spin_unlock_bh(&br->multicast_lock);
 }
 
@@ -2163,6 +2181,64 @@ static void __br_multicast_disable_port_ctx(struct net_bridge_mcast_port *pmctx)
 	br_multicast_rport_del_notify(pmctx, del);
 }
 
+static void br_multicast_disable_port_ctx(struct net_bridge_mcast_port *pmctx)
+{
+	struct net_bridge *br = pmctx->port->br;
+
+	spin_lock_bh(&br->multicast_lock);
+	if (br_multicast_port_ctx_is_vlan(pmctx) &&
+	    !(pmctx->vlan->priv_flags & BR_VLFLAG_MCAST_ENABLED)) {
+		spin_unlock_bh(&br->multicast_lock);
+		return;
+	}
+
+	__br_multicast_disable_port_ctx(pmctx);
+	spin_unlock_bh(&br->multicast_lock);
+}
+
+static void br_multicast_toggle_port(struct net_bridge_port *port, bool on)
+{
+#if IS_ENABLED(CONFIG_BRIDGE_VLAN_FILTERING)
+	if (br_opt_get(port->br, BROPT_MCAST_VLAN_SNOOPING_ENABLED)) {
+		struct net_bridge_vlan_group *vg;
+		struct net_bridge_vlan *vlan;
+
+		rcu_read_lock();
+		vg = nbp_vlan_group_rcu(port);
+		if (!vg) {
+			rcu_read_unlock();
+			return;
+		}
+
+		/* iterate each vlan, toggle vlan multicast context */
+		list_for_each_entry_rcu(vlan, &vg->vlan_list, vlist) {
+			struct net_bridge_mcast_port *pmctx =
+						&vlan->port_mcast_ctx;
+			u8 state = br_vlan_get_state(vlan);
+			/* enable vlan multicast context when state is
+			 * LEARNING or FORWARDING
+			 */
+			if (on && br_vlan_state_allowed(state, true))
+				br_multicast_enable_port_ctx(pmctx);
+			else
+				br_multicast_disable_port_ctx(pmctx);
+		}
+		rcu_read_unlock();
+		return;
+	}
+#endif
+	/* toggle port multicast context when vlan snooping is disabled */
+	if (on)
+		br_multicast_enable_port_ctx(&port->multicast_ctx);
+	else
+		br_multicast_disable_port_ctx(&port->multicast_ctx);
+}
+
+void br_multicast_enable_port(struct net_bridge_port *port)
+{
+	br_multicast_toggle_port(port, true);
+}
+
 void br_multicast_disable_port(struct net_bridge_port *port)
 {
 	spin_lock_bh(&port->br->multicast_lock);
@@ -2171,14 +2247,16 @@ void br_multicast_disable_port(struct net_bridge_port *port)
 	 * Send FLUSH ALL Event for the given MCAST LAN port.
 	 */
 #if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
-	if ((port->flags & BR_MCAST_MCUC_HW_OFFLOAD) && (!port->mcast_flush_all)) {
-		port->mcast_flush_all = true;
+	struct net_bridge_mcast_port *pmctx = &port->multicast_ctx;
+
+	if ((port->flags & BR_MCAST_MCUC_HW_OFFLOAD) && (!pmctx->mcast_flush_all)) {
+		pmctx->mcast_flush_all = true;
 		br_mcast_offload_send_event((void *)port, NULL, BR_MCAST_EVENT_FLUSH_ALL);
 	}
 #endif
 
-	__br_multicast_disable_port_ctx(&port->multicast_ctx);
 	spin_unlock_bh(&port->br->multicast_lock);
+	br_multicast_toggle_port(port, false);
 }
 
 static int __grp_src_delete_marked(struct net_bridge_port_group *pg)
@@ -4298,6 +4376,32 @@ static void __br_multicast_stop(struct net_bridge_mcast *brmctx)
 #endif
 }
 
+void br_multicast_update_vlan_mcast_ctx(struct net_bridge_vlan *v, u8 state)
+{
+#if IS_ENABLED(CONFIG_BRIDGE_VLAN_FILTERING)
+	struct net_bridge *br;
+
+	if (!br_vlan_should_use(v))
+		return;
+
+	if (br_vlan_is_master(v))
+		return;
+
+	br = v->port->br;
+
+	if (!br_opt_get(br, BROPT_MCAST_VLAN_SNOOPING_ENABLED))
+		return;
+
+	if (br_vlan_state_allowed(state, true))
+		br_multicast_enable_port_ctx(&v->port_mcast_ctx);
+
+	/* Multicast is not disabled for the vlan when it goes in
+	 * blocking state because the timers will expire and stop by
+	 * themselves without sending more queries.
+	 */
+#endif
+}
+
 void br_multicast_toggle_one_vlan(struct net_bridge_vlan *vlan, bool on)
 {
 	struct net_bridge *br;
@@ -4391,9 +4495,9 @@ int br_multicast_toggle_vlan_snooping(struct net_bridge *br, bool on,
 		__br_multicast_open(&br->multicast_ctx);
 	list_for_each_entry(p, &br->port_list, list) {
 		if (on)
-			br_multicast_disable_port(p);
+			br_multicast_disable_port_ctx(&p->multicast_ctx);
 		else
-			br_multicast_enable_port(p);
+			br_multicast_enable_port_ctx(&p->multicast_ctx);
 	}
 
 	list_for_each_entry(vlan, &vg->vlan_list, vlist)
@@ -4445,22 +4549,23 @@ void br_multicast_stop(struct net_bridge *br)
 void br_multicast_dev_del(struct net_bridge *br)
 {
 	struct net_bridge_mdb_entry *mp;
-#if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
-	struct net_bridge_port *p;
-#endif
 	HLIST_HEAD(deleted_head);
 	struct hlist_node *tmp;
 
 	spin_lock_bh(&br->multicast_lock);
 
 #if IS_ENABLED(CONFIG_BRIDGE_MCAST_OFFLOAD)
+	struct net_bridge_port *p;
+
 	/* multicast_lock protects port_list, no RCU lock needed */
 	list_for_each_entry(p, &br->port_list, list) {
+		struct net_bridge_mcast_port *pmctx = &p->multicast_ctx;
+
 		/*
 		 * Send FLUSH ALL Event for the given MCAST LAN port.
 		 */
-		if ((p->flags & BR_MCAST_MCUC_HW_OFFLOAD) && (!p->mcast_flush_all)) {
-			p->mcast_flush_all = true;
+		if ((p->flags & BR_MCAST_MCUC_HW_OFFLOAD) && (!pmctx->mcast_flush_all)) {
+			pmctx->mcast_flush_all = true;
 			br_mcast_offload_send_event((void *)p, NULL, BR_MCAST_EVENT_FLUSH_ALL);
 		}
 	}
@@ -4828,6 +4933,14 @@ void br_multicast_set_query_intvl(struct net_bridge_mcast *brmctx,
 		intvl_jiffies = BR_MULTICAST_QUERY_INTVL_MIN;
 	}
 
+	if (intvl_jiffies > BR_MULTICAST_QUERY_INTVL_MAX) {
+		br_info(brmctx->br,
+			"trying to set multicast query interval above maximum, setting to %lu (%ums)\n",
+			jiffies_to_clock_t(BR_MULTICAST_QUERY_INTVL_MAX),
+			jiffies_to_msecs(BR_MULTICAST_QUERY_INTVL_MAX));
+		intvl_jiffies = BR_MULTICAST_QUERY_INTVL_MAX;
+	}
+
 	brmctx->multicast_query_interval = intvl_jiffies;
 }
 
@@ -4842,6 +4955,14 @@ void br_multicast_set_startup_query_intvl(struct net_bridge_mcast *brmctx,
 			jiffies_to_clock_t(BR_MULTICAST_STARTUP_QUERY_INTVL_MIN),
 			jiffies_to_msecs(BR_MULTICAST_STARTUP_QUERY_INTVL_MIN));
 		intvl_jiffies = BR_MULTICAST_STARTUP_QUERY_INTVL_MIN;
+	}
+
+	if (intvl_jiffies > BR_MULTICAST_STARTUP_QUERY_INTVL_MAX) {
+		br_info(brmctx->br,
+			"trying to set multicast startup query interval above maximum, setting to %lu (%ums)\n",
+			jiffies_to_clock_t(BR_MULTICAST_STARTUP_QUERY_INTVL_MAX),
+			jiffies_to_msecs(BR_MULTICAST_STARTUP_QUERY_INTVL_MAX));
+		intvl_jiffies = BR_MULTICAST_STARTUP_QUERY_INTVL_MAX;
 	}
 
 	brmctx->multicast_startup_query_interval = intvl_jiffies;

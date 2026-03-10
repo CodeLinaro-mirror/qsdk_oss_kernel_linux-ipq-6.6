@@ -249,7 +249,7 @@ static noinline bool
 nf_nat_used_tuple_new(const struct nf_conntrack_tuple *tuple,
 		      const struct nf_conn *ignored_ct)
 {
-	static const unsigned long uses_nat = IPS_NAT_MASK | IPS_SEQ_ADJUST_BIT;
+	static const unsigned long uses_nat = IPS_NAT_MASK | IPS_SEQ_ADJUST;
 	const struct nf_conntrack_tuple_hash *thash;
 	const struct nf_conntrack_zone *zone;
 	struct nf_conn *ct;
@@ -288,8 +288,14 @@ nf_nat_used_tuple_new(const struct nf_conntrack_tuple *tuple,
 	zone = nf_ct_zone(ignored_ct);
 
 	thash = nf_conntrack_find_get(net, zone, tuple);
-	if (unlikely(!thash)) /* clashing entry went away */
-		return false;
+	if (unlikely(!thash)) {
+		struct nf_conntrack_tuple reply;
+
+		nf_ct_invert_tuple(&reply, tuple);
+		thash = nf_conntrack_find_get(net, zone, &reply);
+		if (!thash) /* clashing entry went away */
+			return false;
+	}
 
 	ct = nf_ct_tuplehash_to_ctrack(thash);
 
@@ -832,16 +838,19 @@ nf_nat_setup_info(struct nf_conn *ct,
 				      &ct->tuplehash[IP_CT_DIR_ORIGINAL].tuple);
 		lock = &nf_nat_locks[srchash % CONNTRACK_LOCKS];
 		spin_lock_bh(lock);
-		hlist_add_head_rcu(&ct->nat_bysource,
-				   &nf_nat_bysource[srchash]);
+		/* The ct could be already in nf_nat_bysource in some race condition cases.*/
+		if (!(ct->status & IPS_SRC_NAT_DONE)) {
+			hlist_add_head_rcu(&ct->nat_bysource,
+				 &nf_nat_bysource[srchash]);
+			ct->status |= IPS_SRC_NAT_DONE;
+		}
+
 		spin_unlock_bh(lock);
 	}
 
 	/* It's done. */
 	if (maniptype == NF_NAT_MANIP_DST)
 		ct->status |= IPS_DST_NAT_DONE;
-	else
-		ct->status |= IPS_SRC_NAT_DONE;
 
 	return NF_ACCEPT;
 }
