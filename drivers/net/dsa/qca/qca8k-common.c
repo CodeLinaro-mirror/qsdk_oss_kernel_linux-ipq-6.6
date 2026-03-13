@@ -1016,7 +1016,7 @@ int qca8k_port_fdb_dump(struct dsa_switch *ds, int port,
 	return 0;
 }
 
-int qca8k_port_mdb_add(struct dsa_switch *ds, int port,
+int __maybe_unused qca8k_port_mdb_add(struct dsa_switch *ds, int port,
 		       const struct switchdev_obj_port_mdb *mdb,
 		       struct dsa_db db)
 {
@@ -1031,7 +1031,7 @@ int qca8k_port_mdb_add(struct dsa_switch *ds, int port,
 					   QCA8K_ATU_STATUS_STATIC);
 }
 
-int qca8k_port_mdb_del(struct dsa_switch *ds, int port,
+int __maybe_unused qca8k_port_mdb_del(struct dsa_switch *ds, int port,
 		       const struct switchdev_obj_port_mdb *mdb,
 		       struct dsa_db db)
 {
