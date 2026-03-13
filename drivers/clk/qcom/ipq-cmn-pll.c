@@ -1304,6 +1304,60 @@ static struct clk_hw *ipq_cmn_pll_eth_pon_register(struct platform_device *pdev,
 	return &eth_pon_clk->hw;
 }
 
+/*
+ * Register a composite clock that combines a fixed-rate clock with a gate.
+ * This is used for clocks that need both a specific fixed rate and gate control.
+ */
+static struct clk_hw *ipq_cmn_pll_register_fixed_gate(struct device *dev,
+						      const char *name,
+						      struct clk_hw *parent_hw,
+						      unsigned long rate,
+						      void __iomem *base,
+						      u8 enable_bit)
+{
+	struct clk_parent_data pdata = { .hw = parent_hw };
+	struct clk_fixed_rate *fixed;
+	struct clk_gate *gate;
+	spinlock_t *lock;
+
+	/* Allocate and initialize spinlock for gate protection */
+	lock = devm_kzalloc(dev, sizeof(*lock), GFP_KERNEL);
+	if (!lock)
+		return ERR_PTR(-ENOMEM);
+
+	spin_lock_init(lock);
+
+	/* Allocate gate structure */
+	gate = devm_kzalloc(dev, sizeof(*gate), GFP_KERNEL);
+	if (!gate)
+		return ERR_PTR(-ENOMEM);
+
+	/* Allocate fixed-rate structure */
+	fixed = devm_kzalloc(dev, sizeof(*fixed), GFP_KERNEL);
+	if (!fixed)
+		return ERR_PTR(-ENOMEM);
+
+	/* Setup gate */
+	gate->reg = base + CMN_PLL_OUTPUT_RELATED_1;
+	gate->bit_idx = enable_bit;
+	gate->lock = lock;
+
+	/* Setup fixed-rate */
+	fixed->fixed_rate = rate;
+
+	/*
+	 * Use devm_clk_hw_register_composite_pdata() so devres handles
+	 * cleanup automatically, avoiding the need for an explicit
+	 * devm_add_action_or_reset() and preventing double-unregister
+	 * or memory leaks when the device is removed.
+	 */
+	return devm_clk_hw_register_composite_pdata(dev, name, &pdata, 1,
+						    NULL, NULL,
+						    &fixed->hw, &clk_fixed_rate_ops,
+						    &gate->hw, &clk_gate_ops,
+						    0);
+}
+
 static int ipq_cmn_pll_register_clks(struct platform_device *pdev)
 {
 	const struct cmn_pll_fixed_output_clk *p, *fixed_clk;
@@ -1343,13 +1397,12 @@ static int ipq_cmn_pll_register_clks(struct platform_device *pdev)
 	/* Register the fixed rate output clocks (common for all platforms) */
 	for (i = 0; fixed_clk[i].name; i++) {
 		if (fixed_clk[i].enable_bit != -1) {
-			hw = devm_clk_hw_register_gate(dev, fixed_clk[i].name,
-						       clk_hw_get_name(cmn_pll_hw),
-						       0,
-						       cmn_pll->base + CMN_PLL_OUTPUT_RELATED_1,
-						       fixed_clk[i].enable_bit,
-						       0,
-						       NULL);
+			hw = ipq_cmn_pll_register_fixed_gate(dev,
+							     fixed_clk[i].name,
+							     cmn_pll_hw,
+							     fixed_clk[i].rate,
+							     cmn_pll->base,
+							     fixed_clk[i].enable_bit);
 		} else if (fixed_clk[i].rate) {
 			hw = clk_hw_register_fixed_rate_parent_hw(dev,
 							fixed_clk[i].name,
@@ -1454,16 +1507,17 @@ static int ipq_cmn_pll_clk_probe(struct platform_device *pdev)
 
 static void ipq_cmn_pll_clk_remove(struct platform_device *pdev)
 {
+	const struct cmn_pll_fixed_output_clk *fixed_clk;
 	struct clk_hw_onecell_data *hw_data = platform_get_drvdata(pdev);
 	int i;
 
-	/*
-	 * The clock with index CMN_PLL_CLK is unregistered by
-	 * device management.
-	 */
-	for (i = 0; i < hw_data->num; i++) {
-		if (i != CMN_PLL_CLK)
-			clk_hw_unregister(hw_data->hws[i]);
+	fixed_clk = device_get_match_data(&pdev->dev);
+	if (!fixed_clk)
+		return;
+
+	for (i = 0; fixed_clk[i].name; i++) {
+		if (fixed_clk[i].enable_bit == -1 && fixed_clk[i].rate != 0)
+			clk_hw_unregister(hw_data->hws[fixed_clk[i].id]);
 	}
 }
 
