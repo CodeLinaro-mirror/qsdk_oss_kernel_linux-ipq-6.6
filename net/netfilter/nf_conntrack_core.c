@@ -32,7 +32,7 @@
 #include <linux/mm.h>
 #include <linux/nsproxy.h>
 #include <linux/rculist_nulls.h>
-
+#include <net/xfrm.h>
 #include <net/netfilter/nf_conntrack.h>
 #include <net/netfilter/nf_conntrack_bpf.h>
 #include <net/netfilter/nf_conntrack_l4proto.h>
@@ -327,6 +327,13 @@ nf_ct_get_tuple(const struct sk_buff *skb,
 	case IPPROTO_GRE:
 		return gre_pkt_to_tuple(skb, dataoff, net, tuple);
 #endif
+#ifdef CONFIG_NF_CT_PROTO_ESP
+	case IPPROTO_ESP:
+		if (nf_ct_esp_enabled)
+			return esp_pkt_to_tuple(skb, dataoff, net, tuple);
+		else
+			break;
+#endif
 	case IPPROTO_TCP:
 	case IPPROTO_UDP:
 #ifdef CONFIG_NF_CT_PROTO_UDPLITE
@@ -469,6 +476,10 @@ nf_ct_invert_tuple(struct nf_conntrack_tuple *inverse,
 	case IPPROTO_ICMPV6:
 		return nf_conntrack_invert_icmpv6_tuple(inverse, orig);
 #endif
+#ifdef CONFIG_NF_CT_PROTO_ESP
+	case IPPROTO_ESP:
+		return nf_conntrack_invert_esp_tuple(inverse, orig);
+#endif
 	}
 
 	inverse->src.u.all = orig->dst.u.all;
@@ -577,6 +588,13 @@ static void destroy_gre_conntrack(struct nf_conn *ct)
 #endif
 }
 
+static void destroy_esp_conntrack(struct nf_conn *ct)
+{
+#ifdef CONFIG_NF_CT_PROTO_ESP
+	destroy_esp_conntrack_entry(ct);
+#endif
+}
+
 void nf_ct_destroy(struct nf_conntrack *nfct)
 {
 	struct nf_conn *ct = (struct nf_conn *)nfct;
@@ -590,6 +608,9 @@ void nf_ct_destroy(struct nf_conntrack *nfct)
 
 	if (unlikely(nf_ct_protonum(ct) == IPPROTO_GRE))
 		destroy_gre_conntrack(ct);
+
+	if (unlikely(nf_ct_protonum(ct) == IPPROTO_ESP))
+		destroy_esp_conntrack(ct);
 
 	/* Expectations will have been removed in clean_from_lists,
 	 * except TFTP can create an expectation on the first packet,
@@ -1976,6 +1997,13 @@ static int nf_conntrack_handle_packet(struct nf_conn *ct,
 	case IPPROTO_GRE:
 		return nf_conntrack_gre_packet(ct, skb, dataoff,
 					       ctinfo, state);
+#endif
+#ifdef CONFIG_NF_CT_PROTO_ESP
+	case IPPROTO_ESP:
+		if (nf_ct_esp_enabled)
+			return nf_conntrack_esp_packet(ct, skb, dataoff,
+						       ctinfo, state);
+		break;
 #endif
 	}
 

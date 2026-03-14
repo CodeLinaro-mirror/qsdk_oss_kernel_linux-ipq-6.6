@@ -62,6 +62,14 @@ __udp_manip_pkt(struct sk_buff *skb,
 	*portptr = newport;
 }
 
+static bool esp_manip_pkt(struct sk_buff *skb,
+			  unsigned int iphdroff, unsigned int hdroff,
+			  const struct nf_conntrack_tuple *tuple,
+			  enum nf_nat_manip_type maniptype)
+{
+	return true;
+}
+
 static bool udp_manip_pkt(struct sk_buff *skb,
 			  unsigned int iphdroff, unsigned int hdroff,
 			  const struct nf_conntrack_tuple *tuple,
@@ -344,6 +352,9 @@ static bool l4proto_manip_pkt(struct sk_buff *skb,
 	case IPPROTO_GRE:
 		return gre_manip_pkt(skb, iphdroff, hdroff,
 				     tuple, maniptype);
+	case IPPROTO_ESP:
+		return esp_manip_pkt(skb, iphdroff, hdroff,
+				     tuple, maniptype);
 	}
 
 	/* If we don't know protocol -- no error, pass it unmodified. */
@@ -375,6 +386,11 @@ static bool nf_nat_ipv4_manip_pkt(struct sk_buff *skb,
 		csum_replace4(&iph->check, iph->daddr, target->dst.u3.ip);
 		iph->daddr = target->dst.u3.ip;
 	}
+
+#ifdef CONFIG_NF_CT_PROTO_ESP
+	nf_ct_esp_manip_packet(skb, target, maniptype);
+#endif
+
 	return true;
 }
 

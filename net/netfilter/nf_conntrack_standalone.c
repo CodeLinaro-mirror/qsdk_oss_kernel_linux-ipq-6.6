@@ -31,6 +31,12 @@ module_param(enable_hooks, bool, 0000);
 
 unsigned int nf_conntrack_net_id __read_mostly;
 
+#ifdef CONFIG_NF_CT_PROTO_ESP
+/* Sysctl to enable/disable ESP conntrack functionality */
+int nf_ct_esp_enabled __read_mostly;
+EXPORT_SYMBOL_GPL(nf_ct_esp_enabled);
+#endif
+
 #ifdef CONFIG_NF_CONNTRACK_PROCFS
 void
 print_tuple(struct seq_file *s, const struct nf_conntrack_tuple *tuple,
@@ -88,6 +94,14 @@ print_tuple(struct seq_file *s, const struct nf_conntrack_tuple *tuple,
 		seq_printf(s, "srckey=0x%x dstkey=0x%x ",
 			   ntohs(tuple->src.u.gre.key),
 			   ntohs(tuple->dst.u.gre.key));
+		break;
+	case IPPROTO_ESP:
+		/* Both src and dest esp.id should be equal but showing both
+		 * will help find errors.
+		 */
+		seq_printf(s, "srcid=0x%x dstid=0x%x ",
+			   ntohs(tuple->src.u.esp.id),
+			   ntohs(tuple->dst.u.esp.id));
 		break;
 	default:
 		break;
@@ -664,6 +678,11 @@ enum nf_ct_sysctl_index {
 	NF_SYSCTL_CT_PROTO_TIMEOUT_GRE,
 	NF_SYSCTL_CT_PROTO_TIMEOUT_GRE_STREAM,
 #endif
+#ifdef CONFIG_NF_CT_PROTO_ESP
+	NF_SYSCTL_CT_PROTO_ESP_ENABLED,
+	NF_SYSCTL_CT_PROTO_TIMEOUT_ESP_UNREPLIED,
+	NF_SYSCTL_CT_PROTO_TIMEOUT_ESP_REPLIED,
+#endif
 
 	__NF_SYSCTL_CT_LAST_SYSCTL,
 };
@@ -1009,6 +1028,27 @@ static struct ctl_table nf_ct_sysctl_table[] = {
 		.proc_handler   = proc_dointvec_jiffies,
 	},
 #endif
+#ifdef CONFIG_NF_CT_PROTO_ESP
+	[NF_SYSCTL_CT_PROTO_ESP_ENABLED] = {
+		.procname	= "nf_conntrack_esp_enabled",
+		.data		= &nf_ct_esp_enabled,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec,
+	},
+	[NF_SYSCTL_CT_PROTO_TIMEOUT_ESP_UNREPLIED] = {
+		.procname	= "nf_conntrack_esp_timeout_unreplied",
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec_jiffies,
+	},
+	[NF_SYSCTL_CT_PROTO_TIMEOUT_ESP_REPLIED] = {
+		.procname	= "nf_conntrack_esp_timeout_replied",
+		.maxlen		= sizeof(unsigned int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec_jiffies,
+	},
+#endif
 	{}
 };
 
@@ -1117,6 +1157,17 @@ static void nf_conntrack_standalone_init_gre_sysctl(struct net *net,
 #endif
 }
 
+static void nf_conntrack_standalone_init_esp_sysctl(struct net *net,
+						    struct ctl_table *table)
+{
+#ifdef CONFIG_NF_CT_PROTO_ESP
+	struct nf_esp_net *en = nf_esp_pernet(net);
+
+	table[NF_SYSCTL_CT_PROTO_TIMEOUT_ESP_UNREPLIED].data = &en->esp_timeouts[ESP_CT_UNREPLIED];
+	table[NF_SYSCTL_CT_PROTO_TIMEOUT_ESP_REPLIED].data = &en->esp_timeouts[ESP_CT_REPLIED];
+#endif
+}
+
 static int nf_conntrack_standalone_init_sysctl(struct net *net)
 {
 	struct nf_conntrack_net *cnet = nf_ct_pernet(net);
@@ -1153,6 +1204,7 @@ static int nf_conntrack_standalone_init_sysctl(struct net *net)
 	nf_conntrack_standalone_init_sctp_sysctl(net, table);
 	nf_conntrack_standalone_init_dccp_sysctl(net, table);
 	nf_conntrack_standalone_init_gre_sysctl(net, table);
+	nf_conntrack_standalone_init_esp_sysctl(net, table);
 
 	/* Don't allow non-init_net ns to alter global sysctls */
 	if (!net_eq(&init_net, net)) {

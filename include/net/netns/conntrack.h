@@ -77,6 +77,20 @@ struct nf_gre_net {
 };
 #endif
 
+#ifdef CONFIG_NF_CT_PROTO_ESP
+enum esp_conntrack {
+	ESP_CT_UNREPLIED,
+	ESP_CT_REPLIED,
+	ESP_CT_MAX
+};
+
+struct nf_esp_net {
+	spinlock_t id_list_lock;
+	struct list_head id_list;
+	unsigned int esp_timeouts[ESP_CT_MAX];
+};
+#endif
+
 struct nf_ip_net {
 	struct nf_generic_net   generic;
 	struct nf_tcp_net	tcp;
@@ -91,6 +105,9 @@ struct nf_ip_net {
 #endif
 #ifdef CONFIG_NF_CT_PROTO_GRE
 	struct nf_gre_net	gre;
+#endif
+#ifdef CONFIG_NF_CT_PROTO_ESP
+	struct nf_esp_net	esp;
 #endif
 };
 
