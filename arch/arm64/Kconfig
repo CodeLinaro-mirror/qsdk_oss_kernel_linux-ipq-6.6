@@ -2300,6 +2300,13 @@ config SCID_LLCC
 	  code to program SYS_CLUSTERTHREADSID_EL1 with the mapped SID value. Per-CPU
 	  default SID values are captured at boot.
 
+config IPQ_PON
+	bool "Enable PON config"
+	default n
+	help
+	 This is a hint to the NSS-DP and PON driver that the PON
+	 is enabled in the build.
+
 endmenu # "Kernel Features"
 
 menu "Boot options"
