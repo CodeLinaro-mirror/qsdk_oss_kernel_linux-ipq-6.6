@@ -278,27 +278,89 @@ static int ipq_cmn_pll_find_freq_index(unsigned long parent_rate)
 	return index;
 }
 
-static unsigned long clk_cmn_pll_recalc_rate(struct clk_hw *hw,
-					     unsigned long parent_rate)
+/**
+ * clk_cmn_pll_calc_rate - Compute the 64-bit CMN PLL output rate
+ * @regmap: CMN PLL regmap
+ * @ref_rate: Reference clock rate (parent of CMN PLL, fits in 32 bits)
+ *
+ * The CMN PLL rate = ref_rate * 2 * factor / ref_div.
+ * On 32-bit platforms this result (~12 GHz) exceeds unsigned long, so we
+ * always compute it as u64 to avoid truncation in callers.
+ *
+ * Returns the actual CMN PLL rate as u64.
+ */
+static u64 clk_cmn_pll_calc_rate(struct regmap *regmap, unsigned long ref_rate)
 {
-	struct clk_cmn_pll *cmn_pll = to_clk_cmn_pll(hw);
 	u32 val, factor, ref_div;
 
 	/*
 	 * The value of CMN_PLL_DIVIDER_CTRL_FACTOR is automatically adjusted
 	 * by HW according to the parent clock rate.
 	 */
-	regmap_read(cmn_pll->regmap, CMN_PLL_DIVIDER_CTRL, &val);
+	regmap_read(regmap, CMN_PLL_DIVIDER_CTRL, &val);
 	factor = FIELD_GET(CMN_PLL_DIVIDER_CTRL_FACTOR, val);
 	if (WARN_ON(factor == 0))
 		factor = 1;
 
-	regmap_read(cmn_pll->regmap, CMN_PLL_REFCLK_CONFIG, &val);
+	regmap_read(regmap, CMN_PLL_REFCLK_CONFIG, &val);
 	ref_div = FIELD_GET(CMN_PLL_REFCLK_DIV, val);
 	if (WARN_ON(ref_div == 0))
 		ref_div = 1;
 
-	return div_u64((u64)parent_rate * 2 * factor, ref_div);
+	return div_u64((u64)ref_rate * 2 * factor, ref_div);
+}
+
+/**
+ * clk_cmn_pll_get_parent_rate64 - Get the 64-bit CMN PLL rate from a child clock
+ * @hw: Child clock hw (NSS, PPE, or PON clock whose parent is the CMN PLL)
+ *
+ * On 32-bit platforms, the CMN PLL rate (~12 GHz) overflows unsigned long.
+ * When the clock framework passes parent_rate to a child's recalc_rate /
+ * set_rate / round_rate callback, the value is already truncated to 32 bits,
+ * giving a wrong result.
+ *
+ * This helper traverses up to the grandparent (reference clock, ~48 MHz,
+ * which fits in 32 bits) and recomputes the actual 64-bit CMN PLL rate
+ * directly from the hardware registers.
+ *
+ * Returns the actual CMN PLL rate as u64, or 0 on error.
+ */
+static u64 clk_cmn_pll_get_parent_rate64(struct clk_hw *hw)
+{
+	struct clk_cmn_pll *clk = to_clk_cmn_pll(hw);
+	struct clk_hw *cmn_pll_hw;
+	struct clk_hw *ref_hw;
+	unsigned long ref_rate;
+
+	/* hw is NSS/PPE/PON clock; its parent is CMN PLL */
+	cmn_pll_hw = clk_hw_get_parent(hw);
+	if (!cmn_pll_hw)
+		return 0;
+
+	/* CMN PLL's parent is the reference clock (~48 MHz, fits in 32 bits) */
+	ref_hw = clk_hw_get_parent(cmn_pll_hw);
+	if (!ref_hw)
+		return 0;
+
+	ref_rate = clk_hw_get_rate(ref_hw);
+	if (!ref_rate)
+		return 0;
+
+	return clk_cmn_pll_calc_rate(clk->regmap, ref_rate);
+}
+
+static unsigned long clk_cmn_pll_recalc_rate(struct clk_hw *hw,
+					     unsigned long parent_rate)
+{
+	struct clk_cmn_pll *cmn_pll = to_clk_cmn_pll(hw);
+
+	/*
+	 * NOTE: On 32-bit platforms, the CMN PLL rate (~12 GHz) exceeds
+	 * unsigned long (max ~4.29 GHz) and will be truncated here.
+	 * Child clocks (NSS/PPE/PON) use clk_cmn_pll_get_parent_rate64()
+	 * to obtain the correct 64-bit rate and avoid this truncation.
+	 */
+	return (unsigned long)clk_cmn_pll_calc_rate(cmn_pll->regmap, parent_rate);
 }
 
 static int clk_cmn_pll_determine_rate(struct clk_hw *hw,
@@ -428,6 +490,7 @@ static unsigned long clk_pon_refclk_recalc_rate(struct clk_hw *hw,
 						unsigned long parent_rate)
 {
 	struct clk_cmn_pll *pon_clk = to_clk_cmn_pll(hw);
+	u64 pll_rate;
 	u32 val, div;
 
 	regmap_read(pon_clk->regmap, CMN_PLL_PON_CONFIG, &val);
@@ -441,29 +504,51 @@ static unsigned long clk_pon_refclk_recalc_rate(struct clk_hw *hw,
 	if (WARN_ON_ONCE(!div))
 		return 0;
 
-	return DIV_ROUND_CLOSEST_ULL(parent_rate, 2ULL * div);
+	/*
+	 * Use the actual 64-bit CMN PLL rate to avoid 32-bit overflow
+	 * on 32-bit platforms where parent_rate (~12 GHz) is truncated.
+	 */
+	pll_rate = clk_cmn_pll_get_parent_rate64(hw);
+	if (!pll_rate) {
+		WARN_ONCE(1, "Failed to get 64-bit CMN PLL rate\n");
+		return 0;
+	}
+
+	return DIV_ROUND_CLOSEST_ULL(pll_rate, 2ULL * div);
 }
 
 static long clk_pon_refclk_round_rate(struct clk_hw *hw, unsigned long rate,
 				      unsigned long *parent_rate)
 {
+	u64 pll_rate;
 	unsigned long div;
 
 	if (!rate)
 		return 0;
 
-	div = DIV_ROUND_CLOSEST_ULL(*parent_rate, 2ULL * rate);
+	/*
+	 * Use the actual 64-bit CMN PLL rate to avoid 32-bit overflow
+	 * on 32-bit platforms where *parent_rate (~12 GHz) is truncated.
+	 */
+	pll_rate = clk_cmn_pll_get_parent_rate64(hw);
+	if (!pll_rate) {
+		WARN_ONCE(1, "Failed to get 64-bit CMN PLL rate\n");
+		return 0;
+	}
+
+	div = DIV_ROUND_CLOSEST_ULL(pll_rate, 2ULL * rate);
 
 	/* Clamp to valid range (1-255) */
 	div = clamp_t(unsigned long, div, 1, 255);
 
-	return DIV_ROUND_CLOSEST_ULL(*parent_rate, 2ULL * div);
+	return DIV_ROUND_CLOSEST_ULL(pll_rate, 2ULL * div);
 }
 
 static int clk_pon_refclk_set_rate(struct clk_hw *hw, unsigned long rate,
 				   unsigned long parent_rate)
 {
 	struct clk_cmn_pll *pon_clk = to_clk_cmn_pll(hw);
+	u64 pll_rate;
 	unsigned long div;
 	int ret;
 
@@ -474,7 +559,17 @@ static int clk_pon_refclk_set_rate(struct clk_hw *hw, unsigned long rate,
 					 CMN_PLL_PON_MODE_SEL);
 	}
 
-	div = DIV_ROUND_CLOSEST_ULL(parent_rate, 2ULL * rate);
+	/*
+	 * Use the actual 64-bit CMN PLL rate to avoid 32-bit overflow
+	 * on 32-bit platforms where parent_rate (~12 GHz) is truncated.
+	 */
+	pll_rate = clk_cmn_pll_get_parent_rate64(hw);
+	if (!pll_rate) {
+		WARN_ONCE(1, "Failed to get 64-bit CMN PLL rate\n");
+		return -EINVAL;
+	}
+
+	div = DIV_ROUND_CLOSEST_ULL(pll_rate, 2ULL * rate);
 
 	/* Constrain divider to 8-bit register width: [1, 255]. */
 	if (div == 0 || div > 255)
@@ -514,6 +609,7 @@ static unsigned long clk_nss_recalc_rate(struct clk_hw *hw,
 					 unsigned long parent_rate)
 {
 	struct clk_cmn_pll *nss_clk = to_clk_cmn_pll(hw);
+	u64 pll_rate;
 	u32 val, div;
 
 	regmap_read(nss_clk->regmap, CMN_PLL_NSS_PPE_FREQ_CTRL, &val);
@@ -521,33 +617,65 @@ static unsigned long clk_nss_recalc_rate(struct clk_hw *hw,
 	if (WARN_ON_ONCE(!div))
 		return 0;
 
-	return DIV_ROUND_CLOSEST_ULL(parent_rate, 2ULL * div);
+	/*
+	 * Use the actual 64-bit CMN PLL rate to avoid 32-bit overflow
+	 * on 32-bit platforms where parent_rate (~12 GHz) is truncated.
+	 */
+	pll_rate = clk_cmn_pll_get_parent_rate64(hw);
+	if (!pll_rate) {
+		WARN_ONCE(1, "Failed to get 64-bit CMN PLL rate\n");
+		return 0;
+	}
+
+	return DIV_ROUND_CLOSEST_ULL(pll_rate, 2ULL * div);
 }
 
 static long clk_nss_ppe_round_rate(struct clk_hw *hw, unsigned long rate,
 				   unsigned long *parent_rate)
 {
+	u64 pll_rate;
 	unsigned long div;
 
+	/*
+	 * Use the actual 64-bit CMN PLL rate to avoid 32-bit overflow
+	 * on 32-bit platforms where *parent_rate (~12 GHz) is truncated.
+	 */
+	pll_rate = clk_cmn_pll_get_parent_rate64(hw);
+	if (!pll_rate) {
+		WARN_ONCE(1, "Failed to get 64-bit CMN PLL rate\n");
+		return 0;
+	}
+
 	/* Calculate divider */
-	div = DIV_ROUND_CLOSEST_ULL(*parent_rate, 2ULL * rate);
+	div = DIV_ROUND_CLOSEST_ULL(pll_rate, 2ULL * rate);
 
 	/* Clamp to valid range (8-63) */
 	div = clamp_t(unsigned long, div, CMN_PLL_NSS_PPE_DIV_MIN,
 		      CMN_PLL_NSS_PPE_DIV_MAX);
 
-	return DIV_ROUND_CLOSEST_ULL(*parent_rate, 2ULL * div);
+	return DIV_ROUND_CLOSEST_ULL(pll_rate, 2ULL * div);
 }
 
 static int clk_nss_set_rate(struct clk_hw *hw, unsigned long rate,
 			    unsigned long parent_rate)
 {
 	struct clk_cmn_pll *nss_clk = to_clk_cmn_pll(hw);
+	u64 pll_rate;
 	unsigned long div;
 	int ret;
 
+	/*
+	 * Use the actual 64-bit CMN PLL rate to avoid 32-bit overflow
+	 * on 32-bit platforms where parent_rate (~12 GHz) is truncated.
+	 */
+	pll_rate = clk_cmn_pll_get_parent_rate64(hw);
+	if (!pll_rate) {
+		WARN_ONCE(1, "Failed to get 64-bit CMN PLL rate\n");
+		return -EINVAL;
+	}
+
 	/* Calculate divider */
-	div = DIV_ROUND_CLOSEST_ULL(parent_rate, 2ULL * rate);
+	div = DIV_ROUND_CLOSEST_ULL(pll_rate, 2ULL * rate);
 
 	/* Validate range */
 	if (div < CMN_PLL_NSS_PPE_DIV_MIN || div > CMN_PLL_NSS_PPE_DIV_MAX)
@@ -578,6 +706,7 @@ static unsigned long clk_ppe_recalc_rate(struct clk_hw *hw,
 					 unsigned long parent_rate)
 {
 	struct clk_cmn_pll *ppe_clk = to_clk_cmn_pll(hw);
+	u64 pll_rate;
 	u32 val, div;
 
 	regmap_read(ppe_clk->regmap, CMN_PLL_NSS_PPE_FREQ_CTRL, &val);
@@ -585,18 +714,39 @@ static unsigned long clk_ppe_recalc_rate(struct clk_hw *hw,
 	if (WARN_ON_ONCE(!div))
 		return 0;
 
-	return DIV_ROUND_CLOSEST_ULL(parent_rate, 2ULL * div);
+	/*
+	 * Use the actual 64-bit CMN PLL rate to avoid 32-bit overflow
+	 * on 32-bit platforms where parent_rate (~12 GHz) is truncated.
+	 */
+	pll_rate = clk_cmn_pll_get_parent_rate64(hw);
+	if (!pll_rate) {
+		WARN_ONCE(1, "Failed to get 64-bit CMN PLL rate\n");
+		return 0;
+	}
+
+	return DIV_ROUND_CLOSEST_ULL(pll_rate, 2ULL * div);
 }
 
 static int clk_ppe_set_rate(struct clk_hw *hw, unsigned long rate,
 			    unsigned long parent_rate)
 {
 	struct clk_cmn_pll *ppe_clk = to_clk_cmn_pll(hw);
+	u64 pll_rate;
 	unsigned long div;
 	int ret;
 
+	/*
+	 * Use the actual 64-bit CMN PLL rate to avoid 32-bit overflow
+	 * on 32-bit platforms where parent_rate (~12 GHz) is truncated.
+	 */
+	pll_rate = clk_cmn_pll_get_parent_rate64(hw);
+	if (!pll_rate) {
+		WARN_ONCE(1, "Failed to get 64-bit CMN PLL rate\n");
+		return -EINVAL;
+	}
+
 	/* Calculate divider */
-	div = DIV_ROUND_CLOSEST_ULL(parent_rate, 2ULL * rate);
+	div = DIV_ROUND_CLOSEST_ULL(pll_rate, 2ULL * rate);
 
 	/* Validate range */
 	if (div < CMN_PLL_NSS_PPE_DIV_MIN || div > CMN_PLL_NSS_PPE_DIV_MAX)
@@ -1448,7 +1598,6 @@ static int ipq_cmn_pll_register_clks(struct platform_device *pdev)
 	 * is configured to 12 GHZ by DT property assigned-clock-rates-u64.
 	 */
 	hw_data->hws[CMN_PLL_CLK] = cmn_pll_hw;
-
 	hw_data->num = num_clks + 1;
 
 	ret = devm_of_clk_add_hw_provider(dev, of_clk_hw_onecell_get, hw_data);
