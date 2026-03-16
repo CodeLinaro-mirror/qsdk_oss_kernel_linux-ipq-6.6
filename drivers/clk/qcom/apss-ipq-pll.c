@@ -129,7 +129,7 @@ static const struct alpha_pll_config ipq9574_pll_config = {
 };
 
 static const struct alpha_pll_config ipq5210_pll_config = {
-	.l = 0x32,
+	.l = 0x22,
 	.config_ctl_val = 0x4001075B,
 	.config_ctl_hi_val = 0x6,
 	.early_output_mask = BIT(3),
