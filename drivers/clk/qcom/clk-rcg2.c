@@ -377,6 +377,43 @@ exit:
 	return best_conf;
 }
 
+/**
+ * __clk_rcg2_select_conf_no_reparent - select freq conf without changing parent
+ * @hw: RCG clock hw
+ * @f: frequency multi table entry for the requested rate
+ * @req_rate: requested rate
+ *
+ * When CLK_SET_RATE_NO_REPARENT is set, the parent clock must not change.
+ * Find a conf that uses the current parent clock instead of the best-rate
+ * parent. Falls back to normal conf selection if no conf exists for the
+ * current parent.
+ */
+static const struct freq_conf *
+__clk_rcg2_select_conf_no_reparent(struct clk_hw *hw,
+				   const struct freq_multi_tbl *f,
+				   unsigned long req_rate)
+{
+	struct clk_rcg2 *rcg = to_clk_rcg2(hw);
+	const struct freq_conf *conf;
+	int cur_index;
+	u8 cur_src;
+	int i;
+
+	cur_index = clk_hw_get_parent_index(hw);
+	if (cur_index < 0)
+		goto fallback;
+
+	cur_src = rcg->parent_map[cur_index].src;
+
+	for (i = 0, conf = f->confs; i < f->num_confs; i++, conf++) {
+		if (conf->src == cur_src)
+			return conf;
+	}
+
+fallback:
+	return __clk_rcg2_select_conf(hw, f, req_rate);
+}
+
 static int _freq_tbl_fm_determine_rate(struct clk_hw *hw, const struct freq_multi_tbl *f,
 				       struct clk_rate_request *req)
 {
@@ -390,14 +427,19 @@ static int _freq_tbl_fm_determine_rate(struct clk_hw *hw, const struct freq_mult
 	if (!f || !f->confs)
 		return -EINVAL;
 
-	conf = __clk_rcg2_select_conf(hw, f, rate);
+	clk_flags = clk_hw_get_flags(hw);
+
+	if (clk_flags & CLK_SET_RATE_NO_REPARENT)
+		conf = __clk_rcg2_select_conf_no_reparent(hw, f, rate);
+	else
+		conf = __clk_rcg2_select_conf(hw, f, rate);
+
 	if (IS_ERR(conf))
 		return PTR_ERR(conf);
 	index = qcom_find_src_index(hw, rcg->parent_map, conf->src);
 	if (index < 0)
 		return index;
 
-	clk_flags = clk_hw_get_flags(hw);
 	p = clk_hw_get_parent_by_index(hw, index);
 	if (!p)
 		return -EINVAL;
@@ -550,7 +592,11 @@ static int __clk_rcg2_fm_set_rate(struct clk_hw *hw, unsigned long rate)
 	if (!f || !f->confs)
 		return -EINVAL;
 
-	conf = __clk_rcg2_select_conf(hw, f, rate);
+	if (clk_hw_get_flags(hw) & CLK_SET_RATE_NO_REPARENT)
+		conf = __clk_rcg2_select_conf_no_reparent(hw, f, rate);
+	else
+		conf = __clk_rcg2_select_conf(hw, f, rate);
+
 	if (IS_ERR(conf))
 		return PTR_ERR(conf);
 
