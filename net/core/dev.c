@@ -2125,6 +2125,18 @@ static int call_netdevice_notifiers_mtu(unsigned long val,
 bool fast_tc_filter;
 EXPORT_SYMBOL_GPL(fast_tc_filter);
 
+#ifdef CONFIG_IPQ_PON
+/* By default PON Trap Filter will be disabled. */
+bool pon_iftrap_enable;
+EXPORT_SYMBOL_GPL(pon_iftrap_enable);
+
+int (*pon_iftrap_recv)(struct sk_buff *skb) __rcu __read_mostly;
+EXPORT_SYMBOL_GPL(pon_iftrap_recv);
+
+int (*pon_iftrap_xmit)(void *app_data, struct sk_buff *skb) __rcu __read_mostly;
+EXPORT_SYMBOL_GPL(pon_iftrap_xmit);
+#endif
+
 #ifdef CONFIG_NET_INGRESS
 static DEFINE_STATIC_KEY_FALSE(ingress_needed_key);
 
@@ -4649,6 +4661,31 @@ struct netdev_queue *netdev_core_pick_tx(struct net_device *dev,
 	return netdev_get_tx_queue(dev, queue_index);
 }
 
+#ifdef CONFIG_IPQ_PON
+/*	When the external module is loaded, it sets the values of
+ *	pon_iftrap_xmit and pon_iftrap_recv during the module initialization phase,
+ *	and only then sets pon_iftrap_enable to 1.
+ */
+static inline bool pon_iftrap_process_tx(struct sk_buff *skb, unsigned char calling_id)
+{
+	int (*pon_uni_xmit)(void *app_data, struct sk_buff *skb);
+	struct pon_iftrap_devq_uni_tx_meta meta;
+
+	if (pon_iftrap_enable) {
+		/* Caller must hold RCU read lock */
+		pon_uni_xmit = rcu_dereference_bh(pon_iftrap_xmit);
+		if (pon_uni_xmit) {
+			meta.calling_id = calling_id;
+			if (pon_uni_xmit(&meta, skb)) {
+				/* Return true if packet was consumed or dropped */
+				return true;
+			}
+		}
+	}
+	return false; /* Return false if packet need to continue */
+}
+#endif
+
 /**
  *	dev_fast_xmit_vp - fast xmit the skb to a PPE virtual port
  *	@skb:buffer to transmit
@@ -4672,6 +4709,14 @@ bool dev_fast_xmit_vp(struct sk_buff *skb,
 	}
 
 	rcu_read_lock_bh();
+
+#ifdef CONFIG_IPQ_PON
+	if (pon_iftrap_process_tx(skb, DEV_FAST_XMIT_VP)) {
+		rcu_read_unlock_bh();
+		return true;
+	}
+#endif
+
 	cpu = smp_processor_id();
 
 	/*
@@ -4742,6 +4787,13 @@ bool dev_fast_xmit_qdisc(struct sk_buff *skb, struct net_device *top_qdisc_dev, 
 	 * stops preemption for RCU.
 	 */
 	rcu_read_lock_bh();
+
+#ifdef CONFIG_IPQ_PON
+	if (pon_iftrap_process_tx(skb, DEV_FAST_XMIT_QDISC)) {
+		rcu_read_unlock_bh();
+		return true;
+	}
+#endif
 
 	txq = netdev_core_pick_tx(top_qdisc_dev, skb, NULL);
 	q = rcu_dereference_bh(txq->qdisc);
@@ -4815,6 +4867,14 @@ bool dev_fast_xmit(struct sk_buff *skb,
 	}
 
 	rcu_read_lock_bh();
+
+#ifdef CONFIG_IPQ_PON
+	if (pon_iftrap_process_tx(skb, DEV_FAST_XMIT)) {
+		rcu_read_unlock_bh();
+		return true;
+	}
+#endif
+
 	cpu = smp_processor_id();
 
 	/* If device don't need the dst, release it now, otherwise make sure
@@ -4905,6 +4965,13 @@ int __dev_queue_xmit(struct sk_buff *skb, struct net_device *sb_dev)
 	rcu_read_lock_bh();
 
 	skb_update_prio(skb);
+
+#ifdef CONFIG_IPQ_PON
+	if (pon_iftrap_process_tx(skb, __DEV_QUEUE_XMIT)) {
+		rc = NETDEV_TX_OK;
+		goto out;
+	}
+#endif
 
 	qdisc_pkt_len_init(skb);
 	tcx_set_ingress(skb, false);
@@ -6019,6 +6086,20 @@ another_round:
 			goto out;
 		}
 	}
+
+#ifdef CONFIG_IPQ_PON
+	if (pon_iftrap_enable) {
+		int (*pon_uni_recv)(struct sk_buff *skb);
+
+		pon_uni_recv = rcu_dereference(pon_iftrap_recv);
+		if (pon_uni_recv) {
+			if (pon_uni_recv(skb)) { //consumed or dropped
+				ret = NET_RX_DROP;
+				goto out;
+			}
+		}
+	}
+#endif
 
 	if (likely(!fast_tc_filter)) {
 		fast_recv = rcu_dereference(athrs_fast_nat_recv);
