@@ -352,6 +352,15 @@ struct sk_buff_head {
 	spinlock_t	lock;
 };
 
+#ifdef CONFIG_IPQ_PON
+struct gem_skb_ext {
+	u32 sub_br_id;
+	u8 gem_id;
+	u8 flood;
+	u8 __pad[2];
+};
+#endif
+
 struct sk_buff;
 
 #ifndef CONFIG_MAX_SKB_FRAGS
@@ -4801,6 +4810,9 @@ enum skb_ext_id {
 #endif
 #if IS_ENABLED(CONFIG_MCTP_FLOWS)
 	SKB_EXT_MCTP,
+#endif
+#ifdef CONFIG_IPQ_PON
+	SKB_EXT_GEM,
 #endif
 	SKB_EXT_NUM, /* must be last */
 };

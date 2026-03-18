@@ -5175,6 +5175,9 @@ static const u8 skb_ext_type_len[] = {
 #if IS_ENABLED(CONFIG_MCTP_FLOWS)
 	[SKB_EXT_MCTP] = SKB_EXT_CHUNKSIZEOF(struct mctp_flow),
 #endif
+#ifdef CONFIG_IPQ_PON
+	[SKB_EXT_GEM] = SKB_EXT_CHUNKSIZEOF(struct gem_skb_ext),
+#endif
 };
 
 static __always_inline unsigned int skb_ext_total_length(void)

@@ -99,6 +99,10 @@ int br_handle_frame_finish(struct net *net, struct sock *sk, struct sk_buff *skb
 	br_get_dst_hook_t *get_dst_hook = rcu_dereference(br_get_dst_hook);
 	u16 vid = 0;
 	u8 state;
+	u16 ref_sub_br_id;
+#ifdef CONFIG_IPQ_PON
+	struct gem_skb_ext *gem_ext = skb_ext_find(skb, SKB_EXT_GEM);
+#endif
 
 	if (!p)
 		goto drop;
@@ -232,12 +236,22 @@ int br_handle_frame_finish(struct net *net, struct sock *sk, struct sk_buff *skb
 		} else {
 			dst = br_fdb_find_rcu(br, eth_hdr(skb)->h_dest, vid);
 
-			/* Restrict forwarding to/from upstream port & within same sub bridge */
+			/* Do not flood to non-upstream port and to ports in different sub bridge */
 			if (dst && dst->dst &&
-				!((p->flags & BR_UPSTREAM_PORT) || (dst->dst->flags & BR_UPSTREAM_PORT))
-				&& (p->sub_br_id != dst->dst->sub_br_id))
-				dst = NULL;
-
+					!((p->flags & BR_UPSTREAM_PORT) || (dst->dst->flags & BR_UPSTREAM_PORT))) {
+				/* Flood only if source sub bridge id same as
+				 *  - Dest port's sub-bridge id, OR
+				 *  - GEM OMCI sub-bridge id when GEM flood is set.
+				 */
+				ref_sub_br_id = p->sub_br_id;
+#ifdef CONFIG_IPQ_PON
+				if (gem_ext && unlikely(gem_ext->flood))
+					ref_sub_br_id = gem_ext->sub_br_id;
+#endif
+				if(skb->pkt_type != PACKET_HOST)
+					if (dst->dst->sub_br_id != ref_sub_br_id)
+						dst = NULL;
+			}
 		}
 		break;
 	default:

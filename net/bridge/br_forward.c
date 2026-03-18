@@ -213,7 +213,10 @@ void br_flood(struct net_bridge *br, struct sk_buff *skb,
 	struct net_bridge_port *srcp = br_port_get_rcu(skb->dev);
 	struct net_bridge_port *prev = NULL;
 	struct net_bridge_port *p;
-
+	u16 ref_sub_br_id;
+#ifdef CONFIG_IPQ_PON
+	struct gem_skb_ext *gem_ext = skb_ext_find(skb, SKB_EXT_GEM);
+#endif
 	br_tc_skb_miss_set(skb, pkt_type != BR_PKT_BROADCAST);
 
 	list_for_each_entry_rcu(p, &br->port_list, list) {
@@ -248,11 +251,20 @@ void br_flood(struct net_bridge *br, struct sk_buff *skb,
 			continue;
 
 		/* Do not flood to non-upstream port and to ports in different sub bridge */
-		if (srcp &&
-			!((p->flags & BR_UPSTREAM_PORT) || (srcp->flags & BR_UPSTREAM_PORT))
-			&& (p->sub_br_id != srcp->sub_br_id))
-			continue;
-
+		if (srcp && !((p->flags & BR_UPSTREAM_PORT) || (srcp->flags & BR_UPSTREAM_PORT))) {
+			/*
+			 * Flood only if dest port is in the same sub-bridge as:
+			 *  - Source port's sub-bridge id, OR
+			 *  - GEM OMCI sub-bridge id when GEM flood is set.
+			 */
+			ref_sub_br_id = srcp->sub_br_id;
+#ifdef CONFIG_IPQ_PON
+			if (gem_ext && gem_ext->flood)
+				ref_sub_br_id = gem_ext->sub_br_id;
+#endif
+			if (p->sub_br_id != ref_sub_br_id)
+				continue;
+		}
 
 		prev = maybe_deliver(prev, p, skb, local_orig);
 		if (IS_ERR(prev))
