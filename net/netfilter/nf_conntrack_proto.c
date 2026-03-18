@@ -42,6 +42,11 @@
 #include <net/ipv6.h>
 #include <net/inet_frag.h>
 
+#ifdef CONFIG_NF_CT_PROTO_ESP
+/* External sysctl to enable/disable ESP conntrack */
+extern int nf_ct_esp_enabled;
+#endif
+
 static DEFINE_MUTEX(nf_ct_proto_mutex);
 
 #ifdef CONFIG_SYSCTL
@@ -111,6 +116,15 @@ const struct nf_conntrack_l4proto *nf_ct_l4proto_find(u8 l4proto)
 #endif
 #ifdef CONFIG_NF_CT_PROTO_GRE
 	case IPPROTO_GRE: return &nf_conntrack_l4proto_gre;
+#endif
+#ifdef CONFIG_NF_CT_PROTO_ESP
+	case IPPROTO_ESP: {
+		/* Return generic handler if ESP conntrack is disabled */
+		if (!nf_ct_esp_enabled) {
+			return &nf_conntrack_l4proto_generic;
+		}
+		return &nf_conntrack_l4proto_esp;
+	}
 #endif
 #if IS_ENABLED(CONFIG_IPV6)
 	case IPPROTO_ICMPV6: return &nf_conntrack_l4proto_icmpv6;
@@ -608,6 +622,9 @@ EXPORT_SYMBOL_GPL(nf_ct_netns_get);
 
 void nf_ct_netns_put(struct net *net, uint8_t nfproto)
 {
+#ifdef CONFIG_NF_CT_PROTO_ESP
+	nf_ct_esp_pernet_flush(net);
+#endif
 	switch (nfproto) {
 	case NFPROTO_BRIDGE:
 		nf_ct_netns_do_put(net, NFPROTO_BRIDGE);
@@ -655,6 +672,12 @@ int nf_conntrack_proto_init(void)
 		goto cleanup_sockopt;
 #endif
 
+#ifdef CONFIG_NF_CT_PROTO_ESP
+	ret = nf_conntrack_esp_init();
+	if (ret < 0)
+		goto cleanup_sockopt;
+#endif
+
 	return ret;
 
 #if IS_ENABLED(CONFIG_IPV6)
@@ -689,6 +712,9 @@ void nf_conntrack_proto_pernet_init(struct net *net)
 #endif
 #ifdef CONFIG_NF_CT_PROTO_GRE
 	nf_conntrack_gre_init_net(net);
+#endif
+#ifdef CONFIG_NF_CT_PROTO_ESP
+	nf_conntrack_esp_init_net(net);
 #endif
 }
 
