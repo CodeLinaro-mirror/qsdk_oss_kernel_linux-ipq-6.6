@@ -954,6 +954,7 @@ static int geni_i2c_probe(struct platform_device *pdev)
 		dev_dbg(dev, "i2c fifo/se-dma mode. fifo depth:%d\n", tx_depth);
 	}
 
+#ifdef CONFIG_PM
 	clk_disable_unprepare(gi2c->core_clk);
 	ret = geni_se_resources_off(&gi2c->se);
 	if (ret) {
@@ -970,6 +971,9 @@ static int geni_i2c_probe(struct platform_device *pdev)
 	pm_runtime_set_autosuspend_delay(gi2c->se.dev, I2C_AUTO_SUSPEND_DELAY);
 	pm_runtime_use_autosuspend(gi2c->se.dev);
 	pm_runtime_enable(gi2c->se.dev);
+#else
+	enable_irq(gi2c->irq);
+#endif /* CONFIG_PM */
 
 	ret = i2c_add_adapter(&gi2c->adap);
 	if (ret) {
