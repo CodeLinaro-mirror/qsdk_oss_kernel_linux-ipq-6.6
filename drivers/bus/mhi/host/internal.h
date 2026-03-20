@@ -28,11 +28,6 @@ extern struct bus_type mhi_bus_type;
 #define QCN9224_SOC_HW_VERSION_MAJOR_VER_BMSK		GENMASK(11, 8)
 #define QCN9224_SOC_HW_VERSION_MINOR_VER_BMSK		GENMASK(7, 4)
 
-#define IS_LICENSE_DOWN_REQ(mhi_cntrl) \
-	((mhi_cntrl->family_number == QCN9XXX_FAMILY_NUM && \
-	  ((mhi_cntrl->device_number == QCN9224_DEVICE_NUM) || \
-	   (mhi_cntrl->device_number == QCN9625_DEVICE_NUM))) ? true : false)
-
 struct mhi_ctxt {
 	struct mhi_event_ctxt *er_ctxt;
 	struct mhi_chan_ctxt *chan_ctxt;

@@ -669,10 +669,9 @@ int mhi_download_amss_image(struct mhi_controller *mhi_cntrl)
 		return ret;
 	}
 
-	if (IS_LICENSE_DOWN_REQ(mhi_cntrl)) {
-		/* Download the License */
+	/* Download the License */
+	if (mhi_cntrl->device_number == QCN9224_DEVICE_NUM)
 		mhi_download_fw_license(mhi_cntrl);
-	}
 
 	ret = mhi_fw_load_bhie(mhi_cntrl,
 			       /* Vector table is the last entry */
