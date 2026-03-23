@@ -223,7 +223,7 @@ static int qcom_wdt_panic_handler(struct notifier_block *nb,
 
 static int qcom_wdt_get_restart_reason(struct device *dev, struct qcom_wdt *wdt)
 {
-	unsigned int args[2];
+	unsigned int args[3];
 	struct regmap *imem;
 	unsigned int val;
 	int ret;
@@ -253,6 +253,8 @@ static int qcom_wdt_get_restart_reason(struct device *dev, struct qcom_wdt *wdt)
 
 	if (val == args[1])
 		wdt->wdd.bootstatus = WDIOF_CARDRESET;
+	else if (val == args[2])
+		wdt->wdd.bootstatus = WDIOF_POWERUNDER;
 
 	return 0;
 }
