@@ -64,6 +64,7 @@ struct qcom_adsp {
 	struct clk *aggre2_clk;
 
 	struct regulator *cx_supply;
+	struct regulator *mx_supply;
 	struct regulator *px_supply;
 
 	struct device *proxy_pds[3];
@@ -271,10 +272,16 @@ static int adsp_start(struct rproc *rproc)
 			goto disable_aggre2_clk;
 	}
 
+	if (adsp->mx_supply) {
+		ret = regulator_enable(adsp->mx_supply);
+		if (ret)
+			goto disable_cx_supply;
+	}
+
 	if (adsp->px_supply) {
 		ret = regulator_enable(adsp->px_supply);
 		if (ret)
-			goto disable_cx_supply;
+			goto disable_mx_supply;
 	}
 
 	if (adsp->dtb_pas_id) {
@@ -329,6 +336,9 @@ release_pas_metadata:
 disable_px_supply:
 	if (adsp->px_supply)
 		regulator_disable(adsp->px_supply);
+disable_mx_supply:
+	if (adsp->mx_supply)
+		regulator_disable(adsp->mx_supply);
 disable_cx_supply:
 	if (adsp->cx_supply)
 		regulator_disable(adsp->cx_supply);
@@ -353,6 +363,8 @@ static void qcom_pas_handover(struct qcom_q6v5 *q6v5)
 
 	if (adsp->px_supply)
 		regulator_disable(adsp->px_supply);
+	if (adsp->mx_supply)
+		regulator_disable(adsp->mx_supply);
 	if (adsp->cx_supply)
 		regulator_disable(adsp->cx_supply);
 	clk_disable_unprepare(adsp->aggre2_clk);
@@ -469,6 +481,14 @@ static int adsp_init_regulator(struct qcom_adsp *adsp)
 
 	if (adsp->cx_supply)
 		regulator_set_load(adsp->cx_supply, 100000);
+
+	adsp->mx_supply = devm_regulator_get_optional(adsp->dev, "mx");
+	if (IS_ERR(adsp->mx_supply)) {
+		if (PTR_ERR(adsp->mx_supply) == -ENODEV)
+			adsp->mx_supply = NULL;
+		else
+			return PTR_ERR(adsp->mx_supply);
+	}
 
 	adsp->px_supply = devm_regulator_get_optional(adsp->dev, "px");
 	if (IS_ERR(adsp->px_supply)) {
