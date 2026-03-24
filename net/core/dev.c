@@ -4788,13 +4788,6 @@ bool dev_fast_xmit_qdisc(struct sk_buff *skb, struct net_device *top_qdisc_dev, 
 	 */
 	rcu_read_lock_bh();
 
-#ifdef CONFIG_IPQ_PON
-	if (pon_iftrap_process_tx(skb, DEV_FAST_XMIT_QDISC)) {
-		rcu_read_unlock_bh();
-		return true;
-	}
-#endif
-
 	txq = netdev_core_pick_tx(top_qdisc_dev, skb, NULL);
 	q = rcu_dereference_bh(txq->qdisc);
 	if (unlikely(!q->enqueue)) {
@@ -4831,6 +4824,14 @@ bool dev_fast_xmit_qdisc(struct sk_buff *skb, struct net_device *top_qdisc_dev, 
 	/* Update the dev so that we can transmit to bottom device after qdisc */
 	skb->dev = bottom_dev;
 	skb->fast_qdisc = 1;
+
+#ifdef CONFIG_IPQ_PON
+	if (pon_iftrap_process_tx(skb, DEV_FAST_XMIT_QDISC)) {
+		rcu_read_unlock_bh();
+		return true;
+	}
+#endif
+
 	rc = __dev_xmit_skb_qdisc(skb, q, top_qdisc_dev, txq);
 
 	rcu_read_unlock_bh();
