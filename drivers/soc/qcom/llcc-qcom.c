@@ -410,6 +410,12 @@ static const struct llcc_slice_config ipq5424_data[] =  {
 	{LLCC_PCIE6G,     7,   128, 3, 0,  0x3000, 0x0,  0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, },
 };
 
+static const struct llcc_slice_config ipq9650_data[] =  {
+	/* SCID 2 - SKB, SKB data (APSS Core 0,1,2) */
+	{LLCC_APSS,       2,   768, 1, 1,  0x0FFF, 0x0,  0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, },
+	{LLCC_AI,         3,   128, 3, 1,  0x0FFF, 0x0,  0, 0, 0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, },
+};
+
 static const struct llcc_edac_reg_offset llcc_v1_edac_reg_offset = {
 	.trp_ecc_error_status0 = 0x20344,
 	.trp_ecc_error_status1 = 0x20348,
@@ -627,6 +633,14 @@ static const struct qcom_llcc_config ipq5424_cfg = {
 	.need_llcc_cfg	= true,
 	.reg_offset	= llcc_v2_1_reg_offset,
 	.edac_reg_offset = &llcc_v2_1_edac_reg_offset,
+};
+
+static const struct qcom_llcc_config ipq9650_cfg = {
+	.sct_data	= ipq9650_data,
+	.size		= ARRAY_SIZE(ipq9650_data),
+	.need_llcc_cfg	= true,
+	.reg_offset	= llcc_v6_reg_offset,
+	.edac_reg_offset = &llcc_v6_edac_reg_offset,
 };
 
 static struct llcc_drv_data *drv_data = (void *) -EPROBE_DEFER;
@@ -1364,6 +1378,7 @@ err:
 
 static const struct of_device_id qcom_llcc_of_match[] = {
 	{ .compatible = "qcom,ipq5424-llcc", .data = &ipq5424_cfg },
+	{ .compatible = "qcom,ipq9650-llcc", .data = &ipq9650_cfg },
 	{ .compatible = "qcom,sc7180-llcc", .data = &sc7180_cfg },
 	{ .compatible = "qcom,sc7280-llcc", .data = &sc7280_cfg },
 	{ .compatible = "qcom,sc8180x-llcc", .data = &sc8180x_cfg },
