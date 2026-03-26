@@ -55,7 +55,7 @@ static struct sk_buff *_qca_tag_xmit(struct sk_buff *skb, struct net_device *dev
 		/* Set the version field, and set destination port information */
 		*phdr = FIELD_PREP(QCA_HDR_XMIT_VERSION, QCA_HDR_VERSION3);
 
-		if (unlikely(dp->ds->fc_group != NULL)) {
+		if (unlikely(dp->ds->fc_group != NULL && dp->ds->fc_group[dp->index - 1] < QCE2204_FCGROUP_MAX)) {
 			skb->mark = ((HOLB_MHT_VALID_TAG << HOLB_MHT_TAG_SHIFT) | (dp->index - 1));
 			*phdr |= FIELD_PREP(QCA_HDR_XMIT_VCHANNEL, dp->ds->fc_group[dp->index - 1]);
 		}
@@ -177,7 +177,7 @@ static struct sk_buff *qca_8021q_tag_xmit(struct sk_buff *skb, struct net_device
 	if (unlikely(!nskb))
 		return NULL;
 
-	if (unlikely(dp->ds->fc_group != NULL)) {
+	if (unlikely(dp->ds->fc_group != NULL && dp->ds->fc_group[dp->index - 1] < QCE2204_FCGROUP_MAX)) {
 		nskb = qca_4b_tag_xmit(nskb, dev);
 	}
 
