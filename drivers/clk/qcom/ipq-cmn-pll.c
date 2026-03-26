@@ -1563,7 +1563,7 @@ static int ipq_cmn_pll_register_clks(struct platform_device *pdev)
 							  cmn_pll->base,
 							  cmn_pll_hw,
 							  &fixed_clk[i]);
-		} else if (!strcmp(fixed_clk[i].name, "pcs")) {
+		} else if (!strncmp(fixed_clk[i].name, "pcs", 3)) {
 			hw = ipq_cmn_pll_pcs_register(pdev, cmn_pll->regmap,
 						      cmn_pll_hw,
 						      fixed_clk[i].name);
