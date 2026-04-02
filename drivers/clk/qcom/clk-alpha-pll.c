@@ -41,6 +41,7 @@
 #define PLL_USER_CTL(p)		((p)->offset + (p)->regs[PLL_OFF_USER_CTL])
 # define PLL_POST_DIV_SHIFT	8
 # define PLL_POST_DIV_MASK(p)	GENMASK((p)->width - 1, 0)
+# define PLL_ALPHA_MSB		BIT(15)
 # define PLL_ALPHA_EN		BIT(24)
 # define PLL_ALPHA_MODE		BIT(25)
 # define PLL_VCO_SHIFT		20
@@ -1770,6 +1771,27 @@ const struct clk_ops clk_alpha_pll_postdiv_lucid_ops = {
 };
 EXPORT_SYMBOL_GPL(clk_alpha_pll_postdiv_lucid_ops);
 
+static unsigned long
+clk_lucid_pll_passthrough_recalc_rate(struct clk_hw *hw,
+				      unsigned long parent_rate)
+{
+	return parent_rate;
+}
+
+static int
+clk_lucid_pll_passthrough_determine_rate(struct clk_hw *hw,
+					 struct clk_rate_request *req)
+{
+	req->rate = req->best_parent_rate;
+	return 0;
+}
+
+const struct clk_ops clk_lucid_pll_passthrough_ops = {
+	.recalc_rate    = clk_lucid_pll_passthrough_recalc_rate,
+	.determine_rate = clk_lucid_pll_passthrough_determine_rate,
+};
+EXPORT_SYMBOL_GPL(clk_lucid_pll_passthrough_ops);
+
 void clk_agera_pll_configure(struct clk_alpha_pll *pll, struct regmap *regmap,
 			const struct alpha_pll_config *config)
 {
@@ -2160,6 +2182,18 @@ static void clk_zonda_pll_disable(struct clk_hw *hw)
 	regmap_write(regmap, PLL_OPMODE(pll), 0x0);
 }
 
+static void zonda_pll_adjust_l_val(unsigned long rate, unsigned long prate, u32 *l)
+{
+	u64 remainder, quotient;
+
+	quotient = rate;
+	remainder = do_div(quotient, prate);
+	*l = quotient;
+
+	if ((remainder * 2) / prate)
+		*l = *l + 1;
+}
+
 static int clk_zonda_pll_set_rate(struct clk_hw *hw, unsigned long rate,
 				  unsigned long prate)
 {
@@ -2176,8 +2210,14 @@ static int clk_zonda_pll_set_rate(struct clk_hw *hw, unsigned long rate,
 	if (ret < 0)
 		return ret;
 
+	if (a & PLL_ALPHA_MSB)
+		zonda_pll_adjust_l_val(rate, prate, &l);
+
 	regmap_write(pll->clkr.regmap, PLL_ALPHA_VAL(pll), a);
 	regmap_write(pll->clkr.regmap, PLL_L_VAL(pll), l);
+
+	if (!clk_hw_is_enabled(hw))
+		return 0;
 
 	/* Wait before polling for the frequency latch */
 	udelay(5);
