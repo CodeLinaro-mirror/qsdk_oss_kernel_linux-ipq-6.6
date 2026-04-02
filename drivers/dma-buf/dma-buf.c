@@ -1731,5 +1731,4 @@ static void __exit dma_buf_deinit(void)
 	kern_unmount(dma_buf_mnt);
 	dma_buf_uninit_sysfs_statistics();
 }
-module_exit(dma_buf_deinit);
-MODULE_LICENSE("GPL");
+__exitcall(dma_buf_deinit);
