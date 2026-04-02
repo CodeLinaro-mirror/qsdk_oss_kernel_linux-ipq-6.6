@@ -412,8 +412,8 @@ static const struct llcc_slice_config ipq5424_data[] =  {
 
 static const struct llcc_slice_config ipq9650_data[] =  {
 	/* SCID 2 - SKB, SKB data (APSS Core 0,1,2) */
-	{LLCC_APSS,       2,   768, 1, 1,  0x0FFF, 0x0,  0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, },
-	{LLCC_AI,         3,   128, 3, 1,  0x0FFF, 0x0,  0, 0, 0, 1, 0, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, },
+	{LLCC_APSS,       2,   768, 1, 1,  0x0FFF, 0x0,  0, 0, 0, 1, 1, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, },
+	{LLCC_AI,         3,   128, 3, 1,  0x0FFF, 0x0,  0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, },
 };
 
 static const struct llcc_edac_reg_offset llcc_v1_edac_reg_offset = {
