@@ -20,7 +20,7 @@
  * and an output clock to NSS (network subsystem) at 300 MHZ. The other output
  * clocks from CMN PLL on IPQ5424 are the same as IPQ9574.
  *
- * On the IPQ5332 SoC, the CMN PLL provides a single 50 MHZ clock output to
+ * On the IPQ5332 SoC, the CMN PLL provides a single 50 MHZ clock output to
  * the Ethernet PHY (or switch) via the UNIPHY (PCS). It also supplies a 200
  * MHZ clock to the PPE. The remaining fixed-rate clocks to the GCC and PCS
  * are the same as those in the IPQ9574 SoC.
@@ -46,6 +46,7 @@
 #include <linux/bitfield.h>
 #include <linux/clk-provider.h>
 #include <linux/delay.h>
+#include <linux/clk.h>
 #include <linux/err.h>
 #include <linux/mod_devicetable.h>
 #include <linux/module.h>
@@ -1620,33 +1621,51 @@ static int ipq_cmn_pll_clk_probe(struct platform_device *pdev)
 	struct device *dev = &pdev->dev;
 	int ret;
 
-	ret = devm_pm_runtime_enable(dev);
-	if (ret)
-		return ret;
+	if (IS_ENABLED(CONFIG_PM)) {
+		ret = devm_pm_runtime_enable(dev);
+		if (ret)
+			return ret;
 
-	ret = devm_pm_clk_create(dev);
-	if (ret)
-		return ret;
+		ret = devm_pm_clk_create(dev);
+		if (ret)
+			return ret;
 
-	/*
-	 * To access the CMN PLL registers, the GCC AHB & SYS clocks
-	 * of CMN PLL block need to be enabled.
-	 */
-	ret = pm_clk_add(dev, "ahb");
-	if (ret)
-		return dev_err_probe(dev, ret, "Failed to add AHB clock\n");
+		/*
+		 * To access the CMN PLL registers, the GCC AHB & SYS clocks
+		 * of CMN PLL block need to be enabled.
+		 */
+		ret = pm_clk_add(dev, "ahb");
+		if (ret)
+			return dev_err_probe(dev, ret, "Failed to add AHB clock\n");
 
-	ret = pm_clk_add(dev, "sys");
-	if (ret)
-		return dev_err_probe(dev, ret, "Failed to add SYS clock\n");
+		ret = pm_clk_add(dev, "sys");
+		if (ret)
+			return dev_err_probe(dev, ret, "Failed to add SYS clock\n");
 
-	ret = pm_runtime_resume_and_get(dev);
-	if (ret)
-		return ret;
+		ret = pm_runtime_resume_and_get(dev);
+		if (ret)
+			return ret;
+
+	} else {
+		struct clk *clk = NULL;
+
+		clk = devm_clk_get_enabled(dev, "ahb");
+		if (IS_ERR(clk))
+			return dev_err_probe(dev, PTR_ERR(clk),
+					"Failed to enable AHB clock\n");
+
+		clk = devm_clk_get_enabled(dev, "sys");
+		if (IS_ERR(clk))
+			return dev_err_probe(dev, PTR_ERR(clk),
+					"Failed to enable SYS clock\n");
+	}
 
 	/* Register CMN PLL clock and fixed rate output clocks. */
 	ret = ipq_cmn_pll_register_clks(pdev);
-	pm_runtime_put(dev);
+
+	if (IS_ENABLED(CONFIG_PM))
+		pm_runtime_put(dev);
+
 	if (ret)
 		return dev_err_probe(dev, ret,
 				     "Failed to register CMN PLL clocks\n");
