@@ -1771,6 +1771,27 @@ const struct clk_ops clk_alpha_pll_postdiv_lucid_ops = {
 };
 EXPORT_SYMBOL_GPL(clk_alpha_pll_postdiv_lucid_ops);
 
+static unsigned long
+clk_lucid_pll_passthrough_recalc_rate(struct clk_hw *hw,
+				      unsigned long parent_rate)
+{
+	return parent_rate;
+}
+
+static int
+clk_lucid_pll_passthrough_determine_rate(struct clk_hw *hw,
+					 struct clk_rate_request *req)
+{
+	req->rate = req->best_parent_rate;
+	return 0;
+}
+
+const struct clk_ops clk_lucid_pll_passthrough_ops = {
+	.recalc_rate    = clk_lucid_pll_passthrough_recalc_rate,
+	.determine_rate = clk_lucid_pll_passthrough_determine_rate,
+};
+EXPORT_SYMBOL_GPL(clk_lucid_pll_passthrough_ops);
+
 void clk_agera_pll_configure(struct clk_alpha_pll *pll, struct regmap *regmap,
 			const struct alpha_pll_config *config)
 {
