@@ -127,8 +127,6 @@
 /* RATEADAPT_VAL = 256 / ((342M / 240M) - 1) */
 #define AGGR_NOC_PCIE_1LANE_RATEADAPT_VAL	0x200
 
-#define SYSTEM_NOC_PCIE_RATEADAPT_BYPASS	0x1
-
 /* PARF_MHI_CLOCK_RESET_CTRL register fields */
 #define AHB_CLK_EN				BIT(0)
 #define MSTR_AXI_CLK_EN				BIT(1)
@@ -347,8 +345,8 @@ struct qcom_pcie {
 	bool suspended;
 	uint32_t axi_wr_addr_halt;
 	uint32_t aggr_noc_rate_adap_val;
+	uint32_t system_noc_rate_adap_val;
 	uint32_t domain;
-	uint32_t num_lanes;
 	int global_irq;
 #if IS_ENABLED(CONFIG_PCIEAER)
 	int wake_irq;
@@ -1347,8 +1345,8 @@ static int qcom_pcie_post_init(struct qcom_pcie *pcie)
 	}
 
 	if (!IS_ERR_OR_NULL(pcie->system_noc)) {
-		if (pcie->num_lanes == 2)
-			writel(SYSTEM_NOC_PCIE_RATEADAPT_BYPASS, pcie->system_noc);
+		if (pcie->system_noc_rate_adap_val)
+			writel(pcie->system_noc_rate_adap_val, pcie->system_noc);
 	}
 
 	dw_pcie_dbi_ro_wr_en(pci);
@@ -2076,7 +2074,6 @@ static int __qcom_pcie_probe(struct platform_device *pdev,
 	struct dw_pcie *pci;
 	static int rc_idx;
 	int ret;
-	uint32_t num_lanes = 0;
 
 	pcie_cfg = of_device_get_match_data(dev);
 	if (!pcie_cfg || !pcie_cfg->ops) {
@@ -2152,6 +2149,9 @@ static int __qcom_pcie_probe(struct platform_device *pdev,
 	of_property_read_u32(pdev->dev.of_node, "axi-halt-val",
 				&pcie->axi_wr_addr_halt);
 
+	of_property_read_u32(pdev->dev.of_node, "system-noc-val",
+				&pcie->system_noc_rate_adap_val);
+
 	of_property_read_u32(pdev->dev.of_node, "linux,pci-domain",&pcie->domain);
 
 	pcie->enable_vc = of_property_read_bool(pdev->dev.of_node,
@@ -2162,10 +2162,6 @@ static int __qcom_pcie_probe(struct platform_device *pdev,
 
 	pcie->is_emulation = of_property_read_bool(pdev->dev.of_node,
 						   "qcom,emulation");
-
-	of_property_read_u32(pdev->dev.of_node, "num-lanes",
-				&num_lanes);
-	pcie->num_lanes = num_lanes;
 
 	of_property_read_u32(pdev->dev.of_node, "link_retries_count",
 			     &pci->link_retries_count);
