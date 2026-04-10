@@ -518,6 +518,7 @@ static int clk_alpha_pll_enable(struct clk_hw *hw)
 	int ret;
 	struct clk_alpha_pll *pll = to_clk_alpha_pll(hw);
 	u32 val, mask;
+	static int count;
 
 	mask = PLL_OUTCTRL | PLL_RESET_N | PLL_BYPASSNL;
 	ret = regmap_read(pll->clkr.regmap, PLL_MODE(pll), &val);
@@ -554,8 +555,23 @@ static int clk_alpha_pll_enable(struct clk_hw *hw)
 		return ret;
 
 	ret = wait_for_pll_enable_lock(pll);
-	if (ret)
-		return ret;
+	if (ret) {
+		regmap_read(pll->clkr.regmap, PLL_STATUS(pll), &val);
+
+		pr_info("DBG: PLL_LOCK_DET failed, PLL_STATUS 0x%x\n", val);
+
+		if (count == 0) {
+			count++;
+			pr_info("DBG: Shutting down APSS PLL and powering up\n");
+			/* Shutdown the PLL and bring it up again */
+			regmap_write(pll->clkr.regmap, PLL_MODE(pll), 0x6);
+			regmap_write(pll->clkr.regmap, PLL_MODE(pll), 0);
+			udelay(5);
+			pr_info("DBG: Enabling Alpha PLL\n");
+			ret = clk_alpha_pll_enable(hw);
+			pr_info("DBG: PLL enabled\n");
+		}
+	}
 
 	ret = regmap_update_bits(pll->clkr.regmap, PLL_MODE(pll),
 				 PLL_OUTCTRL, PLL_OUTCTRL);
