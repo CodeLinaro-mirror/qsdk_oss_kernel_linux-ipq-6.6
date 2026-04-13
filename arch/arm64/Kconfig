@@ -1965,7 +1965,8 @@ config CC_HAS_SIGN_RETURN_ADDRESS
 	def_bool $(cc-option,-msign-return-address=all)
 
 config AS_HAS_ARMV8_3
-	def_bool $(cc-option,-Wa$(comma)-march=armv8.3-a) if !ARCH_IPQ5424
+	def_bool $(cc-option,-Wa$(comma)-march=armv8.3-a)
+	depends on !ARCH_IPQ5424 && !ARCH_IPQ9650 && !ARCH_IPQ5210
 
 config AS_HAS_CFI_NEGATE_RA_STATE
 	def_bool $(as-instr,.cfi_startproc\n.cfi_negate_ra_state\n.cfi_endproc\n)
@@ -2001,7 +2002,8 @@ config ARM64_AMU_EXTN
 	  indicating that the counter is not enabled.
 
 config AS_HAS_ARMV8_4
-	def_bool $(cc-option,-Wa$(comma)-march=armv8.4-a) if !ARCH_IPQ5424
+	def_bool $(cc-option,-Wa$(comma)-march=armv8.4-a)
+	depends on !ARCH_IPQ5424 && !ARCH_IPQ9650 && !ARCH_IPQ5210
 
 config ARM64_TLB_RANGE
 	bool "Enable support for tlbi range feature"
@@ -2019,7 +2021,8 @@ endmenu # "ARMv8.4 architectural features"
 menu "ARMv8.5 architectural features"
 
 config AS_HAS_ARMV8_5
-	def_bool $(cc-option,-Wa$(comma)-march=armv8.5-a) if !ARCH_IPQ5424
+	def_bool $(cc-option,-Wa$(comma)-march=armv8.5-a)
+	depends on !ARCH_IPQ5424 && !ARCH_IPQ9650 && !ARCH_IPQ5210
 
 config ARM64_BTI
 	bool "Branch Target Identification support"
@@ -2253,7 +2256,7 @@ config CC_HAVE_STACKPROTECTOR_SYSREG
 	def_bool $(cc-option,-mstack-protector-guard=sysreg -mstack-protector-guard-reg=sp_el0 -mstack-protector-guard-offset=0)
 
 config STACKPROTECTOR_PER_TASK
-	def_bool y if !ARCH_IPQ5424
+	depends on !ARCH_IPQ5424 && !ARCH_IPQ9650 && !ARCH_IPQ5210
 	depends on STACKPROTECTOR && CC_HAVE_STACKPROTECTOR_SYSREG
 
 config IPQ_MEM_PROFILE
@@ -2276,6 +2279,12 @@ config UNWIND_PATCH_PAC_INTO_SCS
 
 config ARCH_IPQ5424
 	bool "Enable for target IPQ5424"
+
+config ARCH_IPQ9650
+	bool "Enable for target IPQ9650"
+
+config ARCH_IPQ5210
+	bool "Enable for target IPQ5210"
 
 config IO_COHERENCY
 	bool "Enable IO Coherency for kernel modules"
