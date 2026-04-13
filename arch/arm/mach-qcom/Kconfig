@@ -85,4 +85,10 @@ config IPQ_PROFILE_MINENT
 	  Enable/Disable MINENT profile. Based on this UBI is enabled
 	  or disabled in device tree.
 
+config IPQ_PON
+	bool "Enable PON config"
+	default n
+	help
+	 This is a hint to the NSS-DP and PON driver that the PON
+	 is enabled in the build.
 endif

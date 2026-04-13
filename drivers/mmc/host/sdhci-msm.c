@@ -19,7 +19,6 @@
 #include <linux/reset.h>
 
 #include <soc/qcom/ice.h>
-#include <linux/blk-mq.h>
 
 #include "sdhci-cqhci.h"
 #include "sdhci-pltfm.h"
@@ -157,17 +156,16 @@
 #define CQHCI_VENDOR_CFG1	0xA00
 #define CQHCI_VENDOR_DIS_RST_ON_CQ_EN	(0x3 << 13)
 
-#define DISABLE_CRYPTO			BIT(15)
-#define CRYPTO_GENERAL_ENABLE		BIT(1)
-#define HC_VENDOR_SPECIFIC_FUNC4	0x260
-#define ICE_HCI_SUPPORT			BIT(28)
-
 /* non command queue crypto enable register*/
 #define NONCQ_CRYPTO_PARM		0x70
 #define NONCQ_CRYPTO_DUN		0x74
 
-#define ICE_HCI_PARAM_CCI GENMASK(7, 0)
-#define ICE_HCI_PARAM_CE  GENMASK(8, 8)
+#define DISABLE_CRYPTO			BIT(15)
+#define CRYPTO_GENERAL_ENABLE		BIT(1)
+#define HC_VENDOR_SPECIFIC_FUNC4	0x260
+
+#define ICE_HCI_PARAM_CCI	GENMASK(7, 0)
+#define ICE_HCI_PARAM_CE	GENMASK(8, 8)
 
 struct sdhci_msm_offset {
 	u32 core_hc_mode;
@@ -312,6 +310,7 @@ struct sdhci_msm_host {
 	u32 dll_config;
 	u32 ddr_config;
 	bool vqmmc_enabled;
+	bool non_cqe_ice_init_done;
 };
 
 static const struct sdhci_msm_offset *sdhci_priv_msm_offset(struct sdhci_host *host)
@@ -1891,52 +1890,6 @@ out:
 
 #ifdef CONFIG_MMC_CRYPTO
 
-static int sdhci_msm_ice_cfg(struct sdhci_host *host, struct mmc_request *mrq,
-			     u32 slot)
-{
-	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
-	struct sdhci_msm_host *msm_host = sdhci_pltfm_priv(pltfm_host);
-	struct mmc_host *mmc = msm_host->mmc;
-	struct cqhci_host *cq_host = mmc->cqe_private;
-	unsigned int crypto_params = 0;
-	int key_index = 0;
-	bool bypass = true;
-	u64 dun = 0;
-
-	if (mrq->crypto_ctx) {
-		dun = mrq->crypto_ctx->bc_dun[0];
-		bypass = false;
-		key_index = mrq->crypto_key_slot;
-		if (cq_host->use_hwkey)
-			key_index = 0;
-	}
-
-	crypto_params = FIELD_PREP(ICE_HCI_PARAM_CE, !bypass) |
-			FIELD_PREP(ICE_HCI_PARAM_CCI, key_index);
-
-	cqhci_writel(cq_host, crypto_params, NONCQ_CRYPTO_PARM);
-
-	if (mrq->crypto_ctx)
-		cqhci_writel(cq_host, lower_32_bits(dun), NONCQ_CRYPTO_DUN);
-
-	/* Ensure crypto configuration is written before proceeding */
-	wmb();
-
-	return 0;
-}
-
-static void sdhci_msm_request(struct mmc_host *mmc, struct mmc_request *mrq)
-{
-	struct sdhci_host *host = mmc_priv(mmc);
-
-	if (mmc->caps2 & MMC_CAP2_CRYPTO) {
-
-		sdhci_msm_ice_cfg(host, mrq, 0);
-	}
-
-	sdhci_request(mmc, mrq);
-}
-
 static int sdhci_msm_ice_init(struct sdhci_msm_host *msm_host,
 			      struct cqhci_host *cq_host)
 {
@@ -2010,6 +1963,68 @@ static int sdhci_msm_program_key(struct cqhci_host *cq_host,
 		return qcom_ice_evict_key(msm_host->ice, slot);
 	else
 		return 0;
+}
+
+static void sdhci_msm_non_cqe_ice_init(struct sdhci_host *host)
+{
+	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
+	struct sdhci_msm_host *msm_host = sdhci_pltfm_priv(pltfm_host);
+	struct mmc_host *mmc = msm_host->mmc;
+	struct cqhci_host *cq_host = mmc->cqe_private;
+	u32 config;
+
+	config = sdhci_readl(host, HC_VENDOR_SPECIFIC_FUNC4);
+	config &= ~DISABLE_CRYPTO;
+	sdhci_writel(host, config, HC_VENDOR_SPECIFIC_FUNC4);
+	config = cqhci_readl(cq_host, CQHCI_CFG);
+	config |= CRYPTO_GENERAL_ENABLE;
+	cqhci_writel(cq_host, config, CQHCI_CFG);
+}
+
+static void sdhci_msm_ice_cfg(struct sdhci_host *host, struct mmc_request *mrq)
+{
+	struct sdhci_pltfm_host *pltfm_host = sdhci_priv(host);
+	struct sdhci_msm_host *msm_host = sdhci_pltfm_priv(pltfm_host);
+	struct mmc_host *mmc = msm_host->mmc;
+	struct cqhci_host *cq_host = mmc->cqe_private;
+	unsigned int crypto_params = 0;
+	int key_index;
+
+	if (mrq->crypto_ctx) {
+		if (!msm_host->non_cqe_ice_init_done) {
+			sdhci_msm_non_cqe_ice_init(host);
+			msm_host->non_cqe_ice_init_done = true;
+		}
+
+		key_index = mrq->crypto_key_slot;
+		crypto_params = FIELD_PREP(ICE_HCI_PARAM_CE, 1) |
+				FIELD_PREP(ICE_HCI_PARAM_CCI, key_index);
+
+		cqhci_writel(cq_host, crypto_params, NONCQ_CRYPTO_PARM);
+		cqhci_writel(cq_host, lower_32_bits(mrq->crypto_ctx->bc_dun[0]),
+			     NONCQ_CRYPTO_DUN);
+	} else {
+		cqhci_writel(cq_host, crypto_params, NONCQ_CRYPTO_PARM);
+	}
+
+	/* Ensure crypto configuration is written before proceeding */
+	wmb();
+}
+
+/*
+ * Handle non-CQE MMC requests with ICE crypto support.
+ * Configures ICE registers before passing the request to
+ * the standard SDHCI handler.
+ */
+static void sdhci_msm_request(struct mmc_host *mmc, struct mmc_request *mrq)
+{
+	struct sdhci_host *host = mmc_priv(mmc);
+
+	/* Only need to handle non-CQE crypto requests in this path */
+	if (mmc->caps2 & MMC_CAP2_CRYPTO)
+		sdhci_msm_ice_cfg(host, mrq);
+
+	sdhci_request(mmc, mrq);
 }
 
 #else /* CONFIG_MMC_CRYPTO */
@@ -2182,24 +2197,6 @@ static int sdhci_msm_cqe_add_host(struct sdhci_host *host,
 	ret = __sdhci_add_host(host);
 	if (ret)
 		goto cleanup;
-
-#ifdef CONFIG_MMC_CRYPTO
-	/* Initalize the ICE for NON-CMDQ eMMC devices */
-	u32 config = 0x0;
-	u32 ice_cap = 0x0;
-
-	config = sdhci_readl(host, HC_VENDOR_SPECIFIC_FUNC4);
-	config &= ~DISABLE_CRYPTO;
-	sdhci_writel(host, config, HC_VENDOR_SPECIFIC_FUNC4);
-	mb();
-	ice_cap = cqhci_readl(cq_host, CQHCI_CAP);
-	if (ice_cap & ICE_HCI_SUPPORT) {
-		config = cqhci_readl(cq_host, CQHCI_CFG);
-		config |= CRYPTO_GENERAL_ENABLE;
-		cqhci_writel(cq_host, config, CQHCI_CFG);
-	}
-	sdhci_msm_ice_enable(msm_host);
-#endif
 
 	dev_info(&pdev->dev, "%s: CQE init: success\n",
 			mmc_hostname(host->mmc));

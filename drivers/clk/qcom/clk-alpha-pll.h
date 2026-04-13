@@ -169,6 +169,7 @@ extern const struct clk_ops clk_alpha_pll_postdiv_trion_ops;
 extern const struct clk_ops clk_alpha_pll_lucid_ops;
 #define clk_alpha_pll_fixed_lucid_ops clk_alpha_pll_fixed_trion_ops
 extern const struct clk_ops clk_alpha_pll_postdiv_lucid_ops;
+extern const struct clk_ops clk_lucid_pll_passthrough_ops;
 extern const struct clk_ops clk_alpha_pll_agera_ops;
 
 extern const struct clk_ops clk_alpha_pll_lucid_5lpe_ops;

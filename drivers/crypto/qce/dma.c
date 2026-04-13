@@ -54,7 +54,6 @@ static int qce_dma_prep_cmd_sg(struct qce_device *qce, struct dma_chan *chan,
 	if (!dma_desc) {
 		pr_err("%s:failure in prep cmd desc\n",__func__);
 		dma_unmap_sg(qce->dev, qce_bam_sgl, qce_sgl_cnt, data_dir);
-		kfree(desc);
 		return -EINVAL;
 	}
 
