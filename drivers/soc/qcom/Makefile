@@ -49,3 +49,4 @@ obj-$(CONFIG_QCOM_TMELCOM) += tmelcom/
 obj-$(CONFIG_QCOM_TMEL_LOG) += tmel_log.o
 CFLAGS_qdss_bridge.o += -Wno-error=format
 obj-$(CONFIG_QCOM_QDSS_BRIDGE)	+= qdss_bridge.o
+obj-$(CONFIG_QCOM_CDSP_POWER) += cdsp_power.o
