@@ -34,6 +34,12 @@
 
 #define ADSP_DECRYPT_SHUTDOWN_DELAY_MS	100
 
+#define TCSR_SPARE_REG0		0x1959000
+#define TCSR_SPARE_REG0_SIZE	4
+
+static int debug_q6;
+module_param(debug_q6, int, 0644);
+
 struct adsp_data {
 	int crash_reason_smem;
 	const char *firmware_name;
@@ -248,6 +254,7 @@ release_dtb_firmware:
 static int adsp_start(struct rproc *rproc)
 {
 	struct qcom_adsp *adsp = rproc->priv;
+	void *debug_q6_reg;
 	int ret;
 
 	ret = qcom_q6v5_prepare(&adsp->q6v5);
@@ -306,6 +313,19 @@ static int adsp_start(struct rproc *rproc)
 
 	qcom_pil_info_store(adsp->info_name, adsp->mem_phys, adsp->mem_size);
 
+	if (debug_q6) {
+		debug_q6_reg = ioremap(TCSR_SPARE_REG0, TCSR_SPARE_REG0_SIZE);
+		if (!debug_q6_reg) {
+			dev_err(adsp->dev, "Failed to ioremap debug_q6 register\n");
+			ret = PTR_ERR(debug_q6_reg);
+			goto release_pas_metadata;
+		}
+
+		writel(0x1, debug_q6_reg);
+		dev_info(adsp->dev, "Writing 1 to TCSR_SPARE_REG0\n");
+		iounmap(debug_q6_reg);
+	}
+
 	ret = qcom_pas_auth_and_reset(adsp->pas_id);
 	if (ret) {
 		dev_err(adsp->dev,
@@ -313,8 +333,12 @@ static int adsp_start(struct rproc *rproc)
 		goto release_pas_metadata;
 	}
 
+wait_for_start:
 	ret = qcom_q6v5_wait_for_start(&adsp->q6v5, msecs_to_jiffies(5000));
 	if (ret == -ETIMEDOUT) {
+		if (debug_q6)
+			goto wait_for_start;
+
 		dev_err(adsp->dev, "start timed out\n");
 		qcom_pas_shutdown(adsp->pas_id);
 		goto release_pas_metadata;
