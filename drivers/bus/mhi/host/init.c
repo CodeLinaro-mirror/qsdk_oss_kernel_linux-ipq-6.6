@@ -25,6 +25,10 @@
 
 static DEFINE_IDA(mhi_controller_ida);
 
+static bool code_sharing = true;
+module_param(code_sharing, bool, 0644);
+MODULE_PARM_DESC(code_sharing, "Enable Code Sharing");
+
 const char * const mhi_ee_str[MHI_EE_MAX] = {
 	[MHI_EE_PBL] = "PRIMARY BOOTLOADER",
 	[MHI_EE_SBL] = "SECONDARY BOOTLOADER",
@@ -1102,6 +1106,12 @@ int mhi_register_controller(struct mhi_controller *mhi_cntrl,
 	mhi_dev->mhi_cntrl = mhi_cntrl;
 	dev_set_name(&mhi_dev->dev, "mhi%d", mhi_cntrl->index);
 	mhi_dev->name = dev_name(&mhi_dev->dev);
+
+	if (code_sharing && (mhi_cntrl->device_number == QCN9224_DEVICE_NUM ||
+			     mhi_cntrl->device_number == QCN9625_DEVICE_NUM)) {
+		mhi_cntrl->elf_fw_optimization = true;
+		dev_info(mhi_cntrl->cntrl_dev, "Enabling Code Sharing\n");
+	}
 
 	/* Init wakeup source */
 	device_init_wakeup(&mhi_dev->dev, true);

@@ -8,15 +8,39 @@
 #include <linux/device.h>
 #include <linux/dma-direction.h>
 #include <linux/dma-mapping.h>
+#include <linux/elf.h>
 #include <linux/firmware.h>
 #include <linux/interrupt.h>
 #include <linux/list.h>
 #include <linux/mhi.h>
 #include <linux/module.h>
 #include <linux/random.h>
+#include <linux/refcount.h>
 #include <linux/slab.h>
 #include <linux/wait.h>
 #include "internal.h"
+
+/**
+ * struct mhi_shared_ro - Shared read-only firmware segments
+ * @mhi_bufs: Array of RO segment DMA buffers
+ * @num_segments: Number of RO segments being shared
+ * @refcount: Reference count for tracking endpoint usage
+ * @lock: Protects access to this structure during refcount operations
+ *
+ * When multiple endpoints use the same firmware, RO segments can be
+ * shared to reduce memory usage. This structure tracks the shared
+ * segments and ensures proper cleanup via refcounting.
+ */
+struct mhi_shared_ro {
+	struct mhi_buf *mhi_bufs;
+	u32 num_segments;
+	refcount_t refcount;
+	struct mutex lock;	/* Protects structure during refcount ops */
+};
+
+/* Global shared RO segments - protected by mhi_shared_ro_lock */
+static DEFINE_MUTEX(mhi_shared_ro_lock);
+static struct mhi_shared_ro *mhi_global_shared_ro;
 
 /* Setup RDDM vector table for RDDM transfer and program RXVEC */
 int mhi_rddm_prepare(struct mhi_controller *mhi_cntrl,
@@ -351,10 +375,46 @@ void mhi_free_bhie_table(struct mhi_controller *mhi_cntrl,
 			 struct image_info *image_info,
 			 enum image_type img_type)
 {
+	struct device *dev = &mhi_cntrl->mhi_dev->dev;
 	int i;
 	struct mhi_buf *mhi_buf = image_info->mhi_buf;
+	u32 num_ro_segments = 0;
 
-	for (i = 0; i < image_info->entries; i++, mhi_buf++) {
+	/* Handle shared RO cleanup for FBC images */
+	if (img_type == IMG_TYPE_FBC && mhi_cntrl->shared_ro_segments) {
+		struct mhi_shared_ro *shared_ro = mhi_cntrl->shared_ro_segments;
+
+		num_ro_segments = shared_ro->num_segments;
+
+		mutex_lock(&mhi_shared_ro_lock);
+		if (refcount_dec_and_test(&shared_ro->refcount)) {
+			/* Last EP: Free shared RO segments */
+			dev_info(dev, "Last EP: Freeing %u shared RO segments\n",
+				 num_ro_segments);
+
+			/* Free the actual DMA memory for RO segments */
+			for (i = 0; i < num_ro_segments; i++) {
+				mhi_fw_free_coherent(mhi_cntrl,
+						     shared_ro->mhi_bufs[i].len,
+						     shared_ro->mhi_bufs[i].buf,
+						     shared_ro->mhi_bufs[i].dma_addr);
+			}
+
+			kfree(shared_ro->mhi_bufs);
+			kfree(shared_ro);
+			mhi_global_shared_ro = NULL;
+		} else {
+			dev_info(dev, "EP removed: %u RO segments still shared (refcount=%d)\n",
+				 num_ro_segments,
+				 refcount_read(&shared_ro->refcount));
+		}
+		mhi_cntrl->shared_ro_segments = NULL;
+		mutex_unlock(&mhi_shared_ro_lock);
+	}
+
+	/* Free per-EP segments (skip shared RO segments) */
+	mhi_buf = &image_info->mhi_buf[num_ro_segments];
+	for (i = num_ro_segments; i < image_info->entries; i++, mhi_buf++) {
 		if (img_type == IMG_TYPE_RDDM && !mhi_cntrl->rddm_prealloc) {
 			if (i == (image_info->entries - 1))
 				dma_unmap_single(mhi_cntrl->cntrl_dev,
@@ -373,10 +433,118 @@ void mhi_free_bhie_table(struct mhi_controller *mhi_cntrl,
 	kfree(image_info);
 }
 
+/**
+ * mhi_alloc_bhie_table_partial - Allocate BHIE table with RO segment reuse
+ * @mhi_cntrl: MHI controller
+ * @image_info: Pointer to image_info pointer
+ * @alloc_size: Total firmware size
+ * @rw_size: Size of RW segments to allocate
+ * @num_ro_segments: Number of RO segments to reuse
+ * @shared_ro_bufs: Shared RO segment buffers to copy
+ * @img_type: Image type
+ *
+ * Allocates BHIE table for subsequent EPs, reusing RO segments from first EP.
+ * Only allocates RW segments, copies RO pointers from shared memory.
+ */
+static int mhi_alloc_bhie_table_partial(struct mhi_controller *mhi_cntrl,
+					struct image_info **image_info,
+					size_t alloc_size, size_t rw_size,
+					u32 num_ro_segments,
+					struct mhi_buf *shared_ro_bufs,
+					enum image_type img_type)
+{
+	struct device *dev = &mhi_cntrl->mhi_dev->dev;
+	size_t seg_size = mhi_cntrl->seg_len;
+	int rw_segments, total_segments;
+	int i;
+	struct image_info *img_info;
+	struct mhi_buf *mhi_buf;
+	gfp_t gfp = GFP_KERNEL;
+	size_t allocated_bytes = 0;
+
+	rw_segments = DIV_ROUND_UP(rw_size, seg_size);
+	total_segments = num_ro_segments + rw_segments + 1; /* +1 for vector table */
+
+	dev_dbg(dev, "=== SUBSEQUENT EP: Partial Allocation ===\n");
+	dev_dbg(dev, "  Total firmware size: %zu bytes\n", alloc_size);
+	dev_dbg(dev, "  RO segments to reuse: %u (skipping %zu bytes)\n",
+		num_ro_segments, num_ro_segments * seg_size);
+	dev_dbg(dev, "  RW size to allocate: %zu bytes\n", rw_size);
+	dev_dbg(dev, "  RW segments: %d\n", rw_segments);
+	dev_dbg(dev, "  Total entries: %d (RO:%u + RW:%d + Vec:1)\n",
+		total_segments, num_ro_segments, rw_segments);
+
+	img_info = kzalloc(sizeof(*img_info), gfp);
+	if (!img_info)
+		return -ENOMEM;
+
+	/* Allocate memory for ALL entries (RO + RW + vector) */
+	img_info->mhi_buf = kcalloc(total_segments, sizeof(*img_info->mhi_buf), gfp);
+	if (!img_info->mhi_buf)
+		goto error_alloc_mhi_buf;
+
+	/* Copy RO segment pointers from shared memory */
+	memcpy(img_info->mhi_buf, shared_ro_bufs,
+	       num_ro_segments * sizeof(struct mhi_buf));
+	dev_dbg(dev, "  Copied %u RO segment pointers from shared memory\n",
+		num_ro_segments);
+
+	/* Allocate RW segments starting at index num_ro_segments */
+	mhi_buf = &img_info->mhi_buf[num_ro_segments];
+	for (i = num_ro_segments; i < total_segments; i++, mhi_buf++) {
+		size_t vec_size = seg_size;
+
+		/* Vector table is the last entry */
+		if (i == total_segments - 1)
+			vec_size = sizeof(struct bhi_vec_entry) * i;
+
+		mhi_buf->len = vec_size;
+		mhi_buf->buf = mhi_fw_alloc_coherent(mhi_cntrl, vec_size,
+						     &mhi_buf->dma_addr,
+						     GFP_KERNEL);
+		if (!mhi_buf->buf) {
+			dev_err(dev, "Failed to allocate RW segment[%d]\n", i);
+			goto error_alloc_segment;
+		}
+
+		allocated_bytes += vec_size;
+		dev_dbg(dev, "  Allocated RW segment[%d]: buf=%p dma=0x%llx len=%zu\n",
+			i, mhi_buf->buf, (u64)mhi_buf->dma_addr, mhi_buf->len);
+	}
+
+	img_info->bhi_vec = img_info->mhi_buf[total_segments - 1].buf;
+	img_info->entries = total_segments;
+	*image_info = img_info;
+
+	dev_dbg(dev, "Memory allocation summary:\n");
+	dev_dbg(dev, "  RO segments: %u (SHARED, 0 bytes allocated)\n",
+		num_ro_segments);
+	dev_dbg(dev, "  RW segments: %d (%zu bytes allocated)\n",
+		rw_segments + 1, allocated_bytes);
+	dev_dbg(dev, "  Total entries: %d\n", total_segments);
+
+	return 0;
+
+error_alloc_segment:
+	/* Free only the RW segments we allocated */
+	for (--i, --mhi_buf; i >= (int)num_ro_segments; i--, mhi_buf--) {
+		mhi_fw_free_coherent(mhi_cntrl, mhi_buf->len,
+				     mhi_buf->buf, mhi_buf->dma_addr);
+	}
+
+	kfree(img_info->mhi_buf);
+
+error_alloc_mhi_buf:
+	kfree(img_info);
+
+	return -ENOMEM;
+}
+
 int mhi_alloc_bhie_table(struct mhi_controller *mhi_cntrl,
 			 struct image_info **image_info,
 			 size_t alloc_size, enum image_type img_type)
 {
+	struct device *dev = &mhi_cntrl->mhi_dev->dev;
 	size_t seg_size = mhi_cntrl->seg_len;
 	int segments;
 	int i;
@@ -387,11 +555,16 @@ int mhi_alloc_bhie_table(struct mhi_controller *mhi_cntrl,
 	 */
 	gfp_t gfp = (in_interrupt() ? GFP_ATOMIC :
 		((GFP_KERNEL | __GFP_NORETRY) & ~__GFP_DIRECT_RECLAIM));
+	size_t allocated_bytes = 0;
 
 	if (img_type == IMG_TYPE_RDDM)
 		seg_size = mhi_cntrl->rddm_seg_len;
 
 	segments = DIV_ROUND_UP(alloc_size, seg_size) + 1;
+
+	dev_dbg(dev, "=== FIRST EP: Full Allocation ===\n");
+	dev_dbg(dev, "  Total firmware size: %zu bytes\n", alloc_size);
+	dev_dbg(dev, "  Segments to allocate: %d\n", segments);
 
 	img_info = kzalloc(sizeof(*img_info), gfp);
 	if (!img_info)
@@ -449,11 +622,18 @@ int mhi_alloc_bhie_table(struct mhi_controller *mhi_cntrl,
 			if (!mhi_buf->buf)
 				goto error_alloc_segment;
 		}
+
+		allocated_bytes += vec_size;
 	}
 
 	img_info->bhi_vec = img_info->mhi_buf[segments - 1].buf;
 	img_info->entries = segments;
 	*image_info = img_info;
+
+	dev_dbg(dev, "Memory allocation summary:\n");
+	dev_dbg(dev, "  All segments: %d (%zu bytes allocated)\n",
+		segments - 1, allocated_bytes);
+	dev_dbg(dev, "  Total entries: %d\n", segments);
 
 	return 0;
 
@@ -477,13 +657,142 @@ error_alloc_mhi_buf:
 	return -ENOMEM;
 }
 
+/**
+ * calculate_elf_size - Calculate total size of an ELF image
+ * @fw_data: Pointer to ELF data
+ * @fw_sz: Size of firmware buffer
+ *
+ * Parses ELF program headers to find the end of the last segment.
+ *
+ * Returns: Total ELF size, or 0 on error
+ */
+static size_t calculate_elf_size(const u8 *fw_data, size_t fw_sz)
+{
+	struct elf32_hdr *ehdr;
+	struct elf32_phdr *phdrs;
+	size_t max_end = 0;
+	int i;
+
+	if (fw_sz < sizeof(struct elf32_hdr))
+		return 0;
+
+	ehdr = (struct elf32_hdr *)fw_data;
+	if (memcmp(ehdr->e_ident, ELFMAG, SELFMAG) != 0)
+		return 0;
+
+	phdrs = (struct elf32_phdr *)(fw_data + ehdr->e_phoff);
+
+	/* Find the end of the last program header */
+	for (i = 0; i < ehdr->e_phnum; i++) {
+		struct elf32_phdr *phdr = &phdrs[i];
+		size_t seg_end = phdr->p_offset + phdr->p_filesz;
+
+		if (seg_end > max_end)
+			max_end = seg_end;
+	}
+
+	return max_end;
+}
+
+/**
+ * mhi_analyze_elf_for_ro_segments - Analyze ELF to find RO/RW boundary
+ * @mhi_cntrl: MHI controller
+ * @elf2_data: Pointer to second ELF data
+ * @elf2_offset: Offset of second ELF from start of firmware
+ * @num_ro_segments: Output - number of RO segments
+ *
+ * Scans ELF program headers until first RW segment is found.
+ * Calculates RO boundary relative to firmware start.
+ *
+ * Returns: 0 on success, negative error code on failure
+ */
+static int mhi_analyze_elf_for_ro_segments(struct mhi_controller *mhi_cntrl,
+					   const u8 *elf2_data,
+					   size_t elf2_offset,
+					   u32 *num_ro_segments)
+{
+	struct device *dev = &mhi_cntrl->mhi_dev->dev;
+	struct elf32_hdr *ehdr;
+	struct elf32_phdr *phdrs;
+	size_t first_rw_offset = 0;
+	size_t ro_end;
+	size_t seg_len = mhi_cntrl->seg_len;
+	int i;
+	bool found_rw = false;
+
+	/* Validate ELF header */
+	ehdr = (struct elf32_hdr *)elf2_data;
+	if (memcmp(ehdr->e_ident, ELFMAG, SELFMAG) != 0) {
+		dev_err(dev, "Invalid ELF magic in second ELF\n");
+		return -EINVAL;
+	}
+
+	phdrs = (struct elf32_phdr *)(elf2_data + ehdr->e_phoff);
+
+	/* Scan program headers until first RW segment - STOP there! */
+	dev_dbg(dev, "Analyzing second ELF: %u program headers\n", ehdr->e_phnum);
+	for (i = 0; i < ehdr->e_phnum; i++) {
+		struct elf32_phdr *phdr = &phdrs[i];
+
+		/* Debug: Print all segment info */
+		dev_dbg(dev, "  Segment[%d]: offset=0x%x size=0x%x flags=0x%x (%c%c%c)\n",
+			i, phdr->p_offset, phdr->p_filesz, phdr->p_flags,
+			(phdr->p_flags & PF_R) ? 'R' : '-',
+			(phdr->p_flags & PF_W) ? 'W' : '-',
+			(phdr->p_flags & PF_X) ? 'X' : '-');
+
+		/* Check if writable (first RW segment) */
+		if (phdr->p_flags & PF_W) {
+			/* Found first RW segment - STOP HERE */
+			first_rw_offset = phdr->p_offset;
+			found_rw = true;
+			dev_dbg(dev, "First RW at offset 0x%zx in second ELF\n",
+				first_rw_offset);
+			break;  /* Critical: don't scan further! */
+		}
+	}
+
+	if (!found_rw) {
+		dev_err(dev, "No RW segment found in second ELF\n");
+		return -EINVAL;
+	}
+
+	/* Calculate RO boundary from start of firmware */
+	ro_end = elf2_offset + first_rw_offset - 1;
+
+	/* Round down to seg_len boundary */
+	*num_ro_segments = ro_end / seg_len;
+
+	dev_info(dev, "ELF analysis: elf2_offset=0x%zx, first_rw=0x%zx, ro_end=0x%zx, %u RO segments (%zu bytes each)\n",
+		 elf2_offset, first_rw_offset, ro_end, *num_ro_segments, seg_len);
+
+	return 0;
+}
+
 static void mhi_firmware_copy(struct mhi_controller *mhi_cntrl,
 			      const u8 *buf, size_t remainder,
-			      struct image_info *img_info)
+			      struct image_info *img_info,
+			      u32 start_segment)
 {
+	struct device *dev = &mhi_cntrl->mhi_dev->dev;
 	size_t to_cpy;
 	struct mhi_buf *mhi_buf = img_info->mhi_buf;
 	struct bhi_vec_entry *bhi_vec = img_info->bhi_vec;
+	u32 segment_idx = 0;
+
+	if (start_segment > 0) {
+		dev_dbg(dev, "Firmware copy: Skipping first %u RO segments\n", start_segment);
+		dev_dbg(dev, "  Copying %zu bytes to RW segments starting at index %u\n",
+			remainder, start_segment);
+
+		/* Skip to RW segments */
+		mhi_buf += start_segment;
+		bhi_vec += start_segment;
+		segment_idx = start_segment;
+	} else {
+		dev_dbg(dev, "Firmware copy: Copying %zu bytes to all segments\n",
+			remainder);
+	}
 
 	while (remainder) {
 		to_cpy = min(remainder, mhi_buf->len);
@@ -491,23 +800,50 @@ static void mhi_firmware_copy(struct mhi_controller *mhi_cntrl,
 		bhi_vec->dma_addr = cpu_to_le64(mhi_buf->dma_addr);
 		bhi_vec->size = cpu_to_le64(to_cpy);
 
+		dev_dbg(dev, "  Copied %zu bytes to segment[%u]: dma=0x%llx\n",
+			to_cpy, segment_idx, (u64)mhi_buf->dma_addr);
+
 		buf += to_cpy;
 		remainder -= to_cpy;
 		bhi_vec++;
 		mhi_buf++;
+		segment_idx++;
+	}
+
+	/* Populate vector table entries for RO segments (if skipped) */
+	if (start_segment > 0) {
+		mhi_buf = img_info->mhi_buf;
+		bhi_vec = img_info->bhi_vec;
+
+		dev_dbg(dev, "Populating vector table for %u RO segments\n", start_segment);
+
+		for (segment_idx = 0; segment_idx < start_segment; segment_idx++) {
+			bhi_vec->dma_addr = cpu_to_le64(mhi_buf->dma_addr);
+			bhi_vec->size = cpu_to_le64(mhi_buf->len);
+
+			dev_dbg(dev, "  RO segment[%u]: dma=0x%llx size=%llu (shared)\n",
+				segment_idx, (u64)mhi_buf->dma_addr,
+				(u64)mhi_buf->len);
+
+			bhi_vec++;
+			mhi_buf++;
+		}
 	}
 }
 
 void mhi_fw_load_handler(struct mhi_controller *mhi_cntrl)
 {
 	const struct firmware *firmware = NULL;
+	struct mhi_shared_ro *shared_ro = NULL;
 	struct device *dev = &mhi_cntrl->mhi_dev->dev;
+	const u8 *original_fw_data, *rw_fw_data;
 	enum mhi_pm_state new_state;
 	const char *fw_name;
 	const u8 *fw_data;
-	void *buf;
+	size_t rw_size, fw_sz, size;
+	u32 num_ro_segments = 0;
 	dma_addr_t dma_addr;
-	size_t size, fw_sz;
+	void *buf;
 	int i, ret;
 
 	if (MHI_PM_IN_ERROR_STATE(mhi_cntrl->pm_state)) {
@@ -607,6 +943,10 @@ skip_req_fw:
 	 * device transitioning into MHI READY state
 	 */
 	if (mhi_cntrl->fbc_download) {
+		original_fw_data = firmware ? firmware->data : mhi_cntrl->fw_data;
+		num_ro_segments = 0;
+		shared_ro = NULL;
+
 		/*
 		 * Some FW combine two separate ELF images (SBL + WLAN FW) in a single
 		 * file. Hence, check for the existence of the second ELF header after
@@ -617,15 +957,126 @@ skip_req_fw:
 			fw_sz -= mhi_cntrl->sbl_size;
 		}
 
-		ret = mhi_alloc_bhie_table(mhi_cntrl, &mhi_cntrl->fbc_image, fw_sz,
-					   IMG_TYPE_FBC);
-		if (ret) {
-			release_firmware(firmware);
-			goto error_fw_load;
+		/* Check if we can reuse RO segments BEFORE allocation */
+		if (mhi_cntrl->elf_fw_optimization) {
+			const u8 *elf2_data;
+			size_t elf2_offset, elf1_size, fw_size;
+
+			/* Determine scenario and find second ELF */
+			if (fw_data != original_fw_data) {
+				/* Dual ELF detected at sbl_size */
+				elf2_data = fw_data;
+				elf2_offset = mhi_cntrl->sbl_size;
+				dev_dbg(dev, "Dual ELF detected at sbl_size\n");
+			} else {
+				/* Need to find second ELF manually */
+				fw_size = firmware ? firmware->size :
+						     mhi_cntrl->fw_sz;
+				elf1_size = calculate_elf_size(original_fw_data,
+							       fw_size);
+
+				if (elf1_size == 0) {
+					dev_err(dev, "Failed to calculate first ELF size\n");
+					goto skip_optimization;
+				}
+
+				/* Verify second ELF exists */
+				if (!memcmp(original_fw_data + elf1_size, ELFMAG, SELFMAG)) {
+					elf2_data = original_fw_data + elf1_size;
+					elf2_offset = elf1_size;
+					dev_dbg(dev, "Found second ELF at offset 0x%zx\n",
+						elf1_size);
+				} else {
+					dev_err(dev, "elf_fw_optimization enabled but no second ELF found at 0x%zx\n",
+						elf1_size);
+					goto skip_optimization;
+				}
+			}
+
+			/* Analyze second ELF to find RO/RW boundary */
+			ret = mhi_analyze_elf_for_ro_segments(mhi_cntrl, elf2_data,
+							      elf2_offset, &num_ro_segments);
+			if (ret != 0 || num_ro_segments == 0) {
+				dev_warn(dev, "ELF analysis failed or no RO segments, skipping optimization\n");
+				goto skip_optimization;
+			}
+
+			/* Check if we can reuse existing RO segments */
+			mutex_lock(&mhi_shared_ro_lock);
+			if (mhi_global_shared_ro) {
+				/* Subsequent EP: Reuse RO segments */
+				shared_ro = mhi_global_shared_ro;
+				refcount_inc(&shared_ro->refcount);
+				mhi_cntrl->shared_ro_segments = shared_ro;
+				dev_info(dev, "Subsequent EP: Reusing %u RO segments (refcount=%d)\n",
+					 shared_ro->num_segments,
+					 refcount_read(&shared_ro->refcount));
+			}
+			mutex_unlock(&mhi_shared_ro_lock);
 		}
 
-		/* Load the firmware into BHIE vec table */
-		mhi_firmware_copy(mhi_cntrl, fw_data, fw_sz, mhi_cntrl->fbc_image);
+skip_optimization:
+		/* Allocate based on whether we have shared RO */
+		if (shared_ro) {
+			/* Subsequent EP: Allocate only RW segments */
+			rw_size = fw_sz - (num_ro_segments * mhi_cntrl->seg_len);
+			rw_fw_data = fw_data + (num_ro_segments * mhi_cntrl->seg_len);
+
+			ret = mhi_alloc_bhie_table_partial(mhi_cntrl, &mhi_cntrl->fbc_image,
+							   fw_sz, rw_size, num_ro_segments,
+							   shared_ro->mhi_bufs, IMG_TYPE_FBC);
+			if (ret) {
+				release_firmware(firmware);
+				goto error_fw_load;
+			}
+
+			/* Copy firmware to RW segments only */
+			mhi_firmware_copy(mhi_cntrl, rw_fw_data, rw_size,
+					  mhi_cntrl->fbc_image, num_ro_segments);
+		} else {
+			/* First EP: Normal full allocation */
+			ret = mhi_alloc_bhie_table(mhi_cntrl, &mhi_cntrl->fbc_image,
+						   fw_sz, IMG_TYPE_FBC);
+			if (ret) {
+				release_firmware(firmware);
+				goto error_fw_load;
+			}
+
+			/* Copy firmware to all segments */
+			mhi_firmware_copy(mhi_cntrl, fw_data, fw_sz,
+					  mhi_cntrl->fbc_image, 0);
+
+			/* First EP with optimization: Save RO segments */
+			if (mhi_cntrl->elf_fw_optimization && num_ro_segments > 0) {
+				struct mhi_shared_ro *new_shared_ro;
+
+				new_shared_ro = kzalloc(sizeof(*new_shared_ro), GFP_KERNEL);
+				if (new_shared_ro) {
+					new_shared_ro->mhi_bufs = kcalloc(num_ro_segments,
+									  sizeof(struct mhi_buf),
+									  GFP_KERNEL);
+					if (new_shared_ro->mhi_bufs) {
+						memcpy(new_shared_ro->mhi_bufs,
+						       mhi_cntrl->fbc_image->mhi_buf,
+						       num_ro_segments * sizeof(struct mhi_buf));
+
+						new_shared_ro->num_segments = num_ro_segments;
+						refcount_set(&new_shared_ro->refcount, 1);
+						mutex_init(&new_shared_ro->lock);
+
+						mutex_lock(&mhi_shared_ro_lock);
+						mhi_global_shared_ro = new_shared_ro;
+						mhi_cntrl->shared_ro_segments = new_shared_ro;
+						mutex_unlock(&mhi_shared_ro_lock);
+
+						dev_info(dev, "First EP: Saved %u RO segments for sharing\n",
+							 num_ro_segments);
+					} else {
+						kfree(new_shared_ro);
+					}
+				}
+			}
+		}
 	}
 
 	release_firmware(firmware);

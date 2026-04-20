@@ -313,6 +313,10 @@ struct mhi_controller_config {
  * @reg_len: Length of the MHI MMIO region (required)
  * @fbc_image: Points to firmware image buffer
  * @rddm_image: Points to RAM dump buffer
+ * @shared_ro_segments: Pointer to shared RO segment structure for memory
+ *                      optimization across multiple endpoints (optional)
+ * @elf_fw_optimization: Enable RO segment sharing optimization to reduce
+ *                       memory usage when multiple endpoints use same firmware
  * @mhi_chan: Points to the channel configuration table
  * @lpm_chans: List of channels that require LPM notifications
  * @irq: base irq # to request (required)
@@ -407,6 +411,8 @@ struct mhi_controller {
 	size_t reg_len;
 	struct image_info *fbc_image;
 	struct image_info *rddm_image;
+	void *shared_ro_segments;
+	bool elf_fw_optimization;
 	struct mhi_chan *mhi_chan;
 	struct list_head lpm_chans;
 	int *irq;
