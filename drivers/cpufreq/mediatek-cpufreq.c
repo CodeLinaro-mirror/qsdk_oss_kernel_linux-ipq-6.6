@@ -635,7 +635,7 @@ static int mtk_cpufreq_probe(struct platform_device *pdev)
 		return -ENODEV;
 	}
 
-	for_each_possible_cpu(cpu) {
+	for_each_present_cpu(cpu) {
 		info = mtk_cpu_dvfs_info_lookup(cpu);
 		if (info)
 			continue;
