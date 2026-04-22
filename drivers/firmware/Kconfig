@@ -228,6 +228,33 @@ config QCOM_PAS_TEE
 	  Enable the generic Peripheral Authentication Service (PAS) provided
 	  by the firmware TEE implementation as the backend.
 
+config QCOM_ICE_CORE
+	tristate "Qualcomm Inline Crypto Engine Core"
+	help
+	  Enable the generic Inline Crypto Engine (ICE) core layer.
+	  This acts as the common layer with different backends plugged
+	  in whether it's an SCM implementation or a TEE-based implementation.
+
+config QCOM_ICE_SCM
+	tristate "Qualcomm ICE SCM Backend"
+	depends on QCOM_SCM
+	select QCOM_ICE_CORE
+	default y if QCOM_SCM
+	help
+	  Enable the SCM backend for Qualcomm Inline Crypto Engine.
+	  This backend uses Secure Monitor Calls (SMC) to communicate
+	  with TrustZone for key management operations.
+
+config QCOM_ICE_TEE
+	tristate "Qualcomm ICE TEE Backend"
+	depends on TEE
+	select QCOM_ICE_CORE
+	default m
+	help
+	  Enable the TEE backend for Qualcomm Inline Crypto Engine.
+	  This backend uses the TEE bus framework to communicate with
+	  OPTEE for key management operations.
+
 config QCOM_SCM
 	select QCOM_PAS
 	tristate

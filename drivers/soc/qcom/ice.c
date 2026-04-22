@@ -15,16 +15,9 @@
 #include <linux/of.h>
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
-#include <linux/slab.h>
-
-#include <linux/firmware/qcom/qcom_scm.h>
 
 #include <soc/qcom/ice.h>
-
-#define AES_128_CBC_KEY_SIZE			16
-#define AES_256_CBC_KEY_SIZE			32
-#define AES_128_XTS_KEY_SIZE			32
-#define AES_256_XTS_KEY_SIZE			64
+#include <linux/ice_ops.h>
 
 /* QCOM ICE registers */
 #define QCOM_ICE_REG_VERSION			0x0008
@@ -44,14 +37,6 @@
 
 #define qcom_ice_readl(engine, reg)	\
 	readl((engine)->base + (reg))
-
-struct qcom_ice {
-	struct device *dev;
-	void __iomem *base;
-	struct device_link *link;
-
-	struct clk *core_clk;
-};
 
 static bool qcom_ice_check_supported(struct qcom_ice *ice)
 {
@@ -166,177 +151,13 @@ int qcom_ice_suspend(struct qcom_ice *ice)
 }
 EXPORT_SYMBOL_GPL(qcom_ice_suspend);
 
-static int sdhci_msm_ice_set_hwkey_config(struct qcom_ice *ice,
-				          enum qcom_scm_ice_cipher cipher)
-{
-	struct device *dev = ice->dev;
-	struct ice_config_sec *ice_settings = NULL;
-	int ret;
-
-	ice_settings = kzalloc(sizeof(struct ice_config_sec), GFP_KERNEL);
-	if (!ice_settings)
-		return -ENOMEM;
-
-	switch (cipher) {
-	case QCOM_SCM_ICE_CIPHER_AES_128_XTS:
-		ice_settings->algo_mode = ICE_CRYPTO_ALGO_MODE_HW_AES_XTS;
-		ice_settings->key_size = ICE_CRYPTO_KEY_SIZE_HW_128;
-		ice_settings->key_mode = ICE_CRYPTO_USE_KEY0_HW_KEY;
-		break;
-	case QCOM_SCM_ICE_CIPHER_AES_256_XTS:
-		ice_settings->algo_mode = ICE_CRYPTO_ALGO_MODE_HW_AES_XTS;
-		ice_settings->key_size = ICE_CRYPTO_KEY_SIZE_HW_256;
-		ice_settings->key_mode = ICE_CRYPTO_USE_KEY0_HW_KEY;
-		break;
-	case QCOM_SCM_ICE_CIPHER_AES_128_ECB:
-		ice_settings->algo_mode = ICE_CRYPTO_ALGO_MODE_HW_AES_ECB;
-		ice_settings->key_size = ICE_CRYPTO_KEY_SIZE_HW_128;
-		ice_settings->key_mode = ICE_CRYPTO_USE_KEY0_HW_KEY;
-		break;
-	case QCOM_SCM_ICE_CIPHER_AES_256_ECB:
-		ice_settings->algo_mode = ICE_CRYPTO_ALGO_MODE_HW_AES_ECB;
-		ice_settings->key_size = ICE_CRYPTO_KEY_SIZE_HW_256;
-		ice_settings->key_mode = ICE_CRYPTO_USE_KEY0_HW_KEY;
-		break;
-	default:
-		dev_err_ratelimited(dev, "Unhandled cipher for HW Key support;"
-					"cipher_id=%d\n", cipher);
-		kfree(ice_settings);
-		return -EINVAL;
-	}
-	ret = qcom_config_sec_ice(ice_settings, sizeof(struct ice_config_sec));
-	kfree(ice_settings);
-
-	if (ret)
-		dev_err(dev, "Failed to program ICE HW key: %d", ret);
-
-	return ret;
-}
-
-static int qcom_ice_get_algo_mode(struct qcom_ice *ice, u8 algorithm_id,
-				  u8 key_size, enum qcom_scm_ice_cipher *cipher,
-				  u32 *key_len, bool use_hwkey)
-{
-	struct device *dev = ice->dev;
-
-	switch (key_size) {
-	case QCOM_ICE_CRYPTO_KEY_SIZE_128:
-		fallthrough;
-	case QCOM_ICE_CRYPTO_KEY_SIZE_256:
-		break;
-	default:
-		dev_err(dev, "Unhandled crypto key size %d\n", key_size);
-		return -EINVAL;
-	}
-
-	switch (algorithm_id) {
-	case QCOM_ICE_CRYPTO_ALG_AES_XTS:
-		if (key_size == QCOM_ICE_CRYPTO_KEY_SIZE_256) {
-			*cipher = QCOM_SCM_ICE_CIPHER_AES_256_XTS;
-			*key_len = AES_256_XTS_KEY_SIZE;
-		} else {
-			*cipher = QCOM_SCM_ICE_CIPHER_AES_128_XTS;
-			*key_len = AES_128_XTS_KEY_SIZE;
-		}
-		break;
-	case QCOM_ICE_CRYPTO_ALG_BITLOCKER_AES_CBC:
-		if (key_size == QCOM_ICE_CRYPTO_KEY_SIZE_256) {
-			*cipher = QCOM_SCM_ICE_CIPHER_AES_256_CBC;
-			*key_len = AES_256_CBC_KEY_SIZE;
-		} else {
-			*cipher = QCOM_SCM_ICE_CIPHER_AES_128_CBC;
-			*key_len = AES_128_CBC_KEY_SIZE;
-		}
-		break;
-	case QCOM_ICE_CRYPTO_ALG_AES_ECB:
-		/* ECB mode only supports for HW key slot */
-		if (!use_hwkey) {
-			dev_err_ratelimited(dev, "Unhandled crypto capability; "
-					"algorithm_id=%d, key_size=%d\n",
-					algorithm_id, key_size);
-			return -EINVAL;
-		}
-		if (key_size == QCOM_ICE_CRYPTO_KEY_SIZE_256) {
-			*cipher = QCOM_SCM_ICE_CIPHER_AES_256_ECB;
-			*key_len = AES_256_CBC_KEY_SIZE;
-		} else {
-			*cipher = QCOM_SCM_ICE_CIPHER_AES_128_ECB;
-			*key_len = AES_128_CBC_KEY_SIZE;
-		}
-		break;
-	default:
-		dev_err_ratelimited(dev, "Unhandled crypto capability; algorithm_id=%d, key_size=%d\n",
-				    algorithm_id, key_size);
-		return -EINVAL;
-	}
-
-	dev_info(dev, "cipher: %d key_size: %d", *cipher, *key_len);
-	return 0;
-}
-
-int qcom_ice_program_key(struct qcom_ice *ice,
-			 u8 algorithm_id, u8 key_size,
-			 const u8 crypto_key[], u8 data_unit_size,
-			 int slot, bool use_hwkey)
-{
-	struct device *dev = ice->dev;
-	enum qcom_scm_ice_cipher cipher;
-	union {
-		u8 bytes[AES_256_XTS_KEY_SIZE];
-		u32 words[AES_256_XTS_KEY_SIZE / sizeof(u32)];
-	} key;
-	int i;
-	int err;
-	u32 key_len;
-
-	if (qcom_ice_get_algo_mode(ice, algorithm_id, key_size, &cipher,
-				   &key_len, use_hwkey)) {
-		dev_err(dev, "Unhandled crypto capability; algorithm_id=%d, key_size=%d\n",
-			algorithm_id, key_size);
-		return -EINVAL;
-	}
-
-	if (use_hwkey)
-		return sdhci_msm_ice_set_hwkey_config(ice, cipher);
-
-	memcpy(key.bytes, crypto_key, key_len);
-
-	/* The SCM call requires that the key words are encoded in big endian */
-	for (i = 0; i < ARRAY_SIZE(key.words); i++)
-		__cpu_to_be32s(&key.words[i]);
-
-	err = qcom_scm_ice_set_key(slot, key.bytes, key_len, cipher,
-				   data_unit_size);
-
-	memzero_explicit(&key, sizeof(key));
-
-	return err;
-}
-EXPORT_SYMBOL_GPL(qcom_ice_program_key);
-
-int qcom_ice_evict_key(struct qcom_ice *ice, int slot)
-{
-	return qcom_scm_ice_invalidate_key(slot);
-}
-EXPORT_SYMBOL_GPL(qcom_ice_evict_key);
-
 static struct qcom_ice *qcom_ice_create(struct device *dev,
 					void __iomem *base)
 {
 	struct qcom_ice *engine;
 
-	if (!qcom_scm_is_available())
+	if (!qcom_ice_ops_available())
 		return ERR_PTR(-EPROBE_DEFER);
-
-	if (!qcom_scm_ice_available()) {
-		dev_warn(dev, "ICE SCM interface not found\n");
-		return NULL;
-	}
-
-	if (!qcom_scm_ice_hwkey_available()) {
-		dev_warn(dev, "ICE HW Key SCM interface not found\n");
-		return NULL;
-	}
 
 	engine = devm_kzalloc(dev, sizeof(*engine), GFP_KERNEL);
 	if (!engine)

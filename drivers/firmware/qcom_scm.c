@@ -327,7 +327,7 @@ static bool __qcom_scm_is_call_available(struct device *dev, u32 svc_id,
 	return ret ? false : !!res.result[0];
 }
 
-int qcom_context_ice_sec(u32 type, u8 key_size,
+int __qcom_context_ice_sec(u32 type, u8 key_size,
 			 u8 algo_mode, u8 *data_ctxt, u32 data_ctxt_len,
 			 u8 *salt_ctxt, u32 salt_ctxt_len)
 {
@@ -393,9 +393,8 @@ dma_unmap_data_ctxbuf:
 	return ret ?  : res.result[0];
 
 }
-EXPORT_SYMBOL_GPL(qcom_context_ice_sec);
 
-int qcom_config_sec_ice(void *buf, int size)
+int __qcom_config_sec_ice(void *buf, int size)
 {
 	int ret;
 	dma_addr_t conf_phys;
@@ -415,7 +414,6 @@ int qcom_config_sec_ice(void *buf, int size)
 	ret = qcom_scm_call(__scm->dev, &desc, &res);
 	return ret ? false : !!res.result[0];
 }
-EXPORT_SYMBOL_GPL(qcom_config_sec_ice);
 
 static int qcom_scm_set_boot_addr(void *entry, const u8 *cpu_bits)
 {
@@ -1458,33 +1456,19 @@ int qcom_scm_ocmem_unlock(enum qcom_scm_ocmem_client id, u32 offset, u32 size)
 }
 EXPORT_SYMBOL_GPL(qcom_scm_ocmem_unlock);
 
-/**
- * qcom_scm_ice_available() - Is the ICE key programming interface available?
- *
- * Return: true iff the SCM calls wrapped by qcom_scm_ice_invalidate_key() and
- *	   qcom_scm_ice_set_key() are available.
- */
-bool qcom_scm_ice_available(void)
+bool __qcom_scm_ice_available(void)
 {
 	return __qcom_scm_is_call_available(__scm->dev, QCOM_SCM_SVC_ES,
 					    QCOM_SCM_ES_INVALIDATE_ICE_KEY) &&
 		__qcom_scm_is_call_available(__scm->dev, QCOM_SCM_SVC_ES,
 					     QCOM_SCM_ES_CONFIG_SET_ICE_KEY);
 }
-EXPORT_SYMBOL_GPL(qcom_scm_ice_available);
 
-/**
- * qcom_scm_ice_hwkey_available() - Is the ICE HW key programming
- *                                  interface available?
- *
- * Return: true if the SCM calls wrapped by qcom_config_sec_ice() are available.
- */
-bool qcom_scm_ice_hwkey_available(void)
+bool __qcom_scm_ice_hwkey_available(void)
 {
 	return __qcom_scm_is_call_available(__scm->dev, QCOM_SVC_ICE,
 					    QCOM_SCM_ICE_CMD);
 }
-EXPORT_SYMBOL(qcom_scm_ice_hwkey_available);
 
 /**
  * qcom_qfprom_show_auth_available() - Check if the SCM call to verify
@@ -1545,19 +1529,7 @@ bool qcom_qfrom_fuse_row_read_available(void)
 }
 EXPORT_SYMBOL_GPL(qcom_qfrom_fuse_row_read_available);
 
-/**
- * qcom_scm_ice_invalidate_key() - Invalidate an inline encryption key
- * @index: the keyslot to invalidate
- *
- * The UFSHCI and eMMC standards define a standard way to do this, but it
- * doesn't work on these SoCs; only this SCM call does.
- *
- * It is assumed that the SoC has only one ICE instance being used, as this SCM
- * call doesn't specify which ICE instance the keyslot belongs to.
- *
- * Return: 0 on success; -errno on failure.
- */
-int qcom_scm_ice_invalidate_key(u32 index)
+int __qcom_scm_ice_invalidate_key(u32 index)
 {
 	struct qcom_scm_desc desc = {
 		.svc = QCOM_SCM_SVC_ES,
@@ -1569,30 +1541,8 @@ int qcom_scm_ice_invalidate_key(u32 index)
 
 	return qcom_scm_call(__scm->dev, &desc, NULL);
 }
-EXPORT_SYMBOL_GPL(qcom_scm_ice_invalidate_key);
 
-/**
- * qcom_scm_ice_set_key() - Set an inline encryption key
- * @index: the keyslot into which to set the key
- * @key: the key to program
- * @key_size: the size of the key in bytes
- * @cipher: the encryption algorithm the key is for
- * @data_unit_size: the encryption data unit size, i.e. the size of each
- *		    individual plaintext and ciphertext.  Given in 512-byte
- *		    units, e.g. 1 = 512 bytes, 8 = 4096 bytes, etc.
- *
- * Program a key into a keyslot of Qualcomm ICE (Inline Crypto Engine), where it
- * can then be used to encrypt/decrypt UFS or eMMC I/O requests inline.
- *
- * The UFSHCI and eMMC standards define a standard way to do this, but it
- * doesn't work on these SoCs; only this SCM call does.
- *
- * It is assumed that the SoC has only one ICE instance being used, as this SCM
- * call doesn't specify which ICE instance the keyslot belongs to.
- *
- * Return: 0 on success; -errno on failure.
- */
-int qcom_scm_ice_set_key(u32 index, const u8 *key, u32 key_size,
+int __qcom_scm_ice_set_key(u32 index, const u8 *key, u32 key_size,
 			 enum qcom_scm_ice_cipher cipher, u32 data_unit_size)
 {
 	struct qcom_scm_desc desc = {
@@ -1635,7 +1585,6 @@ int qcom_scm_ice_set_key(u32 index, const u8 *key, u32 key_size,
 	dma_free_coherent(__scm->dev, key_size, keybuf, key_phys);
 	return ret;
 }
-EXPORT_SYMBOL_GPL(qcom_scm_ice_set_key);
 
 /**
  * qcom_scm_hdcp_available() - Check if secure environment supports HDCP.

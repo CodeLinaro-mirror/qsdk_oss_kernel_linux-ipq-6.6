@@ -401,4 +401,13 @@ extern int qti_scm_tls_hardening(uint32_t req_addr, uint32_t req_size,
 				 u32 cmd_id);
 extern int qti_scm_aes(uint32_t req_addr, uint32_t req_size, u32 cmd_id);
 extern int qti_scm_aes_clear_key_handle(uint32_t key_handle, u32 cmd_id);
+int __qcom_context_ice_sec(u32 type, u8 key_size,
+			   u8 algo_mode, u8 *data_ctxt, u32 data_ctxt_len,
+			   u8 *salt_ctxt, u32 salt_ctxt_len);
+int __qcom_config_sec_ice(void *buf, int size);
+bool __qcom_scm_ice_available(void);
+bool __qcom_scm_ice_hwkey_available(void);
+int __qcom_scm_ice_invalidate_key(u32 index);
+int __qcom_scm_ice_set_key(u32 index, const u8 *key, u32 key_size,
+			   enum qcom_scm_ice_cipher cipher, u32 data_unit_size);
 #endif
