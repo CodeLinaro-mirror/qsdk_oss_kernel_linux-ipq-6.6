@@ -1634,7 +1634,7 @@ early_exit:
 	if (next_run)
 		gc_work->early_drop = false;
 
-	queue_delayed_work(system_power_efficient_wq, &gc_work->dwork, next_run);
+	queue_delayed_work(system_unbound_wq, &gc_work->dwork, next_run);
 }
 
 static void conntrack_gc_work_init(struct conntrack_gc_work *gc_work)
@@ -2781,7 +2781,7 @@ int nf_conntrack_init_start(void)
 		goto err_proto;
 
 	conntrack_gc_work_init(&conntrack_gc_work);
-	queue_delayed_work(system_power_efficient_wq, &conntrack_gc_work.dwork, HZ);
+	queue_delayed_work(system_unbound_wq, &conntrack_gc_work.dwork, HZ);
 
 	ret = register_nf_conntrack_bpf();
 	if (ret < 0)
