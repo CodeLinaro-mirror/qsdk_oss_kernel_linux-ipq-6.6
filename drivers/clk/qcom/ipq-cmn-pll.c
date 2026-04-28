@@ -133,6 +133,9 @@ struct cmn_pll_fixed_output_clk {
  * struct clk_cmn_pll - CMN PLL hardware specific data
  * @regmap: hardware regmap.
  * @base: register base address for gate clock registration
+ * @dev: CMN PLL platform device, used for runtime PM to ensure the AHB
+ *       clock is enabled before accessing hardware registers from child
+ *       clock callbacks (round_rate, recalc_rate, set_rate).
  * @hw: handle between common and hardware-specific interfaces
  *
  * This structure is used for all CMN PLL-derived clocks including
@@ -141,6 +144,7 @@ struct cmn_pll_fixed_output_clk {
 struct clk_cmn_pll {
 	struct regmap *regmap;
 	void __iomem *base;
+	struct device *dev;
 	struct clk_hw hw;
 };
 
@@ -332,6 +336,9 @@ static u64 clk_cmn_pll_get_parent_rate64(struct clk_hw *hw)
 	struct clk_hw *cmn_pll_hw;
 	struct clk_hw *ref_hw;
 	unsigned long ref_rate;
+	struct device *cmn_dev;
+	u64 rate;
+	int ret;
 
 	/* hw is NSS/PPE/PON clock; its parent is CMN PLL */
 	cmn_pll_hw = clk_hw_get_parent(hw);
@@ -347,13 +354,30 @@ static u64 clk_cmn_pll_get_parent_rate64(struct clk_hw *hw)
 	if (!ref_rate)
 		return 0;
 
-	return clk_cmn_pll_calc_rate(clk->regmap, ref_rate);
+	/*
+	 * The CMN PLL registers are only accessible when the AHB clock is
+	 * enabled.  The CMN PLL device may be runtime-suspended (AHB clock
+	 * gated) between probe and this callback, causing regmap reads to
+	 * return 0x00000000 and producing wrong factor/ref_div values.
+	 * Resume the CMN PLL device here to guarantee register access.
+	 */
+	cmn_dev = to_clk_cmn_pll(cmn_pll_hw)->dev;
+	ret = pm_runtime_resume_and_get(cmn_dev);
+	if (ret < 0)
+		return 0;
+
+	rate = clk_cmn_pll_calc_rate(clk->regmap, ref_rate);
+	pm_runtime_put(cmn_dev);
+
+	return rate;
 }
 
 static unsigned long clk_cmn_pll_recalc_rate(struct clk_hw *hw,
 					     unsigned long parent_rate)
 {
 	struct clk_cmn_pll *cmn_pll = to_clk_cmn_pll(hw);
+	unsigned long rate;
+	int ret;
 
 	/*
 	 * NOTE: On 32-bit platforms, the CMN PLL rate (~12 GHz) exceeds
@@ -361,7 +385,14 @@ static unsigned long clk_cmn_pll_recalc_rate(struct clk_hw *hw,
 	 * Child clocks (NSS/PPE/PON) use clk_cmn_pll_get_parent_rate64()
 	 * to obtain the correct 64-bit rate and avoid this truncation.
 	 */
-	return (unsigned long)clk_cmn_pll_calc_rate(cmn_pll->regmap, parent_rate);
+	ret = pm_runtime_resume_and_get(cmn_pll->dev);
+	if (ret < 0)
+		return 0;
+
+	rate = (unsigned long)clk_cmn_pll_calc_rate(cmn_pll->regmap, parent_rate);
+	pm_runtime_put(cmn_pll->dev);
+
+	return rate;
 }
 
 static int clk_cmn_pll_determine_rate(struct clk_hw *hw,
@@ -415,11 +446,15 @@ static int clk_cmn_pll_set_rate(struct clk_hw *hw, unsigned long rate,
 	if (index < 0)
 		return index;
 
+	ret = pm_runtime_resume_and_get(cmn_pll->dev);
+	if (ret < 0)
+		return ret;
+
 	ret = regmap_update_bits(cmn_pll->regmap, CMN_PLL_REFCLK_CONFIG,
 				 CMN_PLL_REFCLK_INDEX,
 				 FIELD_PREP(CMN_PLL_REFCLK_INDEX, index));
 	if (ret)
-		return ret;
+		goto rpm_put;
 
 	/*
 	 * Update the source clock rate selection and source clock
@@ -430,26 +465,29 @@ static int clk_cmn_pll_set_rate(struct clk_hw *hw, unsigned long rate,
 					 CMN_PLL_REFCLK_DIV,
 					 FIELD_PREP(CMN_PLL_REFCLK_DIV, 2));
 		if (ret)
-			return ret;
+			goto rpm_put;
 
 		ret = regmap_update_bits(cmn_pll->regmap, CMN_PLL_REFCLK_SRC_SELECTION,
 					 CMN_PLL_REFCLK_SRC_DIV,
 					 FIELD_PREP(CMN_PLL_REFCLK_SRC_DIV, 0));
 		if (ret)
-			return ret;
+			goto rpm_put;
 	}
 
 	/* Enable PLL locked detect. */
 	ret = regmap_set_bits(cmn_pll->regmap, CMN_PLL_CTRL,
 			      CMN_PLL_CTRL_LOCK_DETECT_EN);
 	if (ret)
-		return ret;
+		goto rpm_put;
 
 	/*
 	 * Reset the CMN PLL block to ensure the updated configurations
 	 * take effect.
 	 */
-	return clk_cmn_pll_ana_soft_reset(cmn_pll->regmap);
+	ret = clk_cmn_pll_ana_soft_reset(cmn_pll->regmap);
+rpm_put:
+	pm_runtime_put(cmn_pll->dev);
+	return ret;
 }
 
 static const struct clk_ops clk_cmn_pll_ops = {
@@ -1236,6 +1274,7 @@ static struct clk_hw *ipq_cmn_pll_clk_hw_register(struct platform_device *pdev)
 	cmn_pll->hw.init = &init;
 	cmn_pll->regmap = regmap;
 	cmn_pll->base = base;
+	cmn_pll->dev = dev;
 
 	ret = devm_clk_hw_register(dev, &cmn_pll->hw);
 	if (ret)
