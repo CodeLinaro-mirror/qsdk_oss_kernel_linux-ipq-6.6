@@ -58,6 +58,7 @@ struct adsp_data {
 	int ssctl_id;
 
 	int region_assign_idx;
+	enum rproc_dump_mechanism dump_conf;
 };
 
 struct qcom_adsp {
@@ -732,6 +733,7 @@ static int adsp_probe(struct platform_device *pdev)
 
 	rproc->auto_boot = desc->auto_boot;
 	rproc_coredump_set_elf_info(rproc, ELFCLASS32, EM_NONE);
+	rproc->dump_conf = desc->dump_conf;
 
 	adsp = rproc->priv;
 	adsp->dev = &pdev->dev;
@@ -741,6 +743,7 @@ static int adsp_probe(struct platform_device *pdev)
 	adsp->info_name = desc->sysmon_name;
 	adsp->decrypt_shutdown = desc->decrypt_shutdown;
 	adsp->region_assign_idx = desc->region_assign_idx;
+	rproc->dump_conf = RPROC_COREDUMP_INLINE;
 	if (dtb_fw_name) {
 		adsp->dtb_firmware_name = dtb_fw_name;
 		adsp->dtb_pas_id = desc->dtb_pas_id;
@@ -1291,12 +1294,12 @@ static const struct adsp_data ipq9650_cdsp_resource = {
 	.dtb_firmware_name = "cdsp_dtb.mbn",
 	.pas_id = 18,
 	.dtb_pas_id = 0x25,
-	.minidump_id = 7,
 	.auto_boot = false,
 	.load_state = "cdsp",
 	.ssr_name = "cdsp",
 	.sysmon_name = "cdsp",
 	.ssctl_id = 0x17,
+	.dump_conf = RPROC_COREDUMP_INLINE,
 };
 
 static const struct of_device_id adsp_of_match[] = {
