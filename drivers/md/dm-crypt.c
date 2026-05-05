@@ -3305,7 +3305,7 @@ static int qcom_set_ice_context(struct dm_target *ti, u32 argc, char **argv)
 	if (argc > 8 && argv[8] != NULL && !strcmp(argv[8], "oemseed")) {
 		seedtype = OEM_SEED_TYPE;
 	} else {
-		ret = qcom_context_ice_sec(seedtype, key_size, algo_mode,
+		ret = qcom_ice_set_context(seedtype, key_size, algo_mode,
 				hex_data_context, hex_data_len,
 				hex_salt_context, hex_salt_len);
 		if (ret)
@@ -3352,7 +3352,7 @@ static int qcom_set_ice_context(struct dm_target *ti, u32 argc, char **argv)
 		buf = NULL;
 	}
 
-	ret = qcom_context_ice_sec(seedtype, key_size, algo_mode, hex_data_context,
+	ret = qcom_ice_set_context(seedtype, key_size, algo_mode, hex_data_context,
 				hex_data_len, hex_salt_context, hex_salt_len);
 	if (ret)
 		DMERR("%s: ice context configuration fail\n", __func__);

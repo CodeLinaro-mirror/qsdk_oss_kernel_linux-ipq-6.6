@@ -8,7 +8,12 @@
 
 #include <linux/types.h>
 
-struct qcom_ice;
+struct qcom_ice {
+	struct device *dev;
+	void __iomem *base;
+	struct device_link *link;
+	struct clk *core_clk;
+};
 
 enum qcom_ice_crypto_key_size {
 	QCOM_ICE_CRYPTO_KEY_SIZE_INVALID	= 0x0,
@@ -57,6 +62,9 @@ int qcom_ice_program_key(struct qcom_ice *ice,
 			 const u8 crypto_key[], u8 data_unit_size,
 			 int slot, bool use_hwkey);
 int qcom_ice_evict_key(struct qcom_ice *ice, int slot);
+int qcom_ice_set_context(u32 type, u8 key_size, u8 algo_mode,
+				u8 *data_ctxt, u32 data_ctxt_len,
+				u8 *salt_ctxt, u32 salt_ctxt_len);
 struct qcom_ice *of_qcom_ice_get(struct device *dev);
 struct qcom_ice *devm_of_qcom_ice_get(struct device *dev);
 
