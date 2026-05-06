@@ -932,10 +932,7 @@ static int clk_ephy_raw_set_rate(struct clk_hw *hw, unsigned long rate,
 				      CMN_PLL_PON_CONFIG,
 				      CMN_PLL_GEPHY_312P5M_125M_SEL);
 
-	if (ret)
-		return ret;
-
-	return clk_cmn_pll_ana_soft_reset(ephy_raw_clk->regmap);
+	return ret;
 }
 
 static const struct clk_ops clk_ephy_raw_ops = {
