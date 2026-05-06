@@ -255,8 +255,34 @@ config QCOM_ICE_TEE
 	  This backend uses the TEE bus framework to communicate with
 	  OPTEE for key management operations.
 
+config CRYPTO_DEV_QCOM_SECCRYPT_CORE
+	tristate "Qualcomm SecCrypt Core Layer"
+	help
+	  Core layer for SecCrypt backend management. This provides
+	  the abstraction layer for backend registration and operation
+	  forwarding to either SCM or OP-TEE backends.
+
+config CRYPTO_DEV_QCOM_SECCRYPT_SCM
+	tristate "Qualcomm SecCrypt SCM Backend"
+	depends on QCOM_SCM
+	select CRYPTO_DEV_QCOM_SECCRYPT_CORE
+	help
+	  TrustZone/SCM backend for SecCrypt. This backend uses the
+	  Qualcomm SCM (Secure Channel Manager) interface to communicate
+	  with TrustZone for secure crypto operations.
+
+config CRYPTO_DEV_QCOM_SECCRYPT_TEE
+	tristate "Qualcomm SecCrypt TEE Backend"
+	depends on OPTEE
+	select CRYPTO_DEV_QCOM_SECCRYPT_CORE
+	help
+	  TEE backend for SecCrypt. This backend uses the OP-TEE
+	  framework to communicate with the SecCrypt Trusted Application
+	  for secure crypto operations.
+
 config QCOM_SCM
 	select QCOM_PAS
+	select CRYPTO_DEV_QCOM_SECCRYPT_SCM
 	tristate
 
 config QCOM_SCM_DOWNLOAD_MODE_DEFAULT
