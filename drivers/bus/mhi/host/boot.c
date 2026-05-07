@@ -101,6 +101,7 @@ static int __mhi_download_rddm_in_panic(struct mhi_controller *mhi_cntrl)
 	u32 rx_status;
 	enum mhi_ee_type ee;
 	const u32 delayus = 2000;
+	const u32 soc_reset_delay_ms = 200;
 	u32 retry = (mhi_cntrl->timeout_ms * 1000) / delayus;
 	const u32 rddm_timeout_us = 400000;
 	int rddm_retry = rddm_timeout_us / delayus;
@@ -153,11 +154,18 @@ static int __mhi_download_rddm_in_panic(struct mhi_controller *mhi_cntrl)
 			/* Hardware reset so force device to enter RDDM */
 			dev_dbg(dev,
 				"Did not enter RDDM, do a host req reset\n");
+			mhi_debug_reg_dump(mhi_cntrl);
 			mhi_soc_reset(mhi_cntrl);
-			udelay(delayus);
+			mdelay(soc_reset_delay_ms);
 		}
 
 		ee = mhi_get_exec_env(mhi_cntrl);
+		/* If Target still did not swich to RDDM, dump debug registers and bail out */
+		if (ee != MHI_EE_RDDM) {
+			dev_err(dev, "Failed to switch to RDDM\n");
+			mhi_debug_reg_dump(mhi_cntrl);
+			return -EIO;
+		}
 	}
 
 	dev_dbg(dev,
