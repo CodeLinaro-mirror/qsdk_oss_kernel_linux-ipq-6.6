@@ -98,12 +98,23 @@ void ovl_stack_cpy(struct ovl_path *dst, struct ovl_path *src, unsigned int n)
 		dget(src[i].dentry);
 }
 
+/*
+ * Release references to dentries in the overlay stack.
+ * This is called during inode destruction and must handle the case
+ * where dentries may be concurrently freed by the dcache shrinker.
+ */
 void ovl_stack_put(struct ovl_path *stack, unsigned int n)
 {
 	unsigned int i;
 
-	for (i = 0; stack && i < n; i++)
-		dput(stack[i].dentry);
+	for (i = 0; stack && i < n; i++) {
+		struct dentry *dentry = stack[i].dentry;
+
+		if (WARN_ON(IS_ERR(dentry)))
+			continue;
+		if (dentry)
+			dput(dentry);
+	}
 }
 
 void ovl_stack_free(struct ovl_path *stack, unsigned int n)
