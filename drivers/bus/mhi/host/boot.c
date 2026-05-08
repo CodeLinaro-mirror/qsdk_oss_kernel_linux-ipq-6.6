@@ -962,6 +962,13 @@ skip_req_fw:
 			const u8 *elf2_data;
 			size_t elf2_offset, elf1_size, fw_size;
 
+			/* Skip optimization if firmware is smaller than one segment */
+			if (fw_sz < mhi_cntrl->seg_len) {
+				dev_info(dev, "Firmware size (%zu) < segment size (%zu), skipping optimization\n",
+					 fw_sz, mhi_cntrl->seg_len);
+				goto skip_optimization;
+			}
+
 			/* Determine scenario and find second ELF */
 			if (fw_data != original_fw_data) {
 				/* Dual ELF detected at sbl_size */
