@@ -177,9 +177,21 @@ static void ovl_free_inode(struct inode *inode)
 static void ovl_destroy_inode(struct inode *inode)
 {
 	struct ovl_inode *oi = OVL_I(inode);
+	struct ovl_entry *oe = oi->oe;
 
 	dput(oi->__upperdentry);
-	ovl_stack_put(ovl_lowerstack(oi->oe), ovl_numlower(oi->oe));
+
+	/*
+	 * During cache pressure, dentries in the lower stack may be
+	 * concurrently freed by the dcache shrinker. We need to ensure
+	 * we only put references we actually hold. The ovl_entry holds
+	 * references to lower dentries, so we can safely put them here.
+	 * However, we must check that the entry is still valid.
+	 */
+	if (oe && ovl_numlower(oe) > 0) {
+		ovl_stack_put(ovl_lowerstack(oe), ovl_numlower(oe));
+	}
+
 	if (S_ISDIR(inode->i_mode))
 		ovl_dir_cache_free(inode);
 	else
