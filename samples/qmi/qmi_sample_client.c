@@ -576,7 +576,7 @@ static void ping_pong_cb(struct qmi_handle *qmi, struct sockaddr_qrtr *sq,
 	else if (!resp->pong_valid || memcmp(resp->pong, "pong", 4))
 		txn->result = -EINVAL;
 
-	pr_info("Response for ping from %d:%d handle[%p] is %s\n",
+	pr_debug("Response for ping from %d:%d handle[%p] is %s\n",
 			qmi->sq.sq_port, qmi->sq.sq_node, qmi, resp->pong);
 	complete(&txn->completion);
 }
