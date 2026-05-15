@@ -11,6 +11,7 @@
 #include <linux/module.h>
 #include <linux/notifier.h>
 #include <linux/of.h>
+#include <linux/of_address.h>
 #include <linux/panic_notifier.h>
 #include <linux/platform_device.h>
 #include <linux/regmap.h>
@@ -26,6 +27,13 @@ enum wdt_reg {
 };
 
 #define QCOM_WDT_ENABLE		BIT(0)
+
+#define IPQ9650_SECURE_WDOG_EXPIRE_RESET_STATUS	BIT(0)
+#define IPQ9650_IMEM_POR_SBL_VAL		0x1
+#define IPQ9650_IMEM_NS_WDOG_TZ_VAL		0x1
+#define IPQ9650_IMEM_NS_WDOG_TME_VAL		0x41505053
+#define IPQ9650_IMEM_NS_WDOG_KERNEL_VAL		0x0
+
 
 static const u32 reg_offset_data_apcs_tmr[] = {
 	[WDT_RST] = 0x38,
@@ -221,12 +229,92 @@ static int qcom_wdt_panic_handler(struct notifier_block *nb,
 }
 #endif
 
+static int qcom_wdt_imem_read(struct device *dev, const char *compatible,
+			      u32 *val)
+{
+	struct device_node *np;
+	void __iomem *addr;
+
+	np = of_find_compatible_node(NULL, NULL, compatible);
+	if (!np) {
+		dev_err(dev, "node %s doesn't exist\n", compatible);
+		return -ENODEV;
+	}
+
+	addr = of_iomap(np, 0);
+	of_node_put(np);
+	if (!addr) {
+		dev_err(dev, "iomap failed for compatible %s\n", compatible);
+		return -ENOMEM;
+	}
+
+	memcpy_fromio(val, addr, sizeof(*val));
+	iounmap(addr);
+
+	return 0;
+}
+
+static int qcom_wdt_ipq9650_get_reset_reason(struct device *dev)
+{
+	u32 sbl_reason, tz_reason, tme_reason, kernel_reason;
+	u32 gcc_rst_status;
+	int ret;
+
+	/* Check Power-on Reset */
+	ret = qcom_wdt_imem_read(dev, "qcom,ipq9650-imem-sbl-reason", &sbl_reason);
+	if (ret)
+		return ret;
+
+	if (sbl_reason == IPQ9650_IMEM_POR_SBL_VAL)
+		return WDIOF_POWERUNDER;
+
+	/* Check Non-Secure Watchdog */
+	ret = qcom_wdt_imem_read(dev, "qcom,ipq9650-imem-gcc-rst-status", &gcc_rst_status);
+	if (ret)
+		return ret;
+
+	ret = qcom_wdt_imem_read(dev, "qcom,ipq9650-imem-tz-reason", &tz_reason);
+	if (ret)
+		return ret;
+
+	ret = qcom_wdt_imem_read(dev, "qcom,ipq9650-imem-tme-reason", &tme_reason);
+	if (ret)
+		return ret;
+
+	ret = qcom_wdt_imem_read(dev, "qcom,ipq9650-imem-kernel-reason", &kernel_reason);
+	if (ret)
+		return ret;
+
+	if ((gcc_rst_status & IPQ9650_SECURE_WDOG_EXPIRE_RESET_STATUS) &&
+	    (kernel_reason == IPQ9650_IMEM_NS_WDOG_KERNEL_VAL) &&
+	    (tz_reason == IPQ9650_IMEM_NS_WDOG_TZ_VAL) &&
+	    (tme_reason == IPQ9650_IMEM_NS_WDOG_TME_VAL))
+		return WDIOF_CARDRESET;
+
+	return 0;
+}
+
 static int qcom_wdt_get_restart_reason(struct device *dev, struct qcom_wdt *wdt)
 {
 	unsigned int args[3];
 	struct regmap *imem;
 	unsigned int val;
 	int ret;
+
+	/*
+	 * For IPQ9650, determine the reset reason directly from IMEM and
+	 * GCC registers and populate bootstatus with the IPQ9650-specific
+	 * reset reason code.
+	 */
+	if (of_device_is_compatible(dev->of_node, "qcom,apss-wdt-ipq9650")) {
+		ret = qcom_wdt_ipq9650_get_reset_reason(dev);
+		if (ret >= 0)
+			wdt->wdd.bootstatus = ret;
+		else
+			dev_err(dev, "failed to read the restart reason info\n");
+
+		return 0;
+	}
 
 	imem = syscon_regmap_lookup_by_phandle_args(dev->of_node,
 						    "qcom,restart-reason",
