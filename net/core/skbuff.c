@@ -98,35 +98,159 @@ struct kmem_cache *skbuff_cache __ro_after_init;
 struct kmem_cache *skb_data_cache;
 struct kmem_cache *skb_data_cache_2100;
 
-#if defined(CONFIG_SKB_RECYCLER)
-#define SKB_DATA_CACHE_SIZE (SKB_DATA_ALIGN(SKB_RECYCLE_SIZE + NET_SKB_PAD) + SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
-/*
- * Both caches are kept same size in 1G profile so that all
- * skbs could be recycled. For 256M and 512M profiles, new slab of size
- * 2100 is created.
- */
-#if CONFIG_IPQ_MEM_PROFILE == 256 || CONFIG_IPQ_MEM_PROFILE == 512
-#define SKB_DATA_CACHE_SIZE_2100 (SKB_DATA_ALIGN(2100 + NET_SKB_PAD) + SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
-#else
-#define SKB_DATA_CACHE_SIZE_2100 SKB_DATA_CACHE_SIZE
-#endif
-#else /* CONFIG_SKB_RECYCLER */
-/*
- * DATA CACHE is 2368 for 64bit arch, 2176 for 32bit arch
- * DATA_CACHE_2100 is 2496 for 64bit arch, 2432 for 32bit arch
- * DATA CACHE size should always be lesser than that of DATA_CACHE_2100 size
- */
-#if defined(__LP64__)
-#define SKB_DATA_CACHE_SIZE ((SKB_DATA_ALIGN(1984 + NET_SKB_PAD)) + SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
-#define SKB_DATA_CACHE_SIZE_2100 (SKB_DATA_ALIGN(2100 + NET_SKB_PAD) + SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
-#else
-#define SKB_DATA_CACHE_SIZE ((SKB_DATA_ALIGN(1856 + NET_SKB_PAD)) + SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
-#define SKB_DATA_CACHE_SIZE_2100 (SKB_DATA_ALIGN(2100 + NET_SKB_PAD) + SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
-#endif
-#endif
-
 #include "skbuff_recycle.h"
 #include "skbuff_debug.h"
+
+/*
+ * struct skb_profile_size - per-profile slab size descriptor
+ *
+ * @name:       mem-profile name matched against "mem-profile=<name>" in cmdline
+ * @value:      primary cache size (SKB_DATA_CACHE_SIZE)
+ * @cache_size: secondary cache size (SKB_DATA_CACHE_SIZE_2100)
+ * @profile:    enum skb_mem_profile value for this entry
+ *
+ * With CONFIG_SKB_RECYCLER:
+ *   value      = SKB_RECYCLE_SIZE for all profiles
+ *   cache_size = __SKB_CACHE_SZ(2100)  for optimized/balanced (256M/512M)
+ *   cache_size = SKB_RECYCLE_SIZE       for high (1G, both caches equal)
+ *
+ * Without CONFIG_SKB_RECYCLER:
+ *   value      = __SKB_CACHE_SZ(1984)  for 64-bit (LP64)
+ *   value      = __SKB_CACHE_SZ(1856)  for 32-bit (ILP32)
+ *   cache_size = __SKB_CACHE_SZ(2100)  for all profiles and both word widths
+ */
+struct skb_profile_size {
+	const char *name;
+	const u32 value;
+	const u32 cache_size;
+	const enum skb_mem_profile profile;
+};
+
+#if defined(CONFIG_SKB_RECYCLER)
+static unsigned int skb_recycle_size = CONFIG_SKB_RECYCLE_SIZE;
+#define SKB_RECYCLE_SIZE skb_recycle_size
+#endif
+
+/*
+ * __SKB_CACHE_SZ(payload):
+ *   SKB_DATA_ALIGN(payload + NET_SKB_PAD) + SKB_DATA_ALIGN(sizeof(skb_shared_info))
+ *
+ * NET_SKB_PAD uses a GCC statement-expression (max()) which is not valid in a
+ * static initialiser, so __SKB_NET_PAD provides the equivalent integer constant.
+ * On all supported targets L1_CACHE_BYTES == 64, so NET_SKB_PAD == 64.
+ */
+#define __SKB_NET_PAD		64
+#define __SKB_CACHE_SZ(payload)	(SKB_DATA_ALIGN((payload) + __SKB_NET_PAD) + \
+				 SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
+
+#if defined(CONFIG_SKB_RECYCLER)
+#define __SKB_VAL		CONFIG_SKB_RECYCLE_SIZE
+#define __SKB_VAL_REDUCED	1856
+#define __SKB_CACHE_REDUCED	__SKB_CACHE_SZ(2100)
+#define __SKB_CACHE_HIGH	__SKB_CACHE_SZ(CONFIG_SKB_RECYCLE_SIZE)
+#else /* !CONFIG_SKB_RECYCLER */
+#ifdef __LP64__
+#define __SKB_VAL		1984
+#define __SKB_VAL_REDUCED	1984
+#else
+#define __SKB_VAL		1856
+#define __SKB_VAL_REDUCED	1856
+#endif
+#define __SKB_CACHE_REDUCED	__SKB_CACHE_SZ(2100)
+#define __SKB_CACHE_HIGH	__SKB_CACHE_REDUCED
+#endif /* CONFIG_SKB_RECYCLER */
+
+static const struct skb_profile_size skb_profile_table[] = {
+	/* name		 value		 cache_size		 profile			 */
+	{"optimized",	 __SKB_VAL_REDUCED,	__SKB_CACHE_REDUCED,	SKB_MEM_PROFILE_LOW},
+	{"balanced",	 __SKB_VAL_REDUCED,	__SKB_CACHE_REDUCED,	SKB_MEM_PROFILE_MEDIUM},
+	{"high",	 __SKB_VAL,	 __SKB_CACHE_HIGH,	SKB_MEM_PROFILE_HIGH},
+};
+
+#define skb_profile_table_size ARRAY_SIZE(skb_profile_table)
+
+/* Points to the active profile entry after skb_mem_profile_detect() runs.
+ * Initialised to the "high" (last) entry so __get_cache_size() returns a
+ * valid size even before the cmdline is parsed.
+ */
+static const struct skb_profile_size *skb_active_profile =
+	&skb_profile_table[SKB_MEM_PROFILE_HIGH];
+
+/* SKB data cache size accessors.
+ *
+ * skb_active_profile is set by skb_mem_profile_detect() at the very top of
+ * skb_init(), before either kmem_cache_create call, so these macros always
+ * dereference the correct profile entry.
+ *
+ *   SKB_DATA_CACHE_SIZE      -> skb_active_profile->cache_size
+ *                               primary recycler cache size
+ *   SKB_DATA_CACHE_SIZE_2100 -> skb_active_profile->cache_size
+ *                               secondary 2100-cache size (equals value on
+ *                               the high/1G profile so both caches are equal)
+ */
+#define SKB_DATA_CACHE_SIZE      (skb_active_profile->cache_size)
+#define SKB_DATA_CACHE_SIZE_2100 (skb_active_profile->cache_size)
+
+/* Active memory profile, detected from kernel bootargs at init.
+ * Defaults to SKB_MEM_PROFILE_HIGH if mem-profile is absent.
+ */
+enum skb_mem_profile skb_active_mem_profile = SKB_MEM_PROFILE_HIGH;
+
+/* skb_get_mem_profile - return the active memory profile
+ *
+ * Returns the enum skb_mem_profile value that was detected from the kernel
+ * command line during skb_mem_profile_detect().  Callers (e.g. recycler.c)
+ * should use this accessor instead of referencing skb_active_mem_profile
+ * directly.
+ */
+enum skb_mem_profile skb_get_mem_profile(void)
+{
+	return skb_active_mem_profile;
+}
+EXPORT_SYMBOL(skb_get_mem_profile);
+
+/* skb_mem_profile_detect()
+ *	Parse the kernel command line for "mem-profile=<value>" and set
+ *	skb_active_mem_profile accordingly.
+ *
+ *	  mem-profile=balanced   -> SKB_MEM_PROFILE_MEDIUM (512M)
+ *	  mem-profile=optimized  -> SKB_MEM_PROFILE_LOW    (256M)
+ *	  (absent)               -> SKB_MEM_PROFILE_HIGH   (1G)
+ */
+void skb_mem_profile_detect(void)
+{
+	struct skb_profile_size *pr = skb_profile_table;
+	const char *cmdline = saved_command_line;
+	const char *profile = "high";
+	const char *param;
+	int i;
+
+	/* Default to the last (highest) entry in the table. */
+	skb_active_profile = &skb_profile_table[SKB_MEM_PROFILE_HIGH];
+	param = strstr(cmdline, "mem-profile=");
+	if (!param)
+		goto done;
+
+	param += strlen("mem-profile=");
+
+	/* Walk the table and latch the matching entry. */
+	for (i = 0; i < skb_profile_table_size; i++, pr++) {
+		if (strncmp(param, pr->name, strlen(pr->name)) == 0) {
+			skb_active_profile = &skb_profile_table[i];
+			skb_active_mem_profile = pr->profile;
+			profile = pr->name;
+			break;
+		}
+	}
+
+done:
+#ifdef CONFIG_SKB_RECYCLER
+	skb_recycle_size = skb_active_profile->value;
+#endif
+	skb_active_mem_profile = skb_active_profile->profile;
+	pr_info("Profile (%s) selected size = %d, 2100-cache size = %d\n",
+		profile, skb_active_profile->value, skb_active_profile->cache_size);
+}
 
 static struct kmem_cache *skbuff_fclone_cache __ro_after_init;
 #ifdef CONFIG_SKB_EXTENSIONS
@@ -581,6 +705,35 @@ struct sk_buff *napi_build_skb(void *data, unsigned int frag_size)
 }
 EXPORT_SYMBOL(napi_build_skb);
 
+/**
+ * skb_select_data_cache - pick the right skb data slab for a given object size
+ * @obj_size:   aligned object size (SKB_HEAD_ALIGN of the requested size)
+ * @cache_size: out-param filled with the chosen cache's slab object size
+ *
+ * Returns the kmem_cache pointer that should be used to allocate an skb data
+ * buffer of @obj_size bytes, and writes the corresponding slab size into
+ * @cache_size so the caller can update the allocation size field.
+ *
+ * Selection order:
+ *   1. obj_size <= SKB_SMALL_HEAD_CACHE_SIZE  -> skb_small_head_cache
+ *   2. obj_size <= skb_data_cache_size()      -> skb_data_cache
+ *   3. otherwise                              -> skb_data_cache_2100
+ */
+static inline struct kmem_cache *
+skb_select_data_cache(size_t obj_size, unsigned int *cache_size)
+{
+	if (obj_size <= SKB_SMALL_HEAD_CACHE_SIZE) {
+		*cache_size = SKB_SMALL_HEAD_CACHE_SIZE;
+		return skb_small_head_cache;
+	} else if (obj_size <= SKB_DATA_CACHE_SIZE) {
+		*cache_size = SKB_DATA_CACHE_SIZE;
+		return skb_data_cache;
+	}
+
+	*cache_size = SKB_DATA_CACHE_SIZE_2100;
+	return skb_data_cache_2100;
+}
+
 /*
  * kmalloc_reserve is a wrapper around kmalloc_node_track_caller that tells
  * the caller if emergency pfmemalloc reserves are being used. If it is and
@@ -594,33 +747,22 @@ static void *kmalloc_reserve(unsigned int *size, gfp_t flags, int node,
 	bool ret_pfmemalloc = false;
 	size_t obj_size;
 	void *obj;
-	struct kmem_cache * skb_cache;
+	struct kmem_cache *cache;
+	unsigned int cache_size;
 
 	obj_size = SKB_HEAD_ALIGN(*size);
 	if ((obj_size <= SKB_SMALL_HEAD_CACHE_SIZE &&
 	    !(flags & KMALLOC_NOT_NORMAL_BITS)) ||
 	    (obj_size > SZ_2K && obj_size <= SKB_DATA_CACHE_SIZE_2100)) {
-		if (obj_size <= SKB_SMALL_HEAD_CACHE_SIZE)
-			skb_cache = skb_small_head_cache;
-		else if (obj_size <= SKB_DATA_CACHE_SIZE)
-			skb_cache = skb_data_cache;
-		else
-			skb_cache = skb_data_cache_2100;
-		obj = kmem_cache_alloc_node(skb_cache,
-				flags | __GFP_NOMEMALLOC | __GFP_NOWARN,
-				node);
-		if (obj_size <= SKB_SMALL_HEAD_CACHE_SIZE)
-			*size = SKB_SMALL_HEAD_CACHE_SIZE;
-		else if (obj_size <= SKB_DATA_CACHE_SIZE)
-			*size = SKB_DATA_CACHE_SIZE;
-		else
-			*size = SKB_DATA_CACHE_SIZE_2100;
+		cache = skb_select_data_cache(obj_size, &cache_size);
+		obj = kmem_cache_alloc_node(cache, flags | __GFP_NOMEMALLOC | __GFP_NOWARN, node);
+		*size = cache_size;
 
 		if (obj || !(gfp_pfmemalloc_allowed(flags)))
 			goto out;
 		/* Try again but now we are using pfmemalloc reserves */
 		ret_pfmemalloc = true;
-		obj = kmem_cache_alloc_node(skb_cache, flags, node);
+		obj = kmem_cache_alloc_node(cache, flags, node);
 		goto out;
 	}
 
@@ -5220,6 +5362,7 @@ static void skb_extensions_init(void) {}
 
 void __init skb_init(void)
 {
+	skb_mem_profile_detect();
 
 	skb_data_cache = kmem_cache_create_usercopy("skb_data_cache",
 						SKB_DATA_CACHE_SIZE,
