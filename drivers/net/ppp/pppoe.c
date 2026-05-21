@@ -557,7 +557,7 @@ static struct sk_buff *pppoe_gso_segment(struct sk_buff *skb, netdev_features_t 
 		skb->mac_len = mac_len;
 		skb->protocol = protocol;
 		skb_reset_mac_header(skb);
-		skb_set_network_header(skb, ETH_HLEN);
+		skb_set_network_header(skb, mac_len);
 
 		/* Set this based on protocol v4 or v6 */
 		ph = pppoe_hdr(skb);
