@@ -217,6 +217,7 @@
 #define QCOM_IPQ9574_DEVICE_ID			0x1108
 #define QCOM_IPQ5332_DEVICE_ID			0x1005
 #define QCOM_IPQ5424_DEVICE_ID			0x1006
+#define QCOM_IPQ9650_DEVICE_ID			0x1007
 #define PCIE20_LNK_CONTROL2_LINK_STATUS2	0xa0
 
 /* Early Cal related fields */
@@ -1517,7 +1518,8 @@ int pcie_set_link_speed(struct pci_dev *dev, u16 target_link_speed)
 
 	if (dev->device != QCOM_IPQ9574_DEVICE_ID &&
 	    dev->device != QCOM_IPQ5332_DEVICE_ID &&
-	    dev->device != QCOM_IPQ5424_DEVICE_ID)
+	    dev->device != QCOM_IPQ5424_DEVICE_ID &&
+	    dev->device != QCOM_IPQ9650_DEVICE_ID)
 		return -EINVAL;
 
 	if (target_link_speed < 1 || target_link_speed > 3)
@@ -1556,10 +1558,12 @@ int pcie_set_link_width(struct pci_dev *dev, u16 target_link_width)
 	struct dw_pcie *pci;
 	struct qcom_pcie *pcie;
 	u32 val;
+	int ret;
 
 	if (dev->device != QCOM_IPQ9574_DEVICE_ID &&
 	    dev->device != QCOM_IPQ5332_DEVICE_ID &&
-	    dev->device != QCOM_IPQ5424_DEVICE_ID)
+	    dev->device != QCOM_IPQ5424_DEVICE_ID &&
+	    dev->device != QCOM_IPQ9650_DEVICE_ID)
 		return -EINVAL;
 
 	if (target_link_width < 1 || target_link_width > 2)
@@ -1589,8 +1593,10 @@ int pcie_set_link_width(struct pci_dev *dev, u16 target_link_width)
 		return -EAGAIN;
 	}
 
-	dw_pcie_read(pcie->parf + PARF_LTSSM, 4, &val);
-	if ((val & PCIE20_PARF_LTSSM_MASK) != 0x11) {
+	ret = readl_relaxed_poll_timeout(pcie->parf + PARF_LTSSM, val,
+					 (val & PCIE20_PARF_LTSSM_MASK) == 0x11,
+					 1000, 100000);
+	if (ret) {
 		dev_err(pci->dev, "After lane switch, link is not in L0: val 0x%x\n", val);
 		return -EAGAIN;
 	}
