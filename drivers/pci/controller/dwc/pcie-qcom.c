@@ -2632,8 +2632,8 @@ static void qcom_ipq_switch_lane(struct pci_dev *dev)
 	devp = pci->dev;
 	np = devp->of_node;
 
-	/* Switching PCIE Nodes 2/3 to single lane if force_to_single_lane property is defined in dts */
-	if ((of_property_read_bool(np, "force_to_single_lane")) && (pcie->domain == 2 || pcie->domain == 3)) {
+	/* Switching dual lane PCIE instances to single lane if force_to_single_lane property is defined in dts */
+	if ((of_property_read_bool(np, "force_to_single_lane")) && (pci->num_lanes == 2)) {
 
 		dev_info(devp,"Forcing PCIE to single lane\n");
 
@@ -2685,6 +2685,7 @@ DECLARE_PCI_FIXUP_EARLY(PCI_VENDOR_ID_QCOM, 0x1001, qcom_fixup_class);
 DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_QCOM, 0x1109, qcom_ipq_tc_vc_mapping);
 DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_QCOM, 0x1108, qcom_ipq_switch_lane);
 DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_QCOM, 0x1006, qcom_ipq_switch_lane);
+DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_QCOM, 0x1007, qcom_ipq_switch_lane);
 
 static const struct dev_pm_ops qcom_pcie_pm_ops = {
 	NOIRQ_SYSTEM_SLEEP_PM_OPS(qcom_pcie_suspend_noirq, qcom_pcie_resume_noirq)
