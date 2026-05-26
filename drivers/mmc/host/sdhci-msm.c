@@ -1997,6 +1997,8 @@ static void sdhci_msm_ice_cfg(struct sdhci_host *host, struct mmc_request *mrq)
 		}
 
 		key_index = mrq->crypto_key_slot;
+		if (cq_host->use_hwkey)
+			key_index = 0;
 		crypto_params = FIELD_PREP(ICE_HCI_PARAM_CE, 1) |
 				FIELD_PREP(ICE_HCI_PARAM_CCI, key_index);
 
