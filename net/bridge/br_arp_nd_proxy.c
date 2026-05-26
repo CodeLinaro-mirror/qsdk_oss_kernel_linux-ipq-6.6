@@ -310,7 +310,7 @@ static void br_nd_send(struct net_bridge *br, struct net_bridge_port *p,
 	pip6->priority = ipv6_hdr(request)->priority;
 	pip6->nexthdr = IPPROTO_ICMPV6;
 	pip6->hop_limit = 255;
-	pip6->daddr = ipv6_hdr(request)->saddr;
+	pip6->daddr = ipv6_addr_any(&(ipv6_hdr(request)->saddr)) ? in6addr_linklocal_allnodes : ipv6_hdr(request)->saddr;
 	pip6->saddr = *(struct in6_addr *)n->primary_key;
 
 	skb_pull(reply, sizeof(struct ipv6hdr));
@@ -407,14 +407,16 @@ void br_do_suppress_nd(struct sk_buff *skb, struct net_bridge *br,
 
 	BR_INPUT_SKB_CB(skb)->proxyarp_replied = 0;
 
-	if (br_is_neigh_suppress_enabled(p, vid))
-		return;
+	if (br_opt_get(br, BROPT_NEIGH_SUPPRESS_ENABLED)) {
+		if (br_is_neigh_suppress_enabled(p, vid))
+			return;
 
-	if (msg->icmph.icmp6_type == NDISC_NEIGHBOUR_ADVERTISEMENT &&
-	    !msg->icmph.icmp6_solicited) {
-		/* prevent flooding to neigh suppress ports */
-		BR_INPUT_SKB_CB(skb)->proxyarp_replied = 1;
-		return;
+		if (msg->icmph.icmp6_type == NDISC_NEIGHBOUR_ADVERTISEMENT &&
+		    !msg->icmph.icmp6_solicited) {
+			/* prevent flooding to neigh suppress ports */
+			BR_INPUT_SKB_CB(skb)->proxyarp_replied = 1;
+			return;
+		}
 	}
 
 	if (msg->icmph.icmp6_type != NDISC_NEIGHBOUR_SOLICITATION)
@@ -424,10 +426,17 @@ void br_do_suppress_nd(struct sk_buff *skb, struct net_bridge *br,
 	saddr = &iphdr->saddr;
 	daddr = &iphdr->daddr;
 
-	if (ipv6_addr_any(saddr) || !ipv6_addr_cmp(saddr, daddr)) {
-		/* prevent flooding to neigh suppress ports */
-		BR_INPUT_SKB_CB(skb)->proxyarp_replied = 1;
-		return;
+	if (br_opt_get(br, BROPT_NEIGH_SUPPRESS_ENABLED)) {
+		if (!ipv6_addr_cmp(saddr, daddr)) {
+			/* prevent flooding to neigh suppress ports */
+			BR_INPUT_SKB_CB(skb)->proxyarp_replied = 1;
+			return;
+		}
+
+		if (ipv6_addr_any(saddr)) {
+			/* prevent flooding to neigh suppress ports */
+			BR_INPUT_SKB_CB(skb)->proxyarp_replied = 1;
+		}
 	}
 
 	if (vid != 0) {
@@ -440,7 +449,8 @@ void br_do_suppress_nd(struct sk_buff *skb, struct net_bridge *br,
 		vlandev = dev;
 	}
 
-	if (br_is_local_ip6(vlandev, &msg->target)) {
+	if (br_opt_get(br, BROPT_NEIGH_SUPPRESS_ENABLED) &&
+	    br_is_local_ip6(vlandev, &msg->target)) {
 		/* its our own ip, so don't proxy reply
 		 * and don't forward to arp suppress ports
 		 */
@@ -461,7 +471,8 @@ void br_do_suppress_nd(struct sk_buff *skb, struct net_bridge *br,
 		if (f) {
 			bool replied = false;
 
-			if (br_is_neigh_suppress_enabled(f->dst, vid)) {
+			if (br_is_neigh_suppress_enabled(f->dst, vid) ||
+			    (f->dst && (f->dst->flags & BR_PROXYARP_WIFI))) {
 				if (vid != 0)
 					br_nd_send(br, p, skb, n,
 						   skb->vlan_proto,
