@@ -88,6 +88,9 @@
 #ifdef CONFIG_ATHMEMDEBUG
 #include <linux/ath_memdebug.h>
 #endif
+#if IS_ENABLED(CONFIG_WIRELESS)
+#include <linux/skb_wireless.h>
+#endif
 
 #include "dev.h"
 #include "sock_destructor.h"
@@ -5177,6 +5180,9 @@ static const u8 skb_ext_type_len[] = {
 #endif
 #ifdef CONFIG_IPQ_PON
 	[SKB_EXT_GEM] = SKB_EXT_CHUNKSIZEOF(struct gem_skb_ext),
+#endif
+#if IS_ENABLED(CONFIG_WIRELESS)
+	[SKB_EXT_WIRELESS] = SKB_EXT_CHUNKSIZEOF(struct wireless_skb_ext)
 #endif
 };
 
