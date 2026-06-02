@@ -1929,6 +1929,9 @@ static int qcom_pcie_reset_slot(struct pci_host_bridge *bridge,
 
 	qcom_pcie_host_deinit(pp);
 
+	/* De-assert perst gpio */
+	qcom_ep_reset_deassert(pcie);
+
 	ret = qcom_pcie_host_init(pp);
 	if (ret) {
 		dev_err(dev, "Host init failed\n");
