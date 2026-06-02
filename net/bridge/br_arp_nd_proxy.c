@@ -260,7 +260,9 @@ static void br_nd_send(struct net_bridge *br, struct net_bridge_port *p,
 	int i, len;
 	u8 *daddr;
 	u16 pvid;
+	bool is_dad_ns = false;
 
+	is_dad_ns = ipv6_addr_any(&(ipv6_hdr(request)->saddr));
 	if (!dev)
 		return;
 
@@ -310,7 +312,7 @@ static void br_nd_send(struct net_bridge *br, struct net_bridge_port *p,
 	pip6->priority = ipv6_hdr(request)->priority;
 	pip6->nexthdr = IPPROTO_ICMPV6;
 	pip6->hop_limit = 255;
-	pip6->daddr = ipv6_addr_any(&(ipv6_hdr(request)->saddr)) ? in6addr_linklocal_allnodes : ipv6_hdr(request)->saddr;
+	pip6->daddr = is_dad_ns ? in6addr_linklocal_allnodes : ipv6_hdr(request)->saddr;
 	pip6->saddr = *(struct in6_addr *)n->primary_key;
 
 	skb_pull(reply, sizeof(struct ipv6hdr));
@@ -323,7 +325,7 @@ static void br_nd_send(struct net_bridge *br, struct net_bridge_port *p,
 	na->icmph.icmp6_type = NDISC_NEIGHBOUR_ADVERTISEMENT;
 	na->icmph.icmp6_router = (n->flags & NTF_ROUTER) ? 1 : 0;
 	na->icmph.icmp6_override = 1;
-	na->icmph.icmp6_solicited = 1;
+	na->icmph.icmp6_solicited = is_dad_ns ? 0 : 1;
 	na->target = ns->target;
 	ether_addr_copy(&na->opt[2], n->ha);
 	na->opt[0] = ND_OPT_TARGET_LL_ADDR;
