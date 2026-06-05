@@ -349,10 +349,8 @@ struct qcom_pcie {
 	uint32_t system_noc_rate_adap_val;
 	uint32_t domain;
 	int global_irq;
-#if IS_ENABLED(CONFIG_PCIEAER)
 	int wake_irq;
 	struct completion wake_event;
-#endif
 	bool enable_vc;
 	bool enable_iatu;
 	u32 iatu_ib0_base_addr[3];	/* Low , High, Limit */
@@ -371,11 +369,9 @@ LIST_HEAD(qcom_pcie_list);
 
 #define to_qcom_pcie(x)		dev_get_drvdata((x)->dev)
 
-#if IS_ENABLED(CONFIG_PCIEAER)
 #define WAKE_EVENT_MSEC_DELAY 5000
 static int qcom_pcie_reset_slot(struct pci_host_bridge *bridge,
 				struct pci_dev *pdev);
-#endif
 
 static void qcom_ep_reset_assert(struct qcom_pcie *pcie)
 {
@@ -402,7 +398,6 @@ static int qcom_pcie_start_link(struct dw_pcie *pci)
 	return 0;
 }
 
-#if IS_ENABLED(CONFIG_PCIEAER)
 static irqreturn_t qcom_pcie_wake_irq_handler(int irq, void *data)
 {
 	struct qcom_pcie *pcie = data;
@@ -411,14 +406,11 @@ static irqreturn_t qcom_pcie_wake_irq_handler(int irq, void *data)
 
 	return IRQ_HANDLED;
 }
-#endif
 
 static irqreturn_t qcom_pcie_global_irq_thread_fn(int irq, void *data)
 {
 	struct qcom_pcie *pcie = data;
-#if IS_ENABLED(CONFIG_PCIEAER)
 	struct dw_pcie_rp *pp = &pcie->pci->pp;
-#endif
 	u32 status, mask;
 
 	status = readl_relaxed(pcie->parf + PARF_INT_ALL_STATUS);
@@ -430,17 +422,15 @@ static irqreturn_t qcom_pcie_global_irq_thread_fn(int irq, void *data)
 
 	if (status & PARF_INT_ALL_LINK_DOWN) {
 		dev_info(pcie->pci->dev, "Received Link down event\n");
-		/* We should skip pci_host_handle_link_down() for legacy devices
-		 * where AER is not enabled. Else it reset's the secondary or
-		 * sub-ordinate bus, subsequently EP get reset.
-		 * Hence It should be avoided.
-		 *
-		 * To Do: After the upstream patch is merged, remove the AER check
-		 * and verify the behavior with both AER enabled and disabled.
+		/*
+		 * Only invoke the link recovery path when AER is available.
+		 * pci_aer_available() returns false when AER is disabled via
+		 * the "pci=noaer" kernel command line parameter, allowing
+		 * platforms that do not require link recovery to opt out without
+		 * any driver or device tree changes.
 		 */
-#if IS_ENABLED(CONFIG_PCIEAER)
-		pci_host_handle_link_down(pp->bridge);
-#endif
+		if (pci_aer_available())
+			pci_host_handle_link_down(pp->bridge);
 	} else if (status & PARF_INT_ALL_LINK_UP) {
 		dev_info(pcie->pci->dev, "Received Link up event\n");
 	}
@@ -1488,16 +1478,17 @@ static int qcom_pcie_host_init(struct dw_pcie_rp *pp)
 			goto err_assert_reset;
 	}
 
-	/* reset_slot() callback is required only if AER enabled.
-	 * For non AER case, reset_slot() may reset the endpoint
-	 * if user executes "echo 1 > /sys/bus/pci/devices/<device>/reset"
-	 *
-	 * To Do: After the upstream patch is merged, remove the AER check
-	 * and verify the behavior with both AER enabled and disabled.
+	/*
+	 * Register the reset_slot() callback only when AER is available.
+	 * Platforms that do not require link recovery can disable it by
+	 * passing "pci=noaer" on the kernel command line, which causes
+	 * pci_aer_available() to return false.  Without this check,
+	 * reset_slot() would be invoked on a manual device reset
+	 * ("echo 1 > /sys/bus/pci/devices/<dev>/reset") and unexpectedly
+	 * reset the endpoint on non-RDP configurations.
 	 */
-#if IS_ENABLED(CONFIG_PCIEAER)
-	pp->bridge->reset_slot = qcom_pcie_reset_slot;
-#endif
+	if (pci_aer_available())
+		pp->bridge->reset_slot = qcom_pcie_reset_slot;
 	return 0;
 
 err_assert_reset:
@@ -1883,7 +1874,6 @@ static void qcom_pcie_init_debugfs(struct qcom_pcie *pcie)
 				    qcom_pcie_link_transition_count);
 }
 
-#if IS_ENABLED(CONFIG_PCIEAER)
 static int qcom_pcie_reset_slot(struct pci_host_bridge *bridge,
 				struct pci_dev *pdev)
 {
@@ -1962,7 +1952,6 @@ err_host_deinit:
 
 	return ret;
 }
-#endif
 
 int pcie_rescan(int val)
 {
@@ -2266,21 +2255,21 @@ static int __qcom_pcie_probe(struct platform_device *pdev,
 		}
 	}
 
-#if IS_ENABLED(CONFIG_PCIEAER)
-	init_completion(&pcie->wake_event);
-	pcie->wake_irq = platform_get_irq_byname_optional(pdev, "wake_irq");
-	if (pcie->wake_irq >= 0) {
-		ret = devm_request_irq(&pdev->dev, pcie->wake_irq,
-				       qcom_pcie_wake_irq_handler,
-				       IRQF_TRIGGER_FALLING,
-				       "pcie-wake", pcie);
-		if (ret) {
-			dev_err(&pdev->dev, "Unable to request wake irq\n");
-			pm_runtime_disable(&pdev->dev);
-			goto err_phy_exit;
+	if (pci_aer_available()) {
+		init_completion(&pcie->wake_event);
+		pcie->wake_irq = platform_get_irq_byname_optional(pdev, "wake_irq");
+		if (pcie->wake_irq >= 0) {
+			ret = devm_request_irq(&pdev->dev, pcie->wake_irq,
+					       qcom_pcie_wake_irq_handler,
+					       IRQF_TRIGGER_FALLING,
+					       "pcie-wake", pcie);
+			if (ret) {
+				dev_err(&pdev->dev, "Unable to request wake irq\n");
+				pm_runtime_disable(&pdev->dev);
+				goto err_phy_exit;
+			}
 		}
 	}
-#endif
 
 	if (!rc_idx) {
 		ret = bus_create_file(&pci_bus_type, &bus_attr_slot_rescan);
