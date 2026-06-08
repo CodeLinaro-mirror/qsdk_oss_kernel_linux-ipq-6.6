@@ -248,7 +248,7 @@ static int qcom_wdt_imem_read(struct device *dev, const char *compatible,
 		return -ENOMEM;
 	}
 
-	memcpy_fromio(val, addr, sizeof(*val));
+	*val = readl(addr);
 	iounmap(addr);
 
 	return 0;
