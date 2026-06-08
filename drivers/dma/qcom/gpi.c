@@ -6,12 +6,14 @@
 
 #include <dt-bindings/dma/qcom-gpi.h>
 #include <linux/bitfield.h>
+#include <linux/delay.h>
 #include <linux/dma-mapping.h>
 #include <linux/dmaengine.h>
 #include <linux/module.h>
 #include <linux/of_dma.h>
 #include <linux/platform_device.h>
 #include <linux/dma/qcom-gpi-dma.h>
+#include <linux/firmware.h>
 #include <linux/scatterlist.h>
 #include <linux/slab.h>
 #include "../dmaengine.h"
@@ -61,6 +63,22 @@
 #define TRE_I2C_GO_CMD          GENMASK(4, 0)
 #define TRE_I2C_GO_ADDR		GENMASK(14, 8)
 #define TRE_I2C_GO_STRETCH	BIT(26)
+
+/* UART Config0 WD0 */
+#define TRE_UART_C0_CHAR_SIZE	GENMASK(2, 0)
+#define TRE_UART_C0_STOP_BITS	GENMASK(4, 3)
+#define TRE_UART_C0_PARITY	GENMASK(7, 5)
+#define TRE_UART_C0_FLAGS	GENMASK(15, 8)
+#define TRE_UART_C0_HUNT_CHAR	GENMASK(23, 16)
+#define TRE_UART_C0_PACK_EN	BIT(24)
+
+/* UART Config0 WD1 */
+#define TRE_UART_C0_RX_STALE	GENMASK(23, 0)
+#define TRE_UART_C0_RFR_LEVEL	GENMASK(31, 24)
+
+/* UART GO WD0 */
+#define TRE_UART_GO_CMD		GENMASK(7, 0)
+#define TRE_UART_GO_EN_HUNT	BIT(8)
 
 /* DMA TRE */
 #define TRE_DMA_LEN		GENMASK(23, 0)
@@ -216,8 +234,66 @@ enum CNTXT_OFFS {
 #define GPII_n_CH_k_SCRATCH_2_OFFS(n, k)	(0x20068 + (0x4000 * (n)) + (0x80 * (k)))
 #define GPII_n_CH_k_SCRATCH_3_OFFS(n, k)	(0x2006C + (0x4000 * (n)) + (0x80 * (k)))
 
+/* GSI initialization registers */
+#define GSI_CFG_OFFS                           0x4000
+#define GSI_CFG_GSI_ENABLE                     BIT(0)
+#define GSI_CFG_DOUBLE_MCS_CLK_FREQ            BIT(2)
+
+#define GSI_MCS_CFG_OFFS                       0xF000
+#define GSI_MCS_CFG_MCS_ENABLE                 BIT(0)
+
+#define GSI_PERIPH_BASE_ADDR_LSB_OFFS          0x04018
+#define GSI_PERIPH_BASE_ADDR_MSB_OFFS          0x0401c
+
+#define GSI_MANAGER_EE_QOS_n_OFFS(n)           (0x4300 + (0x4 * (n)))
+
+#define GSI_IRAM_PTR_OFFS		       0x50000
+#define GSI_IRAM_SIZE			       0x4DC0
+
+#define GSI_MCS_CODE_VER_OFFS                  0x4008
+
+/* IEP (Interrupt Entry Point) registers */
+#define GSI_IRAM_PTR_CH_CMD_OFFS               0x04400
+#define GSI_IRAM_PTR_EE_GENERIC_CMD_OFFS       0x04404
+#define GSI_IRAM_PTR_TLV_CH_NOT_FULL_OFFS      0x04408
+#define GSI_IRAM_PTR_CH_DB_OFFS                0x04418
+#define GSI_IRAM_PTR_EV_DB_OFFS                0x0441c
+#define GSI_IRAM_PTR_NEW_RE_OFFS               0x04420
+#define GSI_IRAM_PTR_CH_DIS_COMP_OFFS          0x04424
+#define GSI_IRAM_PTR_CH_EMPTY_OFFS             0x04428
+#define GSI_IRAM_PTR_EVENT_GEN_COMP_OFFS       0x0442c
+#define GSI_IRAM_PTR_PERIPH_IF_TLV_IN_0_OFFS   0x04430
+#define GSI_IRAM_PTR_TIMER_EXPIRED_OFFS        0x0443c
+#define GSI_IRAM_PTR_INT_MOD_STOPED_OFFS       0x0444c
+
+/* EE generic command register — used to boot the MCS sequencer after enable */
+#define GPII_n_EE_GENERIC_CMD_OFFS(n)		(0x23018 + (0x4000 * (n)))
+#define GSI_EE_GENERIC_CMD_INIT			0x81
+
+#define GSI_EE_n_GSI_STATUS_OFFS(n)             (0x13000 + (0x4000 * (n)))
+#define GSI_EE_n_GSI_STATUS_ENABLED             BIT(0)
+
 struct __packed gpi_tre {
 	u32 dword[4];
+};
+
+/* Structure to hold all IEP values */
+struct gsi_iep_values {
+	u32 ch_cmd;
+	u32 ch_db;
+	u32 ev_db;
+	u32 new_re;
+	u32 ch_dis_comp;
+	u32 ch_empty;
+	u32 event_gen_comp;
+	u32 int_mod_stopped;
+	u32 ee_generic_cmd;
+	u32 periph_if_tlv_in_0;
+	u32 periph_if_tlv_in_1;
+	u32 periph_if_tlv_in_2;
+	u32 timer_expired;
+	u32 write_eng_comp;
+	u32 read_eng_comp;
 };
 
 enum msm_gpi_tce_code {
@@ -474,6 +550,8 @@ struct gpi_dev {
 	u32 gpii_mask; /* gpii instances available for apps */
 	u32 ev_factor; /* ev ring length factor */
 	struct gpii *gpiis;
+	bool gsi_standalone;
+	bool gsi_init_done;
 };
 
 struct reg_info {
@@ -522,7 +600,7 @@ struct gpii {
 	bool ieob_set;
 };
 
-#define MAX_TRE 3
+#define MAX_TRE 6
 
 struct gpi_desc {
 	struct virt_dma_desc vd;
@@ -541,6 +619,7 @@ static irqreturn_t gpi_handle_irq(int irq, void *data);
 static void gpi_ring_recycle_ev_element(struct gpi_ring *ring);
 static int gpi_ring_add_element(struct gpi_ring *ring, void **wp);
 static void gpi_process_events(struct gpii *gpii);
+static int gsi_standalone_init(struct gpi_dev *gpi_dev);
 
 static inline struct gchan *to_gchan(struct dma_chan *dma_chan)
 {
@@ -1095,6 +1174,11 @@ static void gpi_process_events(struct gpii *gpii)
 	union gpi_event *gpi_event;
 	struct gchan *gchan;
 	u32 chid, type;
+	struct virt_dma_desc *vd;
+	struct gpi_desc *gpi_desc;
+	struct qcom_gpi_dma_async_tx_cb_param *tx_cb_param;
+	unsigned long flags;
+	u32 byte_count;
 
 	cntxt_rp = gpi_read_reg(gpii, gpii->ev_ring_rp_lsb_reg);
 	rp = to_virtual(ev_ring, cntxt_rp);
@@ -1127,6 +1211,52 @@ static void gpi_process_events(struct gpii *gpii)
 				break;
 			case QUP_NOTIF_EV_TYPE:
 				dev_dbg(gpii->gpi_dev->dev, "QUP_NOTIF_EV_TYPE\n");
+				gchan = &gpii->gchan[chid];
+				byte_count = gpi_event->qup_notif_event.count & 0xFFFFFF;
+
+				if (byte_count == 0) {
+					dev_info(gpii->gpi_dev->dev,
+						 "QUP_NOTIF: chid=%u count=0, skipping GO-TRE ack\n",
+						 chid);
+					break;
+				}
+
+				/* Only process if channel is active */
+				if (unlikely(gchan->pm_state != ACTIVE_STATE)) {
+					dev_err(gpii->gpi_dev->dev,
+						"QUP_NOTIF: skipping, ch @ %s state\n",
+						TO_GPI_PM_STR(gchan->pm_state));
+					break;
+				}
+
+				spin_lock_irqsave(&gchan->vc.lock, flags);
+				vd = vchan_next_desc(&gchan->vc);
+				if (!vd) {
+					spin_unlock_irqrestore(&gchan->vc.lock, flags);
+					dev_dbg(gpii->gpi_dev->dev,
+						"QUP_NOTIF: no pending descriptor\n");
+					break;
+				}
+				gpi_desc = to_gpi_desc(vd);
+				spin_unlock_irqrestore(&gchan->vc.lock, flags);
+
+				/* Populate callback parameters with QUP_NOTIF data */
+				tx_cb_param = vd->tx.callback_param;
+				if (vd->tx.callback && tx_cb_param) {
+					tx_cb_param->length = byte_count;
+					tx_cb_param->completion_code = QCOM_GPI_TCE_SUCCESS;
+					tx_cb_param->status = gpi_event->qup_notif_event.status;
+
+					dma_cookie_complete(&vd->tx);
+					vd->tx.callback(tx_cb_param);
+				}
+
+				/* Free the descriptor */
+				spin_lock_irqsave(&gchan->vc.lock, flags);
+				list_del(&vd->node);
+				spin_unlock_irqrestore(&gchan->vc.lock, flags);
+				kfree(gpi_desc);
+
 				break;
 			default:
 				dev_dbg(gpii->gpi_dev->dev,
@@ -1709,6 +1839,68 @@ static int gpi_create_i2c_tre(struct gchan *chan, struct gpi_desc *desc,
 	return tre_idx;
 }
 
+static int gpi_create_uart_tre(struct gchan *chan, struct gpi_desc *desc,
+			       struct scatterlist *sgl, enum dma_transfer_direction direction)
+{
+	struct gpi_uart_config *uart = chan->config;
+	unsigned int tre_idx = 0;
+	dma_addr_t address;
+	struct gpi_tre *tre;
+
+	/* first create config tre if applicable */
+	if (direction == DMA_MEM_TO_DEV && uart->set_config) {
+		tre = &desc->tre[tre_idx];
+		tre_idx++;
+
+		tre->dword[0] = u32_encode_bits(uart->char_size, TRE_UART_C0_CHAR_SIZE);
+		tre->dword[0] |= u32_encode_bits(uart->stop_bits, TRE_UART_C0_STOP_BITS);
+		tre->dword[0] |= u32_encode_bits(uart->parity, TRE_UART_C0_PARITY);
+		tre->dword[0] |= u32_encode_bits(uart->flags, TRE_UART_C0_FLAGS);
+		tre->dword[0] |= u32_encode_bits(uart->hunt_char, TRE_UART_C0_HUNT_CHAR);
+		tre->dword[0] |= u32_encode_bits(uart->pack_en, TRE_UART_C0_PACK_EN);
+
+		tre->dword[1] = u32_encode_bits(uart->rx_stale, TRE_UART_C0_RX_STALE);
+		tre->dword[1] |= u32_encode_bits(uart->rfr_level, TRE_UART_C0_RFR_LEVEL);
+
+		tre->dword[2] = u32_encode_bits(uart->clk_div, TRE_C0_CLK_DIV);
+		tre->dword[2] |= u32_encode_bits(uart->clk_src, TRE_C0_CLK_SRC);
+
+		tre->dword[3] = u32_encode_bits(TRE_TYPE_CONFIG0, TRE_FLAGS_TYPE);
+		tre->dword[3] |= u32_encode_bits(1, TRE_FLAGS_CHAIN);
+	}
+
+	/* create the GO tre for TX */
+	if (direction == DMA_MEM_TO_DEV) {
+		tre = &desc->tre[tre_idx];
+		tre_idx++;
+
+		tre->dword[0] = u32_encode_bits(uart->command, TRE_UART_GO_CMD);
+		tre->dword[0] |= u32_encode_bits(uart->en_hunt, TRE_UART_GO_EN_HUNT);
+
+		tre->dword[1] = 0;
+		tre->dword[2] = 0;
+
+		tre->dword[3] = u32_encode_bits(TRE_TYPE_GO, TRE_FLAGS_TYPE);
+		tre->dword[3] |= u32_encode_bits(1, TRE_FLAGS_CHAIN);
+	}
+
+	/* create the dma tre */
+	tre = &desc->tre[tre_idx];
+	tre_idx++;
+
+	address = sg_dma_address(sgl);
+	tre->dword[0] = lower_32_bits(address);
+	tre->dword[1] = upper_32_bits(address);
+
+	tre->dword[2] = u32_encode_bits(sg_dma_len(sgl), TRE_DMA_LEN);
+
+	tre->dword[3] = u32_encode_bits(TRE_TYPE_DMA, TRE_FLAGS_TYPE);
+	if (direction == DMA_MEM_TO_DEV)
+		tre->dword[3] |= u32_encode_bits(1, TRE_FLAGS_IEOT);
+
+	return tre_idx;
+}
+
 static int gpi_create_spi_tre(struct gchan *chan, struct gpi_desc *desc,
 			      struct scatterlist *sgl, enum dma_transfer_direction direction)
 {
@@ -1807,17 +1999,23 @@ gpi_prep_slave_sg(struct dma_chan *chan, struct scatterlist *sgl,
 		return NULL;
 	}
 
-	if (sg_len > 1) {
+	/* SPI and I2C support only a single SG element; UART uses pre-built multi-SG TREs */
+	if (sg_len > 1 && gchan->protocol != QCOM_GPI_UART) {
 		dev_err(dev, "Multi sg sent, we support only one atm: %d\n", sg_len);
 		return NULL;
 	}
 
-	nr_tre = 3;
-	set_config = *(u32 *)gchan->config;
-	if (!set_config)
-		nr_tre = 2;
-	if (direction == DMA_DEV_TO_MEM) /* rx */
-		nr_tre = 1;
+	/* For UART multi-SG (pre-built TREs), nr_tre equals the SG count directly */
+	if (gchan->protocol == QCOM_GPI_UART && sg_len > 1) {
+		nr_tre = sg_len;
+	} else {
+		nr_tre = 3;
+		set_config = *(u32 *)gchan->config;
+		if (!set_config)
+			nr_tre = 2;
+		if (direction == DMA_DEV_TO_MEM) /* rx */
+			nr_tre = 1;
+	}
 
 	/* calculate # of elements required & available */
 	nr = gpi_ring_num_elements_avail(ch_ring);
@@ -1835,6 +2033,30 @@ gpi_prep_slave_sg(struct dma_chan *chan, struct scatterlist *sgl,
 		i = gpi_create_spi_tre(gchan, gpi_desc, sgl, direction);
 	} else if (gchan->protocol == QCOM_GPI_I2C) {
 		i = gpi_create_i2c_tre(gchan, gpi_desc, sgl, direction);
+	} else if (gchan->protocol == QCOM_GPI_UART) {
+		if (sg_len > 1) {
+			/*
+			 * Pre-built TREs passed as SG elements.
+			 * Each SG element is exactly one gpi_tre
+			 * (16 bytes). Mirrors gpi_msm.c gpi_prep_slave_sg()
+			 * which iterates SG elements and copies each as a TRE.
+			 */
+			struct scatterlist *sg;
+			int k;
+
+			if (sg_len > MAX_TRE) {
+				dev_err(dev, "UART: too many TREs: %u (max %u)\n",
+					sg_len, MAX_TRE);
+				kfree(gpi_desc);
+				return NULL;
+			}
+			for_each_sg(sgl, sg, sg_len, k)
+				memcpy(&gpi_desc->tre[k], sg_virt(sg),
+				       sizeof(struct gpi_tre));
+			i = sg_len;
+		} else {
+			i = gpi_create_uart_tre(gchan, gpi_desc, sgl, direction);
+		}
 	} else {
 		dev_err(dev, "invalid peripheral: %d\n", gchan->protocol);
 		kfree(gpi_desc);
@@ -1987,7 +2209,7 @@ static void gpi_free_chan_resources(struct dma_chan *chan)
 	write_unlock_irq(&gpii->pm_lock);
 
 	/* attempt to do graceful hardware shutdown */
-	if (cur_state == ACTIVE_STATE) {
+	if (cur_state == ACTIVE_STATE || cur_state == PREPARE_TERMINATE) {
 		gpi_stop_chan(gchan);
 
 		ret = gpi_send_cmd(gpii, gchan, GPI_CH_CMD_RESET);
@@ -2044,7 +2266,15 @@ static int gpi_alloc_chan_resources(struct dma_chan *chan)
 {
 	struct gchan *gchan = to_gchan(chan);
 	struct gpii *gpii = gchan->gpii;
+	struct gpi_dev *gpi_dev = gpii->gpi_dev;
 	int ret;
+
+	if (gpi_dev->gsi_standalone && !gpi_dev->gsi_init_done) {
+		ret = gsi_standalone_init(gpi_dev);
+		if (ret)
+			return ret;
+		gpi_dev->gsi_init_done = true;
+	}
 
 	mutex_lock(&gpii->ctrl_lock);
 
@@ -2148,6 +2378,359 @@ static struct dma_chan *gpi_of_dma_xlate(struct of_phandle_args *args,
 	return dma_get_slave_channel(&gchan->vc.chan);
 }
 
+/*
+ * GSI Firmware loading via request_firmware()
+ *
+ * Binary format of qupv3_gsi_firmware.bin:
+ *   [0..3]   magic 0x47534946 ("GSIF")
+ *   [4..5]   iep_count (u16 LE)
+ *   [6..7]   reserved
+ *   [8..11]  num_instructions (u32 LE)
+ *   [12 ..]  IEP records: iep_count × (32-byte name + u32 offset LE)
+ *   [12 + iep_count*36 ..]  instructions: num_instructions × 6 bytes
+ */
+
+#define GSI_FW_PATH		"qupv3_gsi_firmware.bin"
+#define GSI_FW_MAGIC		0x47534946U
+#define GSI_FW_IEP_NAME_LEN	32
+
+struct gsi_fw_hdr {
+	__le32 magic;
+	__le16 iep_count;
+	__le16 reserved;
+	__le32 num_instructions;
+} __packed;
+
+struct gsi_fw_iep_rec {
+	u8  name[GSI_FW_IEP_NAME_LEN];
+	__le32 offset;
+} __packed;
+
+/* Load all IEP values from the parsed firmware blob */
+static void gsi_load_all_ieps(struct gpi_dev *gpi_dev,
+			      struct gsi_iep_values *ieps,
+			      const struct gsi_fw_iep_rec *rec,
+			      u16 count)
+{
+	u16 i;
+
+	memset(ieps, 0, sizeof(*ieps));
+
+	for (i = 0; i < count; i++) {
+		u32 off = le32_to_cpu(rec[i].offset);
+		const char *name = rec[i].name;
+
+		if (!strncmp(name, "GSI_IRAM_PTR_CH_CMD", GSI_FW_IEP_NAME_LEN))
+			ieps->ch_cmd = off;
+		else if (!strncmp(name, "GSI_IRAM_PTR_CH_DB", GSI_FW_IEP_NAME_LEN))
+			ieps->ch_db = off;
+		else if (!strncmp(name, "GSI_IRAM_PTR_EV_DB", GSI_FW_IEP_NAME_LEN))
+			ieps->ev_db = off;
+		else if (!strncmp(name, "GSI_IRAM_PTR_NEW_RE", GSI_FW_IEP_NAME_LEN))
+			ieps->new_re = off;
+		else if (!strncmp(name, "GSI_IRAM_PTR_CH_DIS_COMP", GSI_FW_IEP_NAME_LEN))
+			ieps->ch_dis_comp = off;
+		else if (!strncmp(name, "GSI_IRAM_PTR_CH_EMPTY", GSI_FW_IEP_NAME_LEN))
+			ieps->ch_empty = off;
+		else if (!strncmp(name, "GSI_IRAM_PTR_EVENT_GEN_COMP", GSI_FW_IEP_NAME_LEN))
+			ieps->event_gen_comp = off;
+		else if (!strncmp(name, "GSI_IRAM_PTR_INT_MOD_STOPED", GSI_FW_IEP_NAME_LEN))
+			ieps->int_mod_stopped = off;
+		else if (!strncmp(name, "GSI_IRAM_PTR_EE_GENERIC_CMD", GSI_FW_IEP_NAME_LEN))
+			ieps->ee_generic_cmd = off;
+		else if (!strncmp(name, "GSI_IRAM_PTR_PERIPH_IF_TLV_IN_0", GSI_FW_IEP_NAME_LEN))
+			ieps->periph_if_tlv_in_0 = off;
+		else if (!strncmp(name, "GSI_IRAM_PTR_TIMER_EXPIRED", GSI_FW_IEP_NAME_LEN))
+			ieps->timer_expired = off;
+	}
+
+	dev_dbg(gpi_dev->dev,
+		"IEPs: CH_CMD=%u CH_DB=%u NEW_RE=%u EE_GENERIC_CMD=%u\n",
+		ieps->ch_cmd, ieps->ch_db, ieps->new_re, ieps->ee_generic_cmd);
+	dev_dbg(gpi_dev->dev,
+		"IEPs: CH_DIS_COMP=%u CH_EMPTY=%u EVENT_GEN_COMP=%u INT_MOD_STOPED=%u\n",
+		ieps->ch_dis_comp, ieps->ch_empty, ieps->event_gen_comp,
+		ieps->int_mod_stopped);
+	dev_dbg(gpi_dev->dev,
+		"IEPs: PERIPH_IF_TLV_IN_0=%u TIMER_EXPIRED=%u\n",
+		ieps->periph_if_tlv_in_0, ieps->timer_expired);
+}
+
+static void gsi_setup_all_ieps(struct gpi_dev *gpi_dev,
+			       const struct gsi_iep_values *ieps)
+{
+	void __iomem *gsi_base = gpi_dev->regs;
+
+	if (ieps->ch_cmd)
+		writel_relaxed(ieps->ch_cmd,
+			       gsi_base + GSI_IRAM_PTR_CH_CMD_OFFS);
+
+	if (ieps->ch_db)
+		writel_relaxed(ieps->ch_db,
+			       gsi_base + GSI_IRAM_PTR_CH_DB_OFFS);
+
+	if (ieps->ev_db)
+		writel_relaxed(ieps->ev_db,
+			       gsi_base + GSI_IRAM_PTR_EV_DB_OFFS);
+
+	if (ieps->new_re)
+		writel_relaxed(ieps->new_re,
+			       gsi_base + GSI_IRAM_PTR_NEW_RE_OFFS);
+
+	if (ieps->ch_dis_comp)
+		writel_relaxed(ieps->ch_dis_comp,
+			       gsi_base + GSI_IRAM_PTR_CH_DIS_COMP_OFFS);
+
+	if (ieps->ch_empty)
+		writel_relaxed(ieps->ch_empty,
+			       gsi_base + GSI_IRAM_PTR_CH_EMPTY_OFFS);
+
+	if (ieps->event_gen_comp)
+		writel_relaxed(ieps->event_gen_comp,
+			       gsi_base + GSI_IRAM_PTR_EVENT_GEN_COMP_OFFS);
+
+	if (ieps->int_mod_stopped)
+		writel_relaxed(ieps->int_mod_stopped,
+			       gsi_base + GSI_IRAM_PTR_INT_MOD_STOPED_OFFS);
+
+	if (ieps->ee_generic_cmd)
+		writel_relaxed(ieps->ee_generic_cmd,
+			       gsi_base + GSI_IRAM_PTR_EE_GENERIC_CMD_OFFS);
+
+	if (ieps->periph_if_tlv_in_0)
+		writel_relaxed(ieps->periph_if_tlv_in_0,
+			       gsi_base + GSI_IRAM_PTR_PERIPH_IF_TLV_IN_0_OFFS);
+
+	if (ieps->timer_expired)
+		writel_relaxed(ieps->timer_expired,
+			       gsi_base + GSI_IRAM_PTR_TIMER_EXPIRED_OFFS);
+
+	/* Ensure all IEP pointer writes are visible to hardware before return */
+	wmb();
+	dev_dbg(gpi_dev->dev, "IEP pointers configured\n");
+}
+
+/* Program GSI IRAM from the firmware blob */
+static int gsi_program_iram(struct gpi_dev *gpi_dev,
+			    const u8 *instr_data, u32 num_instructions)
+{
+	void __iomem *iram_base = gpi_dev->regs + GSI_IRAM_PTR_OFFS;
+	u32 i, ver_val, rb_lo, rb_hi;
+	u64 instruction;
+	const u8 *bytes;
+
+	if (num_instructions * 8 > GSI_IRAM_SIZE) {
+		dev_err(gpi_dev->dev,
+			"Firmware too large: %u instructions (max %u)\n",
+			num_instructions, GSI_IRAM_SIZE / 8);
+		return -EINVAL;
+	}
+
+	/*
+	 * Write firmware version word to MCS_CODE_VER before loading IRAM.
+	 * Instructions are big-endian (MSB-first): bytes[0]=bit47, bytes[5]=bit0.
+	 * dword0 (bits 31:0) = bytes[2..5] big-endian = the version word.
+	 */
+	bytes = instr_data;
+	ver_val = ((u32)bytes[2] << 24) | ((u32)bytes[3] << 16) |
+		  ((u32)bytes[4] <<  8) |  (u32)bytes[5];
+	dev_dbg(gpi_dev->dev,
+		"DBG: writing MCS_CODE_VER=0x%08x to offset 0x%x\n",
+		ver_val, GSI_MCS_CODE_VER_OFFS);
+	writel_relaxed(ver_val, gpi_dev->regs + GSI_MCS_CODE_VER_OFFS);
+	/* Flush the version write before readback to confirm it landed. */
+	wmb();
+	ver_val = readl_relaxed(gpi_dev->regs + GSI_MCS_CODE_VER_OFFS);
+	dev_dbg(gpi_dev->dev,
+		"DBG: MCS_CODE_VER readback after write=0x%08x\n",
+		ver_val);
+
+	dev_dbg(gpi_dev->dev,
+		"DBG: IRAM base offset=0x%x, regs=%p, iram_base=%p\n",
+		GSI_IRAM_PTR_OFFS, gpi_dev->regs, iram_base);
+
+	/* Write each 48-bit instruction to IRAM */
+	for (i = 0; i < num_instructions; i++) {
+		bytes = instr_data + (i * 6);
+
+		/*
+		 * Instructions are big-endian (MSB-first): bytes[0]=bit47.
+		 * Assemble to 48-bit value; write dword0 to even slot, dword1
+		 * (16 bits) to odd slot.
+		 */
+		instruction  = ((u64)bytes[0] << 40);
+		instruction |= ((u64)bytes[1] << 32);
+		instruction |= ((u64)bytes[2] << 24);
+		instruction |= ((u64)bytes[3] << 16);
+		instruction |= ((u64)bytes[4] <<  8);
+		instruction |=  (u64)bytes[5];
+
+		writel_relaxed(lower_32_bits(instruction),
+			       iram_base + (i * 8));
+		writel_relaxed((u32)(instruction >> 32) & 0xFFFF,
+			       iram_base + (i * 8) + 4);
+
+		if (i < 4) {
+			dev_dbg(gpi_dev->dev,
+				"DBG: IRAM[%u] offset=0x%x lo=0x%08x hi=0x%04x\n",
+				i, (u32)(GSI_IRAM_PTR_OFFS + i * 8),
+				lower_32_bits(instruction),
+				(u32)(instruction >> 32) & 0xFFFF);
+		}
+	}
+
+	/* Flush all IRAM writes to hardware before readback verification. */
+	wmb();
+
+	/* Readback first slot to verify IRAM write landed */
+	rb_lo = readl_relaxed(iram_base);
+	rb_hi = readl_relaxed(iram_base + 4);
+	dev_dbg(gpi_dev->dev,
+		"DBG: IRAM[0] readback lo=0x%08x hi=0x%04x\n",
+		rb_lo, rb_hi & 0xFFFF);
+	dev_dbg(gpi_dev->dev, "DBG: IRAM programming complete: %u instructions\n",
+		num_instructions);
+	return 0;
+}
+
+/* Complete GSI initialization using firmware loaded via request_firmware() */
+static int gsi_standalone_init(struct gpi_dev *gpi_dev)
+{
+	void __iomem *gsi_base = gpi_dev->regs;
+	const struct firmware *fw;
+	const struct gsi_fw_hdr *hdr;
+	const struct gsi_fw_iep_rec *iep_recs;
+	const u8 *instr_data;
+	struct gsi_iep_values ieps;
+	size_t min_size, iep_section_size;
+	u16 iep_count;
+	u32 num_instructions;
+	u32 val;
+	int ret;
+
+	ret = request_firmware(&fw, GSI_FW_PATH, gpi_dev->dev);
+	if (ret) {
+		if (ret == -ENOENT) {
+			dev_dbg(gpi_dev->dev,
+				"GSI firmware '%s' not yet available, deferring probe\n",
+				GSI_FW_PATH);
+			return -EPROBE_DEFER;
+		}
+		dev_err(gpi_dev->dev, "Failed to load GSI firmware '%s': %d\n",
+			GSI_FW_PATH, ret);
+		return ret;
+	}
+
+	/* Validate header */
+	if (fw->size < sizeof(*hdr)) {
+		dev_err(gpi_dev->dev, "GSI firmware too small (%zu bytes)\n", fw->size);
+		ret = -EINVAL;
+		goto out_release;
+	}
+
+	hdr = (const struct gsi_fw_hdr *)fw->data;
+
+	if (le32_to_cpu(hdr->magic) != GSI_FW_MAGIC) {
+		dev_err(gpi_dev->dev, "GSI firmware bad magic: 0x%08x\n",
+			le32_to_cpu(hdr->magic));
+		ret = -EINVAL;
+		goto out_release;
+	}
+
+	iep_count       = le16_to_cpu(hdr->iep_count);
+	num_instructions = le32_to_cpu(hdr->num_instructions);
+
+	iep_section_size = (size_t)iep_count * sizeof(struct gsi_fw_iep_rec);
+	min_size = sizeof(*hdr) + iep_section_size +
+		   (size_t)num_instructions * 6;
+
+	if (fw->size < min_size) {
+		dev_err(gpi_dev->dev,
+			"GSI firmware truncated: expected %zu, got %zu\n",
+			min_size, fw->size);
+		ret = -EINVAL;
+		goto out_release;
+	}
+
+	iep_recs   = (const struct gsi_fw_iep_rec *)(fw->data + sizeof(*hdr));
+	instr_data = fw->data + sizeof(*hdr) + iep_section_size;
+
+	dev_dbg(gpi_dev->dev, "GSI firmware: %u IEPs, %u instructions\n",
+		iep_count, num_instructions);
+
+	/* Step 1: Hardware pre-check */
+	val = readl_relaxed(gsi_base + GSI_CFG_OFFS);
+	if (val & GSI_CFG_GSI_ENABLE) {
+		dev_dbg(gpi_dev->dev,
+			"GSI already enabled, performing re-initialization\n");
+		val &= ~GSI_CFG_GSI_ENABLE;
+		writel_relaxed(val, gsi_base + GSI_CFG_OFFS);
+		/* Ensure GSI_ENABLE is deasserted before the reset delay. */
+		wmb();
+		usleep_range(100, 200);
+	}
+
+	/* Set peripheral base */
+	writel_relaxed(0, gsi_base + GSI_PERIPH_BASE_ADDR_LSB_OFFS);
+	writel_relaxed(0, gsi_base + GSI_PERIPH_BASE_ADDR_MSB_OFFS);
+	/* Flush peripheral base writes before IEP and IRAM programming. */
+	wmb();
+
+	/* Load IEPs from firmware and program hardware registers */
+	gsi_load_all_ieps(gpi_dev, &ieps, iep_recs, iep_count);
+	gsi_setup_all_ieps(gpi_dev, &ieps);
+
+	/* Program IRAM from firmware blob */
+	ret = gsi_program_iram(gpi_dev, instr_data, num_instructions);
+	if (ret)
+		goto out_release;
+
+	val = readl_relaxed(gsi_base + GSI_MCS_CFG_OFFS);
+	val |= GSI_MCS_CFG_MCS_ENABLE;
+	writel_relaxed(val, gsi_base + GSI_MCS_CFG_OFFS);
+	/* Flush MCS_ENABLE write before reading back GSI_CFG. */
+	wmb();
+
+	/* Enable GSI core with double clock */
+	val = readl_relaxed(gsi_base + GSI_CFG_OFFS);
+	val |= GSI_CFG_DOUBLE_MCS_CLK_FREQ;
+	writel_relaxed(val, gsi_base + GSI_CFG_OFFS);
+	/* Flush double-clock write before asserting GSI_ENABLE. */
+	wmb();
+	val |= GSI_CFG_GSI_ENABLE;
+	writel_relaxed(val, gsi_base + GSI_CFG_OFFS);
+	/* Flush GSI_ENABLE write before reading back to confirm. */
+	wmb();
+	val = readl_relaxed(gsi_base + GSI_CFG_OFFS);
+	dev_info(gpi_dev->dev, "GSI Core Initialization Success!\n");
+
+	/* Validate firmware version after MCS is running */
+	val = readl_relaxed(gsi_base + GSI_MCS_CODE_VER_OFFS);
+	if (val == 0 || val == 0xFFFFFFFF) {
+		dev_err(gpi_dev->dev, "Invalid firmware version: 0x%08x\n", val);
+		ret = -EINVAL;
+		goto err_disable;
+	}
+	dev_info(gpi_dev->dev, "GSI Firmware Version: 0x%08x\n", val);
+
+	release_firmware(fw);
+	return 0;
+
+err_disable:
+	dev_err(gpi_dev->dev, "Initialization failed, cleaning up\n");
+	val = readl_relaxed(gsi_base + GSI_MCS_CFG_OFFS);
+	val &= ~GSI_MCS_CFG_MCS_ENABLE;
+	writel_relaxed(val, gsi_base + GSI_MCS_CFG_OFFS);
+	val = readl_relaxed(gsi_base + GSI_CFG_OFFS);
+	val &= ~GSI_CFG_GSI_ENABLE;
+	writel_relaxed(val, gsi_base + GSI_CFG_OFFS);
+	/* Flush disable writes before releasing firmware and returning. */
+	wmb();
+out_release:
+	release_firmware(fw);
+	return ret;
+}
+
 static int gpi_probe(struct platform_device *pdev)
 {
 	struct gpi_dev *gpi_dev;
@@ -2245,8 +2828,10 @@ static int gpi_probe(struct platform_device *pdev)
 		gpii->gpi_dev = gpi_dev;
 	}
 
-	platform_set_drvdata(pdev, gpi_dev);
+	if (of_property_read_bool(gpi_dev->dev->of_node, "qcom,gsi-standalone-init"))
+		gpi_dev->gsi_standalone = true;
 
+	platform_set_drvdata(pdev, gpi_dev);
 	/* clear and Set capabilities */
 	dma_cap_zero(gpi_dev->dma_device.cap_mask);
 	dma_cap_set(DMA_SLAVE, gpi_dev->dma_device.cap_mask);
