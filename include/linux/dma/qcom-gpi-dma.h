@@ -80,4 +80,94 @@ struct gpi_i2c_config {
 	bool multi_msg;
 };
 
+struct __packed qcom_gpi_tre {
+	u32 dword[4];
+};
+
+/* UART Go TRE */
+#define QCOM_GPI_UART_GO_TRE_DWORD0(en_hunt, command) (((en_hunt) << 8) | (command))
+#define QCOM_GPI_UART_GO_TRE_DWORD1 (0)
+#define QCOM_GPI_UART_GO_TRE_DWORD2 (0)
+#define QCOM_GPI_UART_GO_TRE_DWORD3(link_rx, bei, ieot, ieob, ch) \
+	((0x2 << 20) | (0x0 << 16) | ((link_rx) << 11) | ((bei) << 10) | \
+	((ieot) << 9) | ((ieob) << 8) | (ch))
+
+/* UART Config0 TRE */
+#define QCOM_GPI_UART_CONFIG0_TRE_DWORD0(pack, hunt, flags, parity, sbl, size) \
+	(((pack) << 24) | ((hunt) << 16) | ((flags) << 8) | ((parity) << 5) | \
+	((sbl) << 3) | (size))
+#define QCOM_GPI_UART_CONFIG0_TRE_DWORD1(rfr_level, rx_stale) \
+	(((rfr_level) << 24) | (rx_stale))
+#define QCOM_GPI_UART_CONFIG0_TRE_DWORD2(clk_source, clk_div) \
+	(((clk_source) << 16) | (clk_div))
+#define QCOM_GPI_UART_CONFIG0_TRE_DWORD3(link_rx, bei, ieot, ieob, ch) \
+	((0x2 << 20) | (0x2 << 16) | ((link_rx) << 11) | ((bei) << 10) | \
+	((ieot) << 9) | ((ieob) << 8) | (ch))
+
+/* DMA w. Buffer TRE */
+#ifdef CONFIG_ARM64
+#define QCOM_GPI_DMA_W_BUFFER_TRE_DWORD0(ptr) ((u32)ptr)
+#define QCOM_GPI_DMA_W_BUFFER_TRE_DWORD1(ptr) ((u32)((ptr) >> 32))
+#else
+#define QCOM_GPI_DMA_W_BUFFER_TRE_DWORD0(ptr) (ptr)
+#define QCOM_GPI_DMA_W_BUFFER_TRE_DWORD1(ptr) 0
+#endif
+
+#define QCOM_GPI_DMA_W_BUFFER_TRE_DWORD2(length) ((length) & 0xFFFFFF)
+#define QCOM_GPI_DMA_W_BUFFER_TRE_DWORD3(link_rx, bei, ieot, ieob, ch) \
+	((0x1 << 20) | (0x0 << 16) | ((link_rx) << 11) | ((bei) << 10) | \
+	((ieot) << 9) | ((ieob) << 8) | (ch))
+
+enum qcom_gpi_tce_code {
+	QCOM_GPI_TCE_SUCCESS = 1,
+	QCOM_GPI_TCE_EOT = 2,
+	QCOM_GPI_TCE_EOB = 4,
+	QCOM_GPI_TCE_UNEXP_ERR = 16,
+};
+
+/*
+ * gpi specific callback parameters to pass between gpi client and gpi engine.
+ * client shall set async_desc.callback_parm to qcom_gpi_dma_async_tx_cb_param
+ */
+struct qcom_gpi_dma_async_tx_cb_param {
+	u32 length;
+	enum qcom_gpi_tce_code completion_code; /* TCE event code */
+	u32 status;
+	struct __packed qcom_gpi_tre imed_tre;
+	void *userdata;
+};
+
+/**
+ * struct gpi_uart_config - UART config for peripheral
+ *
+ * @set_config: set peripheral config
+ * @pack_en: process tx/rx buffers as packed
+ * @hunt_char: hunt character for pattern matching
+ * @flags: UART control flags
+ * @parity: parity mode (0=none, 1=odd, 2=even)
+ * @stop_bits: stop bit length (0=0.5, 1=1, 2=1.5, 3=2)
+ * @char_size: character size (0=5bits, 7=8bits)
+ * @en_hunt: enable hunt mode
+ * @command: UART command
+ * @rfr_level: RFR watermark level
+ * @rx_stale: RX stale timeout count
+ * @clk_src: clock source
+ * @clk_div: clock divider
+ */
+struct gpi_uart_config {
+	u8 set_config;
+	u8 pack_en;
+	u8 hunt_char;
+	u8 flags;
+	u8 parity;
+	u8 stop_bits;
+	u8 char_size;
+	u8 en_hunt;
+	u8 command;
+	u8 rfr_level;
+	u16 rx_stale;
+	u16 clk_src;
+	u16 clk_div;
+};
+
 #endif /* QCOM_GPI_DMA_H */
