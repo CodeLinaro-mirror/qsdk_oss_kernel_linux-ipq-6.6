@@ -121,6 +121,7 @@ obj-$(CONFIG_REGULATOR_CPR3_NPU) += cpr3-npu-regulator.o
 obj-$(CONFIG_REGULATOR_CPR4_APSS) += cpr4-apss-regulator.o
 obj-$(CONFIG_REGULATOR_QCOM_USB_VBUS) += qcom_usb_vbus-regulator.o
 obj-$(CONFIG_REGULATOR_QTI_GPIO) += qcom-gpio-regulator.o
+obj-$(CONFIG_REGULATOR_QCOM_OPEN_LOOP_CPR) += qcom-open-loop-cpr-regulator.o
 obj-$(CONFIG_REGULATOR_PALMAS) += palmas-regulator.o
 obj-$(CONFIG_REGULATOR_PCA9450) += pca9450-regulator.o
 obj-$(CONFIG_REGULATOR_PF8X00) += pf8x00-regulator.o
