@@ -25,6 +25,9 @@
 #include <linux/bitops.h>
 #include <linux/compiler.h>
 #include <linux/iopoll.h>
+#include <linux/iommu.h>
+#include <linux/remoteproc.h>
+#include <linux/remoteproc/qcom_rproc.h>
 
 #define ADSP_DOMAIN_ID (0)
 #define MDSP_DOMAIN_ID (1)
@@ -323,6 +326,9 @@ struct fastrpc_channel_ctx {
 	bool poll_mode_supported;
 	u64 dma_mask;
 	u64 jobid;
+	struct rproc *rproc;
+	struct notifier_block rproc_atomic_nb;
+	void *ssr_atomic_notifier;
 };
 
 struct fastrpc_device {
@@ -2564,6 +2570,26 @@ static int fastrpc_get_domain_id(const char *domain)
 }
 
 /*
+ * The remoteproc SSR notifier chains are keyed by the PAS driver's
+ * ssr_name (see qcom_q6v5_pas.c), not by the generic "adsp"/"cdsp"/...
+ * domain label used in the fastrpc DT node, so the two must be mapped
+ * explicitly rather than reusing the domain label string.
+ */
+static const char *fastrpc_get_ssr_name(int domain_id)
+{
+	switch (domain_id) {
+	case ADSP_DOMAIN_ID:
+		return "lpass";
+	case SDSP_DOMAIN_ID:
+		return "dsps";
+	case CDSP_DOMAIN_ID:
+		return "cdsp";
+	default:
+		return NULL;
+	}
+}
+
+/*
  * Exception list for older platforms that use default_soc_data but whose
  * DSP firmware supports FastRPC polling mode.
  *
@@ -2577,6 +2603,30 @@ static const char *const fastrpc_poll_supported_machines[] = {
 	"qcom,sm8450",	 "qcom,sm8550",	  "qcom,sm8650",  "qcom,sm8750",
 	"qcom,x1e80100", "qcom,x1p42100", "qcom,ipq9650", NULL,
 };
+
+static int  fastrpc_restart_notifier_cb(struct notifier_block *nb,
+					     unsigned long action, void *data)
+{
+	struct fastrpc_channel_ctx *cctx = container_of(nb, struct fastrpc_channel_ctx, rproc_atomic_nb);
+
+	pr_info("Received atomic event %lu for rproc: %s\n",
+		 action, cctx->rproc->name);
+
+	switch (action) {
+	case QCOM_SSR_NOTIFY_CRASH:
+		/* If rproc crashed and recovery is not enabled then create a kernel panic */
+		if (cctx->rproc->recovery_disabled) {
+			pr_err("Unhandled rproc fault, causing kernel panic (recovery disabled)");
+			panic("Unhandled rproc fault");
+		}
+		return NOTIFY_OK;
+
+	default:
+		return NOTIFY_DONE;
+	}
+
+	return NOTIFY_DONE;
+}
 
 static int fastrpc_rpmsg_probe(struct rpmsg_device *rpdev)
 {
@@ -2656,6 +2706,18 @@ static int fastrpc_rpmsg_probe(struct rpmsg_device *rpdev)
 			break;
 		}
 	}
+
+	data->rproc_atomic_nb.notifier_call = fastrpc_restart_notifier_cb;
+	data->rproc_atomic_nb.priority = 1;
+	data->rproc = rproc_get_by_child(&rpdev->dev);
+	if (!data->rproc) {
+		dev_err(rdev, "Failed to find rproc for fastrpc device\n");
+		err = -EINVAL;
+		goto err_free_data;
+	}
+	data->ssr_atomic_notifier =
+			qcom_register_ssr_atomic_notifier(fastrpc_get_ssr_name(domain_id),
+							  &data->rproc_atomic_nb);
 
 	switch (domain_id) {
 	case ADSP_DOMAIN_ID:
