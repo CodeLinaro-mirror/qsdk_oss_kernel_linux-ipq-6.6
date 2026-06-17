@@ -121,19 +121,28 @@ static unsigned int skb_recycle_size = CONFIG_SKB_RECYCLE_SIZE;
 #define __SKB_CACHE_SZ(payload)	(SKB_DATA_ALIGN((payload) + __SKB_NET_PAD) + \
 				 SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
 
-#if defined(CONFIG_SKB_RECYCLER)
-#define __SKB_VAL		CONFIG_SKB_RECYCLE_SIZE
-#define __SKB_VAL_REDUCED	1856
-#define __SKB_CACHE_REDUCED	__SKB_CACHE_SZ(__SKB_VAL_REDUCED)
-#define __SKB_CACHE_HIGH	__SKB_CACHE_SZ(CONFIG_SKB_RECYCLE_SIZE)
-#else /* !CONFIG_SKB_RECYCLER */
 #ifdef __LP64__
 #define __SKB_VAL		1984
 #define __SKB_VAL_REDUCED	1984
-#else
+#else /* 32-bit */
 #define __SKB_VAL		1856
 #define __SKB_VAL_REDUCED	1856
 #endif
+
+#if defined(CONFIG_SKB_RECYCLER)
+#define __SKB_CACHE_HIGH	__SKB_CACHE_SZ(CONFIG_SKB_RECYCLE_SIZE)
+#if (CONFIG_SKB_RECYCLE_SIZE == 1664)
+#define __SKB_CACHE_REDUCED	__SKB_CACHE_HIGH
+#undef __SKB_VAL
+#undef __SKB_VAL_REDUCED
+#define __SKB_VAL		CONFIG_SKB_RECYCLE_SIZE
+#define __SKB_VAL_REDUCED	__SKB_VAL
+
+#else /* CONFIG_SKB_RECYCLE_SIZE != 1664 */
+#define __SKB_CACHE_REDUCED	__SKB_CACHE_SZ(2100)
+#endif
+
+#else /* !CONFIG_SKB_RECYCLER */
 #define __SKB_CACHE_REDUCED	__SKB_CACHE_SZ(2100)
 #define __SKB_CACHE_HIGH	__SKB_CACHE_REDUCED
 #endif /* CONFIG_SKB_RECYCLER */
@@ -164,11 +173,14 @@ EXPORT_SYMBOL(skb_active_profile);
  *   SKB_DATA_CACHE_SIZE      -> skb_active_profile->cache_size
  *                               primary recycler cache size
  *   SKB_DATA_CACHE_SIZE_2100 -> skb_active_profile->cache_size
- *                               secondary 2100-cache size (equals value on
- *                               the high/1G profile so both caches are equal)
+ *                               secondary 2100-cache size for CP skbs
+ *                               2688 B for 64-bit systems
+ *                               2624 B for 32-bit systems
  */
 #define SKB_DATA_CACHE_SIZE      (skb_active_profile->cache_size)
-#define SKB_DATA_CACHE_SIZE_2100 (skb_active_profile->cache_size)
+
+#define SKB_DATA_CACHE_SIZE_2100 (2304 + NET_SKB_PAD +	\
+		SKB_DATA_ALIGN(sizeof(struct skb_shared_info)))
 
 /* Active memory profile, detected from kernel bootargs at init.
  * Defaults to SKB_MEM_PROFILE_HIGH if mem-profile is absent.
@@ -228,7 +240,7 @@ done:
 #endif
 	skb_active_mem_profile = skb_active_profile->profile;
 	pr_info("Profile (%s) selected size = %d, 2100-cache size = %d\n",
-		profile, skb_active_profile->value, skb_active_profile->cache_size);
+		profile, skb_active_profile->value, SKB_DATA_CACHE_SIZE_2100);
 }
 
 static struct kmem_cache *skbuff_fclone_cache __ro_after_init;
