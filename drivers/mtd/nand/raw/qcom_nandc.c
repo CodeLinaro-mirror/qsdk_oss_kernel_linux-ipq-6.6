@@ -3071,7 +3071,6 @@ static int qcom_nand_attach_chip(struct nand_chip *chip)
 	 */
 	if (nandc->props->is_serial_nand) {
 		num_addr_cycle = 3;
-		dsbl_sts_aftr_write = 1;
 		wr_rd_bsy_gap = 20;
 		recovery_cycle = 0;
 	}
