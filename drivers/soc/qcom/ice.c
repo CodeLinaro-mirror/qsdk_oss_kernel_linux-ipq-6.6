@@ -159,6 +159,12 @@ static struct qcom_ice *qcom_ice_create(struct device *dev,
 	if (!qcom_ice_ops_available())
 		return ERR_PTR(-EPROBE_DEFER);
 
+	/* Check if ICE functionality is actually available */
+	if (!qcom_ice_available()) {
+		dev_info(dev, "ICE functionality not available, skipping ICE initialization\n");
+		return NULL;
+	}
+
 	engine = devm_kzalloc(dev, sizeof(*engine), GFP_KERNEL);
 	if (!engine)
 		return ERR_PTR(-ENOMEM);
