@@ -26,6 +26,7 @@
 #include <linux/soc/qcom/mdt_loader.h>
 #include <linux/soc/qcom/smem.h>
 #include <linux/soc/qcom/smem_state.h>
+#include <linux/nvmem-consumer.h>
 
 #include "qcom_common.h"
 #include "qcom_pil_info.h"
@@ -698,7 +699,29 @@ static int adsp_probe(struct platform_device *pdev)
 	struct rproc *rproc;
 	const char *fw_name, *dtb_fw_name = NULL;
 	const struct rproc_ops *ops = &adsp_ops;
+	struct nvmem_cell *adsp_nvmem;
+	u8 *disable_status;
+	size_t len;
 	int ret;
+
+	/* If nvmem-cells present on NSP/Turing node in DTSI, check QFPROM fuse
+	 * for Turing SS disable status (SOFTSKU_STATUS_TURING, bit 0).
+	 * 0 = enabled, 1 = disabled.
+	 */
+	adsp_nvmem = devm_nvmem_cell_get(&pdev->dev, NULL);
+	if (IS_ERR(adsp_nvmem)) {
+		if (PTR_ERR(adsp_nvmem) == -EPROBE_DEFER)
+			return -EPROBE_DEFER;
+	} else {
+		disable_status = nvmem_cell_read(adsp_nvmem, &len);
+		devm_nvmem_cell_put(&pdev->dev, adsp_nvmem);
+		if (!IS_ERR(disable_status) && ((unsigned int)(*disable_status) == 1)) {
+			dev_info(&pdev->dev, "NSP/Turing disabled in qfprom efuse\n");
+			kfree(disable_status);
+			return -ENODEV;
+		}
+		kfree(disable_status);
+	}
 
 	desc = of_device_get_match_data(&pdev->dev);
 	if (!desc)
