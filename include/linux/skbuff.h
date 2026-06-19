@@ -4816,6 +4816,9 @@ enum skb_ext_id {
 #if IS_ENABLED(CONFIG_MCTP_FLOWS)
 	SKB_EXT_MCTP,
 #endif
+#if IS_ENABLED(CONFIG_WIRELESS)
+	SKB_EXT_WIRELESS,
+#endif
 #ifdef CONFIG_IPQ_PON
 	SKB_EXT_GEM,
 #endif
