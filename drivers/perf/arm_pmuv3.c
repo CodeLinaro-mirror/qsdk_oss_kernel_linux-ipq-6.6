@@ -11,6 +11,7 @@
 #include <asm/irq_regs.h>
 #include <asm/perf_event.h>
 #include <asm/virt.h>
+#include <asm/cputype.h>
 
 #include <clocksource/arm_arch_timer.h>
 
@@ -23,13 +24,9 @@
 #include <linux/sched_clock.h>
 #include <linux/smp.h>
 #include <linux/nmi.h>
-#include <linux/bsearch.h>
 #include <linux/types.h>
 
 #include <asm/arm_pmuv3.h>
-
-/* ARMv8 Cortex-A53 specific event types. */
-#define ARMV8_A53_PERFCTR_PREF_LINEFILL				0xC2
 
 /* ARMv8 Cavium ThunderX specific event types. */
 #define ARMV8_THUNDER_PERFCTR_L1D_CACHE_MISS_ST			0xE9
@@ -368,39 +365,39 @@ static struct attribute *armv8_pmuv3_event_attrs[] = {
 	ARMV8_EVENT_ATTR(stall_backend_ld_tlb, ARMV8_PMUV3_PERFCTR_STALL_BACKEND_LD_TLB),
 	ARMV8_EVENT_ATTR(stall_backend_st_stb, ARMV8_PMUV3_PERFCTR_STALL_BACKEND_ST_STB),
 	ARMV8_EVENT_ATTR(stall_backend_st_tlb, ARMV8_PMUV3_PERFCTR_STALL_BACKEND_ST_TLB),
+	/* Cortex-A53 unique implementation-defined events
+	 * (0xC8=scu_snoop and 0xE0=stall_iq_empty are not present on A55/A73/A78) */
+	ARMV8_EVENT_ATTR(scu_snoop, ARMV8_A53_PERFCTR_SCU_SNOOP),
+	ARMV8_EVENT_ATTR(stall_iq_empty, ARMV8_A53_PERFCTR_STALL_IQ_EMPTY),
+	/* Cortex-A55 implementation-defined events (branch predictor + TLB walk) */
+	ARMV8_EVENT_ATTR(predecode_error, ARMV8_A55_PERFCTR_PREDECODE_ERROR),
+	ARMV8_EVENT_ATTR(br_cond_pred, ARMV8_A55_PERFCTR_BR_COND_PRED),
+	ARMV8_EVENT_ATTR(br_indirect_mispred, ARMV8_A55_PERFCTR_BR_INDIRECT_MISPRED),
+	ARMV8_EVENT_ATTR(br_indirect_addr_mispred, ARMV8_A55_PERFCTR_BR_INDIRECT_ADDR_MISPRED),
+	ARMV8_EVENT_ATTR(br_cond_mispred, ARMV8_A55_PERFCTR_BR_COND_MISPRED),
+	ARMV8_EVENT_ATTR(br_indirect_addr_pred, ARMV8_A55_PERFCTR_BR_INDIRECT_ADDR_PRED),
+	ARMV8_EVENT_ATTR(br_return_addr_pred, ARMV8_A55_PERFCTR_BR_RETURN_ADDR_PRED),
+	ARMV8_EVENT_ATTR(br_return_addr_mispred, ARMV8_A55_PERFCTR_BR_RETURN_ADDR_MISPRED),
+	ARMV8_EVENT_ATTR(l2d_llwalk_tlb, ARMV8_A55_PERFCTR_L2D_LLWALK_TLB),
+	ARMV8_EVENT_ATTR(l2d_llwalk_tlb_refill, ARMV8_A55_PERFCTR_L2D_LLWALK_TLB_REFILL),
+	ARMV8_EVENT_ATTR(l2d_l2walk_tlb, ARMV8_A55_PERFCTR_L2D_L2WALK_TLB),
+	ARMV8_EVENT_ATTR(l2d_l2walk_tlb_refill, ARMV8_A55_PERFCTR_L2D_L2WALK_TLB_REFILL),
+	ARMV8_EVENT_ATTR(l2d_s2_tlb, ARMV8_A55_PERFCTR_L2D_S2_TLB),
+	ARMV8_EVENT_ATTR(l2d_s2_tlb_refill, ARMV8_A55_PERFCTR_L2D_S2_TLB_REFILL),
+	ARMV8_EVENT_ATTR(l2d_cache_stash_dropped, ARMV8_A55_PERFCTR_L2D_CACHE_STASH_DROPPED),
+	/* Cortex-A73 unique implementation-defined events
+	 * (0xD8-0xDF and 0xE0 are not present on A55/A78)
+	 */
+	ARMV8_EVENT_ATTR(ls_iq_full, ARMV8_A73_PERFCTR_LS_IQ_FULL),
+	ARMV8_EVENT_ATTR(dp_iq_full, ARMV8_A73_PERFCTR_DP_IQ_FULL),
+	ARMV8_EVENT_ATTR(de_iq_full, ARMV8_A73_PERFCTR_DE_IQ_FULL),
+	ARMV8_EVENT_ATTR(exc_trap_hyp, ARMV8_A73_PERFCTR_EXC_TRAP_HYP),
+	ARMV8_EVENT_ATTR(etm_ext_out0, ARMV8_A73_PERFCTR_ETM_EXT_OUT0),
+	ARMV8_EVENT_ATTR(etm_ext_out1, ARMV8_A73_PERFCTR_ETM_EXT_OUT1),
+	ARMV8_EVENT_ATTR(mmu_ptw, ARMV8_A73_PERFCTR_MMU_PTW),
 	NULL,
 };
 
-static const u32 armv8_impdef_ids[] = {
-#ifdef CONFIG_TARGET_ipq96xx
-	0x0040, 0x0041, 0x0042, 0x0043, 0x0044, 0x0045, 0x0046, 0x0047,
-	0x0048, 0x004C, 0x004D, 0x004E, 0x004F, 0x0050, 0x0051, 0x0052,
-	0x0053, 0x0056, 0x0057, 0x0058, 0x005C, 0x005D, 0x005E, 0x005F,
-	0x0060, 0x0061, 0x0066, 0x0067, 0x0068, 0x0069, 0x006A, 0x006C,
-	0x006D, 0x006E, 0x006F, 0x0070, 0x0071, 0x0073, 0x0074, 0x0075,
-	0x0076, 0x0077, 0x0078, 0x0079, 0x007A, 0x007C, 0x007D, 0x007E,
-	0x0081, 0x0082, 0x0083, 0x0084, 0x0086, 0x0087, 0x0088, 0x008A,
-	0x008B, 0x008C, 0x008D, 0x008E, 0x008F, 0x0090, 0x0091, 0x00A0
-#endif
-};
-
-static inline int cmp_u32(const void *key, const void *elt)
-{
-	u32 a = *(const u32 *)key;
-	u32 b = *(const u32 *)elt;
-
-	if (a < b)
-		return -1;
-	if (a > b)
-		return 1;
-	return 0;
-}
-
-static inline bool armv8_impdef_id_supported(u32 id)
-{
-	return bsearch(&id, armv8_impdef_ids, ARRAY_SIZE(armv8_impdef_ids),
-		       sizeof(armv8_impdef_ids[0]), cmp_u32) != NULL;
-}
 
 static umode_t
 armv8pmu_event_attr_is_visible(struct kobject *kobj,
@@ -413,10 +410,15 @@ armv8pmu_event_attr_is_visible(struct kobject *kobj,
 
 	pmu_attr = container_of(attr, struct perf_pmu_events_attr, attr.attr);
 
+	/*
+	 * For common architectural events (IDs 0x00-0x3F) the PMCEID bitmap
+	 * tells us exactly which ones this PMU implements.
+	 */
 	if (pmu_attr->id < ARMV8_PMUV3_MAX_COMMON_EVENTS &&
 	    test_bit(pmu_attr->id, cpu_pmu->pmceid_bitmap))
 		return attr->mode;
 
+	/* Extended common events (0x4000+) use the ext bitmap. */
 	if (pmu_attr->id >= ARMV8_PMUV3_EXT_COMMON_EVENT_BASE) {
 		u64 id = pmu_attr->id - ARMV8_PMUV3_EXT_COMMON_EVENT_BASE;
 
@@ -425,7 +427,16 @@ armv8pmu_event_attr_is_visible(struct kobject *kobj,
 			return attr->mode;
 	}
 
-	if (armv8_impdef_id_supported((u32)pmu_attr->id))
+	/*
+	 * Implementation-defined events (IDs >= 0x40) are not reported in
+	 * PMCEID. Their presence was recorded in pmceid_bitmap by
+	 * __armv8pmu_probe_pmu() using __bitmap_set(). Use the bitmap as the
+	 * single source of truth so that only events actually present on this
+	 * PMU instance are visible, regardless of which CPU runs this sysfs
+	 * callback.
+	 */
+	if (pmu_attr->id >= 0x40 && pmu_attr->id < ARMV8_PMUV3_MAX_COMMON_EVENTS &&
+	    test_bit(pmu_attr->id, cpu_pmu->pmceid_bitmap))
 		return attr->mode;
 
 	return 0;
@@ -1238,17 +1249,16 @@ static void __armv8pmu_probe_pmu(void *info)
 {
 	struct armv8pmu_probe_info *probe = info;
 	struct arm_pmu *cpu_pmu = probe->pmu;
-	struct platform_device *pdev = cpu_pmu->plat_device;
 	u64 pmceid_raw[2];
 	u32 pmceid[8];
 	int pmuver;
-	const char *compatible;
 
 	pmuver = read_pmuver();
 	if (!pmuv3_implemented(pmuver))
 		return;
 
 	cpu_pmu->pmuver = pmuver;
+	cpu_pmu->cpu_part = read_cpuid_part_number();
 	probe->present = true;
 
 	/* Read the nb of CNTx counters supported from PMNC */
@@ -1270,59 +1280,292 @@ static void __armv8pmu_probe_pmu(void *info)
 	bitmap_from_arr32(cpu_pmu->pmceid_ext_bitmap,
 			     pmceid, ARMV8_PMUV3_MAX_COMMON_EVENTS);
 
-	of_property_read_string(pdev->dev.of_node, "compatible", &compatible);
-	if (strncmp("arm,cortex-a73-pmu", compatible, sizeof("arm,cortex-a73-pmu")) == 0) {
+	switch (cpu_pmu->cpu_part) {
+	case ARM_CPU_PART_CORTEX_A53 & 0xFFFF:
+		/*
+		 * A53 impdef events are not reported in PMCEID;
+		 * mark them supported in the bitmap manually.
+		 */
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_BUS_ACCESS_RD, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_BUS_ACCESS_WR, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_BR_INDIRECT_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_EXC_IRQ, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_EXC_FIQ, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A53_PERFCTR_EXT_MEM_REQ, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A53_PERFCTR_NC_EXT_MEM_REQ, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A53_PERFCTR_PREF_LINEFILL, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A53_PERFCTR_ICACHE_THROTTLE, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A53_PERFCTR_ENTER_READ_ALLOC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A53_PERFCTR_READ_ALLOC_MODE, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A53_PERFCTR_PREDECODE_ERROR, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A53_PERFCTR_STB_STALL, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A53_PERFCTR_SCU_SNOOP, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A53_PERFCTR_BR_COND_EXEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_A53_PERFCTR_BR_INDIRECT_MISPRED, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_A53_PERFCTR_BR_INDIRECT_ADDR_MISPRED, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A53_PERFCTR_BR_COND_MISPRED, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A53_PERFCTR_L1I_MEM_ERROR, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A53_PERFCTR_L1D_MEM_ERROR, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A53_PERFCTR_TLB_MEM_ERROR, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A53_PERFCTR_STALL_IQ_EMPTY, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A53_PERFCTR_STALL_IQ_ICACHE, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A53_PERFCTR_STALL_IQ_TLB, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A53_PERFCTR_STALL_IQ_PDERR, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A53_PERFCTR_STALL_ILOCK, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A53_PERFCTR_STALL_ILOCK_AGU, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A53_PERFCTR_STALL_ILOCK_FPU, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A53_PERFCTR_STALL_WR_LD, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A53_PERFCTR_STALL_WR_ST, 1);
+		break;
+	case ARM_CPU_PART_CORTEX_A73 & 0xFFFF:
+		/*
+		 * A73 impdef events not reported in PMCEID; mark them manually.
+		 * Includes L2 cache RD/WR/WB/INVAL, speculative ops, barriers,
+		 * and micro-architectural stall/TLB events.
+		 */
 		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L2D_CACHE_RD, 1);
 		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L2D_CACHE_WR, 1);
-		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L2D_CACHE_WB_VICTIM, 1);
-		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L2D_CACHE_WB_CLEAN, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_L2D_CACHE_WB_VICTIM, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_L2D_CACHE_WB_CLEAN, 1);
 		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L2D_CACHE_INVAL, 1);
-	}
-
-#if defined(CONFIG_ARCH_IPQ5424) && defined(CONFIG_ARM64)
-	of_property_read_string(pdev->dev.of_node, "compatible", &compatible);
-	if (strncmp("arm,cortex-a55-pmu", compatible, sizeof("arm,cortex-a55-pmu")) == 0) {
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_BUS_ACCESS_SHARED, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_BUS_ACCESS_NOT_SHARED, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_BUS_ACCESS_NORMAL, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_BUS_ACCESS_PERIPH, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_MEM_ACCESS_RD, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_MEM_ACCESS_WR, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_UNALIGNED_LDST_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_LDREX_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_STREX_FAIL_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_LD_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_ST_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_LDST_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_DP_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_ASE_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_VFP_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_CRYPTO_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_BR_INDIRECT_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_ISB_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_DSB_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_DMB_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_EXC_HVC, 1);
+		/* A73-specific micro-architectural events */
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A73_PERFCTR_LF_STALL, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A73_PERFCTR_PTW_STALL, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A73_PERFCTR_I_TAG_RAM_RD, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A73_PERFCTR_I_DATA_RAM_RD, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A73_PERFCTR_I_BTAC_RAM_RD, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A73_PERFCTR_D_LSU_SLOT_FULL, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A73_PERFCTR_LS_IQ_FULL, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A73_PERFCTR_DP_IQ_FULL, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A73_PERFCTR_DE_IQ_FULL, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A73_PERFCTR_EXC_TRAP_HYP, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A73_PERFCTR_ETM_EXT_OUT0, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A73_PERFCTR_ETM_EXT_OUT1, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A73_PERFCTR_MMU_PTW, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A73_PERFCTR_MMU_PTW_ST1, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A73_PERFCTR_MMU_PTW_ST2, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A73_PERFCTR_MMU_PTW_LSU, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A73_PERFCTR_MMU_PTW_ISIDE, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A73_PERFCTR_MMU_PTW_PLD, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A73_PERFCTR_MMU_PTW_CP15, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A73_PERFCTR_PLD_UTLB_REFILL, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A73_PERFCTR_CP15_UTLB_REFILL, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A73_PERFCTR_UTLB_FLUSH, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A73_PERFCTR_TLB_ACCESS, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A73_PERFCTR_TLB_MISS, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_A73_PERFCTR_DCACHE_SELF_HIT_VIPT, 1);
+		break;
+#if defined(__aarch64__)
+	case ARM_CPU_PART_CORTEX_A78 & 0xFFFF:
+		/*
+		 * A78 impdef events not reported in PMCEID; mark them manually.
+		 */
 		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L1D_CACHE_RD, 1);
 		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L1D_CACHE_WR, 1);
-		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L2D_CACHE_REFILL_RD, 1);
-		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L2D_CACHE_REFILL_WR, 1);
-		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L1D_CACHE_REFILL_RD, 1);
-		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L1D_CACHE_REFILL_WR, 1);
 		__bitmap_set(cpu_pmu->pmceid_bitmap,
-			ARMV8_IMPDEF_PERFCTR_L1D_CACHE_REFILL_INNER, 1);
+					ARMV8_IMPDEF_PERFCTR_L1D_CACHE_REFILL_RD, 1);
 		__bitmap_set(cpu_pmu->pmceid_bitmap,
-			ARMV8_IMPDEF_PERFCTR_L1D_CACHE_REFILL_OUTER, 1);
+					ARMV8_IMPDEF_PERFCTR_L1D_CACHE_REFILL_WR, 1);
 		__bitmap_set(cpu_pmu->pmceid_bitmap,
-			ARMV8_IMPDEF_PERFCTR_L1D_CACHE_REFILL_PREFETCH, 1);
-		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L1D_WS_MODE_ENTRY, 1);
+					ARMV8_IMPDEF_PERFCTR_L1D_CACHE_REFILL_INNER, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_L1D_CACHE_REFILL_OUTER, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_L1D_CACHE_WB_VICTIM, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_L1D_CACHE_WB_CLEAN, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L1D_CACHE_INVAL, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_L1D_TLB_REFILL_RD, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_L1D_TLB_REFILL_WR, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L1D_TLB_RD, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L1D_TLB_WR, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L2D_CACHE_RD, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L2D_CACHE_WR, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_L2D_CACHE_REFILL_RD, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_L2D_CACHE_REFILL_WR, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_L2D_CACHE_WB_VICTIM, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_L2D_CACHE_WB_CLEAN, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L2D_CACHE_INVAL, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_L2D_TLB_REFILL_RD, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_L2D_TLB_REFILL_WR, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L2D_TLB_RD, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L2D_TLB_WR, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_BUS_ACCESS_RD, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_BUS_ACCESS_WR, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_MEM_ACCESS_RD, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_MEM_ACCESS_WR, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_UNALIGNED_LD_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_UNALIGNED_ST_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_UNALIGNED_LDST_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_LDREX_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_STREX_PASS_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_STREX_FAIL_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_STREX_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_LD_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_ST_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_DP_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_ASE_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_VFP_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_PC_WRITE_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_CRYPTO_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_BR_IMMED_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_BR_RETURN_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_BR_INDIRECT_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_ISB_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_DSB_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_DMB_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_EXC_UNDEF, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_EXC_SVC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_EXC_PABORT, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_EXC_DABORT, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_EXC_IRQ, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_EXC_FIQ, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_EXC_SMC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_EXC_HVC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_EXC_TRAP_PABORT, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_EXC_TRAP_DABORT, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_EXC_TRAP_OTHER, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_EXC_TRAP_IRQ, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_EXC_TRAP_FIQ, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_RC_LD_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_RC_ST_SPEC, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L3D_CACHE_RD, 1);
+		break;
+#endif
+	case ARM_CPU_PART_CORTEX_A55 & 0xFFFF:
+		/*
+		 * A55 impdef events not reported in PMCEID; mark them manually.
+		 */
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L1D_CACHE_RD, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L1D_CACHE_WR, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_L1D_CACHE_REFILL_RD, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_L1D_CACHE_REFILL_WR, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_L1D_CACHE_REFILL_INNER, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_L1D_CACHE_REFILL_OUTER, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_L2D_CACHE_REFILL_RD, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_L2D_CACHE_REFILL_WR, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_L1D_CACHE_REFILL_PREFETCH, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_L1D_WS_MODE_ENTRY, 1);
 		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L1D_WS_MODE, 1);
 		__bitmap_set(cpu_pmu->pmceid_bitmap,
-			ARMV8_IMPDEF_PERFCTR_L2D_CACHE_REFILL_PREFETCH, 1);
+					ARMV8_IMPDEF_PERFCTR_L2D_CACHE_REFILL_PREFETCH, 1);
 		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L2D_WS_MODE, 1);
-		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L3D_CACHE_REFILL_RD, 1);
-		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L3D_CACHE_REFILL_WR, 1);
 		__bitmap_set(cpu_pmu->pmceid_bitmap,
-			ARMV8_IMPDEF_PERFCTR_L3D_CACHE_REFILL_PREFETCH, 1);
+					ARMV8_IMPDEF_PERFCTR_L3D_CACHE_REFILL_RD, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_L3D_CACHE_REFILL_WR, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_IMPDEF_PERFCTR_L3D_CACHE_REFILL_PREFETCH, 1);
 		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L3D_WS_MODE, 1);
 		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_MEM_ACCESS_RD, 1);
 		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_MEM_ACCESS_WR, 1);
-		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_PMUV3_PERFCTR_STALL_FRONTEND_CACHE, 1);
-		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_PMUV3_PERFCTR_STALL_FRONTEND_TLB, 1);
-		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_PMUV3_PERFCTR_STALL_FRONTEND_PDERR, 1);
-		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_PMUV3_PERFCTR_STALL_BACKEND_ILOCK, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A55_PERFCTR_PREDECODE_ERROR, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A55_PERFCTR_BR_COND_PRED, 1);
 		__bitmap_set(cpu_pmu->pmceid_bitmap,
-			ARMV8_PMUV3_PERFCTR_STALL_BACKEND_ILOCK_AGU, 1);
+					ARMV8_A55_PERFCTR_BR_INDIRECT_MISPRED, 1);
 		__bitmap_set(cpu_pmu->pmceid_bitmap,
-			ARMV8_PMUV3_PERFCTR_STALL_BACKEND_ILOCK_FPU, 1);
+					ARMV8_A55_PERFCTR_BR_INDIRECT_ADDR_MISPRED, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A55_PERFCTR_BR_COND_MISPRED, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_A55_PERFCTR_BR_INDIRECT_ADDR_PRED, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_A55_PERFCTR_BR_RETURN_ADDR_PRED, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_A55_PERFCTR_BR_RETURN_ADDR_MISPRED, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A55_PERFCTR_L2D_LLWALK_TLB, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_A55_PERFCTR_L2D_LLWALK_TLB_REFILL, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A55_PERFCTR_L2D_L2WALK_TLB, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_A55_PERFCTR_L2D_L2WALK_TLB_REFILL, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A55_PERFCTR_L2D_S2_TLB, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_A55_PERFCTR_L2D_S2_TLB_REFILL, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_A55_PERFCTR_L2D_CACHE_STASH_DROPPED, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_BUS_ACCESS_RD, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_BUS_ACCESS_WR, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_EXC_IRQ, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_EXC_FIQ, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_IMPDEF_PERFCTR_L3D_CACHE_RD, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_PMUV3_PERFCTR_STALL_FRONTEND_CACHE, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_PMUV3_PERFCTR_STALL_FRONTEND_TLB, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_PMUV3_PERFCTR_STALL_FRONTEND_PDERR, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_PMUV3_PERFCTR_STALL_BACKEND_ILOCK, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_PMUV3_PERFCTR_STALL_BACKEND_ILOCK_AGU, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_PMUV3_PERFCTR_STALL_BACKEND_ILOCK_FPU, 1);
 		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_PMUV3_PERFCTR_STALL_BACKEND_LD, 1);
 		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_PMUV3_PERFCTR_STALL_BACKEND_ST, 1);
 		__bitmap_set(cpu_pmu->pmceid_bitmap,
-			ARMV8_PMUV3_PERFCTR_STALL_BACKEND_LD_CACHE, 1);
-		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_PMUV3_PERFCTR_STALL_BACKEND_LD_TLB, 1);
-		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_PMUV3_PERFCTR_STALL_BACKEND_ST_STB, 1);
-		__bitmap_set(cpu_pmu->pmceid_bitmap, ARMV8_PMUV3_PERFCTR_STALL_BACKEND_ST_TLB, 1);
+					ARMV8_PMUV3_PERFCTR_STALL_BACKEND_LD_CACHE, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_PMUV3_PERFCTR_STALL_BACKEND_LD_TLB, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_PMUV3_PERFCTR_STALL_BACKEND_ST_STB, 1);
+		__bitmap_set(cpu_pmu->pmceid_bitmap,
+					ARMV8_PMUV3_PERFCTR_STALL_BACKEND_ST_TLB, 1);
+		break;
+	default:
+		break;
 	}
-#endif
 
 	/* store PMMIR register for sysfs */
 	if (is_pmuv3p4(pmuver) && (pmceid_raw[1] & BIT(31)))
