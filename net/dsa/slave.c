@@ -2559,7 +2559,7 @@ void dsa_slave_setup_tagger(struct net_device *slave)
 		slave->features |= NETIF_F_HW_VLAN_CTAG_FILTER;
 
 	/* for pkt with ath hdr cksum should be done by stack */
-	if (DSA_TAG_PROTO_4B_QCA == cpu_dp->tag_ops->proto || dp->ds->fc_group != NULL)
+	if (ds->needs_sw_csum)
 		slave->features &= (~NETIF_F_HW_CSUM | NETIF_F_IP_CSUM | NETIF_F_IPV6_CSUM);
 }
 

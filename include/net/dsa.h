@@ -422,6 +422,12 @@ struct dsa_switch {
 	/* Keep VLAN filtering enabled on ports not offloading any upper */
 	u32			needs_standalone_vlan_filtering:1;
 
+	/* The tagger rewrites the L2 header in a way the conduit's checksum
+	 * engine cannot account for, so TX checksums must be computed in
+	 * software.
+	 */
+	u32			needs_sw_csum:1;
+
 	/* Pass .port_vlan_add and .port_vlan_del to drivers even for bridges
 	 * that have vlan_filtering=0. All drivers should ideally set this (and
 	 * then the option would get removed), but it is unknown whether this
@@ -517,8 +523,6 @@ struct dsa_switch {
 	unsigned int		max_num_bridges;
 
 	unsigned int		num_ports;
-
-	uint8_t *fc_group;
 };
 
 static inline struct dsa_port *dsa_to_port(struct dsa_switch *ds, int p)
