@@ -663,7 +663,7 @@ static void qcom_scm_set_abnormal_magic(bool enable)
 			val & ~(QCOM_SCM_ABNORMAL_MAGIC));
 }
 
-static void qcom_scm_set_download_mode(bool enable)
+void qcom_scm_set_download_mode(bool enable)
 {
 	u32 val = enable ? QCOM_DLOAD_FULLDUMP : QCOM_DLOAD_NODUMP;
 	bool avail;
@@ -686,6 +686,7 @@ static void qcom_scm_set_download_mode(bool enable)
 	if (ret)
 		dev_err(__scm->dev, "failed to set download mode: %d\n", ret);
 }
+EXPORT_SYMBOL_GPL(qcom_scm_set_download_mode);
 
 /**
  * qcom_scm_pas_init_image() - Initialize peripheral authentication service
