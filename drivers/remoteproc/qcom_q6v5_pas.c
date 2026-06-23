@@ -401,6 +401,7 @@ static void qcom_pas_handover(struct qcom_q6v5 *q6v5)
 static int adsp_stop(struct rproc *rproc)
 {
 	struct qcom_adsp *adsp = rproc->priv;
+	int dtb_ret;
 	int handover;
 	int ret;
 
@@ -415,10 +416,13 @@ static int adsp_stop(struct rproc *rproc)
 	if (ret)
 		dev_err(adsp->dev, "failed to shutdown: %d\n", ret);
 
+	/* Shutdown DTB processor if present, but preserve main shutdown error */
 	if (adsp->dtb_pas_id) {
-		ret = qcom_pas_shutdown(adsp->dtb_pas_id);
-		if (ret)
-			dev_err(adsp->dev, "failed to shutdown dtb: %d\n", ret);
+		dtb_ret = qcom_pas_shutdown(adsp->dtb_pas_id);
+		if (dtb_ret)
+			dev_err(adsp->dev, "failed to shutdown dtb: %d\n", dtb_ret);
+		if (!ret && dtb_ret)
+			ret = dtb_ret;
 	}
 
 	handover = qcom_q6v5_unprepare(&adsp->q6v5);
