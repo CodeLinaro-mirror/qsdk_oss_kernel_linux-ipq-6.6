@@ -87,6 +87,7 @@ struct arm_pmu {
 	cpumask_t	supported_cpus;
 	char		*name;
 	int		pmuver;
+	unsigned int	cpu_part;	/* CPU part number, set at probe time */
 	irqreturn_t	(*handle_irq)(struct arm_pmu *pmu);
 	void		(*enable)(struct perf_event *event);
 	void		(*disable)(struct perf_event *event);
@@ -104,11 +105,14 @@ struct arm_pmu {
 	int		(*map_event)(struct perf_event *event);
 	int		num_events;
 	bool		secure_access; /* 32-bit ARM only */
-#if defined(CONFIG_ARCH_IPQ5424) && defined(CONFIG_ARM64)
+/*
+ * The PMCEIDn registers cover architectural events 0x00-0x3F.
+ * Implementation-defined events (>= 0x40) are not reported in PMCEID
+ * and must be manually enabled per-core. The highest impdef event
+ * across supported cores (A53/A55/A73/A78) reaches 0xEC, so size the
+ * bitmap to 0xF0 to cover all of them without overflow.
+ */
 #define ARMV8_PMUV3_MAX_COMMON_EVENTS		0xF0
-#else
-#define ARMV8_PMUV3_MAX_COMMON_EVENTS		0x80
-#endif
 	DECLARE_BITMAP(pmceid_bitmap, ARMV8_PMUV3_MAX_COMMON_EVENTS);
 #define ARMV8_PMUV3_EXT_COMMON_EVENT_BASE	0x4000
 	DECLARE_BITMAP(pmceid_ext_bitmap, ARMV8_PMUV3_MAX_COMMON_EVENTS);
