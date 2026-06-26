@@ -25,6 +25,10 @@ config ARCH_IPQ9650
 	bool "Enable support for IPQ9650"
 	select ARM_GIC_V3
 
+config ARCH_IPQ5610
+	bool "Enable support for IPQ5610"
+	select ARM_GIC_V3
+
 config ARCH_MSM8X60
 	bool "Enable support for MSM8X60"
 	select CLKSRC_QCOM
