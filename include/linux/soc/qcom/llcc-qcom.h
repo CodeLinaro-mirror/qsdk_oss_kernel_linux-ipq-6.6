@@ -61,6 +61,7 @@
 #define LLCC_RXFILL 5
 #define LLCC_PCIE5G 6
 #define LLCC_PCIE6G 7
+#define LLCC_PCIE2G 8
 
 
 /**
