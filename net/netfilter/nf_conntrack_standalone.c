@@ -612,6 +612,26 @@ nf_conntrack_hash_sysctl(struct ctl_table *table, int write,
 	return ret;
 }
 
+#ifdef CONFIG_NF_CT_PROTO_ESP
+static int nf_conntrack_esp_enabled_handler(struct ctl_table *table, int write,
+					    void __user *buffer, size_t *lenp, loff_t *ppos)
+{
+	int ret;
+
+	/* Let the standard handler update the per-netns .data field */
+	ret = proc_dointvec(table, write, buffer, lenp, ppos);
+	if (ret)
+		return ret;
+
+	if (write) {
+		/* Sync the new value into the global */
+		nf_ct_esp_enabled = *(unsigned int *)table->data;
+	}
+
+	return 0;
+}
+#endif
+
 static struct ctl_table_header *nf_ct_netfilter_header;
 
 enum nf_ct_sysctl_index {
@@ -1031,10 +1051,9 @@ static struct ctl_table nf_ct_sysctl_table[] = {
 #ifdef CONFIG_NF_CT_PROTO_ESP
 	[NF_SYSCTL_CT_PROTO_ESP_ENABLED] = {
 		.procname	= "nf_conntrack_esp_enabled",
-		.data		= &nf_ct_esp_enabled,
 		.maxlen		= sizeof(int),
 		.mode		= 0644,
-		.proc_handler	= proc_dointvec,
+		.proc_handler	= nf_conntrack_esp_enabled_handler,
 	},
 	[NF_SYSCTL_CT_PROTO_TIMEOUT_ESP_UNREPLIED] = {
 		.procname	= "nf_conntrack_esp_timeout_unreplied",
@@ -1163,6 +1182,7 @@ static void nf_conntrack_standalone_init_esp_sysctl(struct net *net,
 #ifdef CONFIG_NF_CT_PROTO_ESP
 	struct nf_esp_net *en = nf_esp_pernet(net);
 
+	table[NF_SYSCTL_CT_PROTO_ESP_ENABLED].data = &en->esp_enabled;
 	table[NF_SYSCTL_CT_PROTO_TIMEOUT_ESP_UNREPLIED].data = &en->esp_timeouts[ESP_CT_UNREPLIED];
 	table[NF_SYSCTL_CT_PROTO_TIMEOUT_ESP_REPLIED].data = &en->esp_timeouts[ESP_CT_REPLIED];
 #endif
