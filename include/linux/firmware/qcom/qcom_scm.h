@@ -265,6 +265,7 @@ extern bool qcom_scm_is_available(void);
 extern int qcom_scm_set_cold_boot_addr(void *entry);
 extern int qcom_scm_set_warm_boot_addr(void *entry);
 extern void qcom_scm_cpu_power_down(u32 flags);
+extern void qcom_scm_set_download_mode(bool enable);
 extern int qcom_scm_set_remote_state(u32 state, u32 id);
 extern int qcom_scm_derive_and_share_key(uint32_t key_len, uint8_t *sw_context,
 				u32 sw_context_len, uint8_t *derived_key,
