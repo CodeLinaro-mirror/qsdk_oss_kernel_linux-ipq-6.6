@@ -251,6 +251,27 @@ out:
 		dma_unmap_single(mhi_cntrl->cntrl_dev, mhi_buf->dma_addr,
 				 mhi_buf->len, DMA_TO_DEVICE);
 
+	/*
+	 * Sync all RDDM data segments for CPU access. The data segments
+	 * (all entries except the last vector table entry) were mapped with
+	 * DMA_FROM_DEVICE in mhi_alloc_bhie_table(). After the device writes
+	 * RDDM data via DMA, the CPU cache may still hold stale data (zeros
+	 * from the initial kmalloc). Without this sync, reading mhi_buf->buf
+	 * (virtual address) returns zeros while the actual data is only
+	 * visible at the physical/DMA address. This is the root cause of
+	 * SFR/coredump not being displayed from the virtual address buffer.
+	 */
+	if (!mhi_cntrl->rddm_prealloc) {
+		struct mhi_buf *data_buf = mhi_cntrl->rddm_image->mhi_buf;
+		unsigned int j;
+
+		for (j = 0; j < mhi_cntrl->rddm_image->entries - 1; j++, data_buf++)
+			dma_sync_single_for_cpu(mhi_cntrl->cntrl_dev,
+						data_buf->dma_addr,
+						data_buf->len,
+						DMA_FROM_DEVICE);
+	}
+
 	if (ret) {
 		dev_err(dev, "RDDM transfer failed. RXVEC_STATUS: 0x%x\n",
 			rx_status);
