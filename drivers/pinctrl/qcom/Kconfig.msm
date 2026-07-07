@@ -95,6 +95,14 @@ config PINCTRL_IPQ9650
 	  Qualcomm Technologies Inc. IPQ9650 platform. Select this for
 	  IPQ9650.
 
+config PINCTRL_IPQ5610
+	tristate "Qualcomm Technologies, Inc. IPQ5610 pin controller driver"
+	help
+	  This is the pinctrl, pinmux, pinconf and gpiolib driver for
+	  the Qualcomm Technologies Inc. TLMM block found on the
+	  Qualcomm Technologies Inc. IPQ5610 platform. Select this for
+	  IPQ5610.
+
 config PINCTRL_MSM8226
 	tristate "Qualcomm 8226 pin controller driver"
 	depends on ARM || COMPILE_TEST
