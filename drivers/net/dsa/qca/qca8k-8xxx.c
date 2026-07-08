@@ -473,10 +473,13 @@ qca8k_bulk_read(void *ctx, const void *reg_buf, size_t reg_len,
 	int i, count = val_len / sizeof(u32), ret;
 	struct qca8k_priv *priv = ctx;
 	u32 reg = *(u16 *)reg_buf;
+	u32 *val = val_buf;
 
-	/* loop count times and increment reg of 4 */
-	for (i = 0; i < count; i++, reg += sizeof(u32)) {
-		ret = qca8k_read_mii(priv, reg, val_buf + i);
+	/* loop count times, increment reg of 4 and increment val ptr to
+	 * the next value
+	 */
+	for (i = 0; i < count; i++, reg += sizeof(u32), val++) {
+		ret = qca8k_read_mii(priv, reg, val);
 		if (ret < 0)
 			return ret;
 	}
