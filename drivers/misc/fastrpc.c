@@ -37,7 +37,7 @@
 #define FASTRPC_MAX_FDLIST	16
 #define FASTRPC_MAX_CRCLIST	64
 #define FASTRPC_PHYS(p)	((p) & 0xffffffff)
-#define FASTRPC_CTX_MAX (256)
+#define FASTRPC_CTX_MAX (1024)
 #define FASTRPC_INIT_HANDLE	1
 #define FASTRPC_DSP_UTILITIES_HANDLE	2
 /*
@@ -46,7 +46,17 @@
  * in the IDL file or FastRPC framework.
  */
 #define FASTRPC_MAX_STATIC_HANDLE (20)
-#define FASTRPC_CTXID_MASK GENMASK(15, 8)
+#define FASTRPC_CTXID_MASK GENMASK(19, 8)
+/* Mask covering the jobid bits in a context ID */
+#define FASTRPC_JOBID_MASK GENMASK(31, 28)
+
+/* Starting position of job id counter in context id */
+#define FASTRPC_CTXID_JOBID_POS (28)
+
+/* Macro to pack job id counter into context id */
+#define FASTRPC_PACK_JOBID_IN_CTXID(ctxid, jobid) \
+	((ctxid) | FIELD_PREP(FASTRPC_JOBID_MASK, (jobid)))
+
 #define INIT_FILELEN_MAX (2 * 1024 * 1024)
 #define INIT_FILE_NAMELEN_MAX (128)
 #define FASTRPC_DEVICE_NAME	"fastrpc"
@@ -302,6 +312,7 @@ struct fastrpc_channel_ctx {
 	bool unsigned_support;
 	bool poll_mode_supported;
 	u64 dma_mask;
+	u64 jobid;
 };
 
 struct fastrpc_device {
@@ -735,7 +746,9 @@ static struct fastrpc_invoke_ctx *fastrpc_context_alloc(
 		spin_unlock_irqrestore(&cctx->lock, flags);
 		goto err_idr;
 	}
+	cctx->jobid++;
 	ctx->ctxid = FIELD_PREP(FASTRPC_CTXID_MASK, ret);
+	ctx->ctxid = FASTRPC_PACK_JOBID_IN_CTXID(ctx->ctxid, cctx->jobid);
 	spin_unlock_irqrestore(&cctx->lock, flags);
 
 	kref_init(&ctx->refcount);
@@ -2739,20 +2752,29 @@ static int fastrpc_rpmsg_callback(struct rpmsg_device *rpdev, void *data,
 	struct fastrpc_invoke_ctx *ctx;
 	unsigned long flags;
 	unsigned long ctxid;
+	unsigned long idr;
 
 	if (len < sizeof(*rsp))
 		return -EINVAL;
 
-	ctxid = FIELD_GET(FASTRPC_CTXID_MASK, rsp->ctx);
+	idr = FIELD_GET(FASTRPC_CTXID_MASK, rsp->ctx);
+	ctxid = rsp->ctx & (FASTRPC_CTXID_MASK | FASTRPC_JOBID_MASK);
 
 	spin_lock_irqsave(&cctx->lock, flags);
-	ctx = idr_find(&cctx->ctx_idr, ctxid);
-	spin_unlock_irqrestore(&cctx->lock, flags);
+	ctx = idr_find(&cctx->ctx_idr, idr);
 
 	if (!ctx) {
-		dev_err(&rpdev->dev, "No context ID matches response\n");
-		return -ENOENT;
+		dev_dbg(&rpdev->dev, "No context ID matches response\n");
+		spin_unlock_irqrestore(&cctx->lock, flags);
+		return 0;
 	}
+	if (ctx->ctxid != ctxid) {
+		spin_unlock_irqrestore(&cctx->lock, flags);
+		dev_dbg(&rpdev->dev, "Warning: rsp ctxid 0x%lx mismatch with local ctxid 0x%llx (full rsp ctx 0x%llx)\n",
+				ctxid, ctx->ctxid, rsp->ctx);
+		return 0;
+	}
+	spin_unlock_irqrestore(&cctx->lock, flags);
 
 	ctx->retval = rsp->retval;
 	ctx->is_work_done = true;
