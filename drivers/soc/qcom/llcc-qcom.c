@@ -412,12 +412,12 @@ static const struct llcc_slice_config ipq5424_data[] =  {
 
 static const struct llcc_slice_config ipq9650_data[] =  {
 	/* SCID 1 - RXFILL, TXDESC descriptors (PPE) */
-	{LLCC_RXFILL,     1,   128, 3, 0,  0x03FF, 0x0,  0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, },
+	{LLCC_RXFILL,     1,   128, 1, 0,  0x007F, 0x0,  0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, },
 	/* SCID 2 - SKB, SKB data (APSS Core 0,1,2) */
-	{LLCC_APSS,       2,   640, 1, 1,  0x03FF, 0x0,  0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, },
-	{LLCC_AI,         3,   128, 3, 1,  0x03FF, 0x0,  0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, },
+	{LLCC_APSS,       2,   384, 3, 1,  0x007F, 0x0,  0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, },
+	{LLCC_AI,         3,   128, 3, 1,  0x007F, 0x0,  0, 0, 0, 1, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0, },
 	/* SCID 5 - RXDESC & TXCMPL Descriptors (PPE) */
-	{LLCC_RXDESC,     5,   320, 3, 0,  0x03FF, 0x0,  0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, },
+	{LLCC_RXDESC,     5,   192, 3, 0,  0x0380, 0x0,  0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 1, 1, 1, 1, },
 	{LLCC_PCIE2G,     8,   384, 3, 0,  0xFC00, 0x0,  0, 0, 0, 1, 1, 0, 1, 1, 1, 0, 0, 0, 0, 0, 0, },
 };
 
