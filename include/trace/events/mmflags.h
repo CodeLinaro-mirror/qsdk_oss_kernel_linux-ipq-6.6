@@ -60,9 +60,17 @@
 #define __def_gfpflag_names_kasan
 #endif
 
+#ifdef CONFIG_SKB_RECYCLER
+#define __def_gfpflag_names_recycler ,			\
+	gfpflag_string(__GFP_RECYCLER)
+#else
+#define __def_gfpflag_names_recycler
+#endif
+
 #define show_gfp_flags(flags)						\
 	(flags) ? __print_flags(flags, "|",				\
 	__def_gfpflag_names __def_gfpflag_names_kasan			\
+	__def_gfpflag_names_recycler					\
 	) : "none"
 
 #ifdef CONFIG_MMU

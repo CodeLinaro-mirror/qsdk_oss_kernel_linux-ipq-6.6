@@ -1065,6 +1065,8 @@ struct sk_buff {
 	/* Packets processed in dev_fast_xmit_qdisc() path */
 	__u8			int_pri:4;
 	/* Priority info for hardware qdiscs */
+	__u8			is_from_custom_cache:1;
+	/* Allocated from custom cache with recycler enabled */
 
 #ifdef CONFIG_IPQ_PON
 	/* packets processed by pon_iftrap_......() */
@@ -3416,7 +3418,7 @@ static inline struct sk_buff *netdev_alloc_skb(struct net_device *dev,
 static inline struct sk_buff *netdev_alloc_skb_fast(struct net_device *dev,
 						    unsigned int length)
 {
-	return __netdev_alloc_skb_fast(dev, length, GFP_ATOMIC);
+	return __netdev_alloc_skb_fast(dev, length, GFP_ATOMIC | __GFP_RECYCLER);
 }
 
 /* legacy helper around __netdev_alloc_skb() */
