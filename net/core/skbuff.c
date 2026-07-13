@@ -113,9 +113,11 @@ struct kmem_cache *skb_data_cache_2100;
  * @profile:    enum skb_mem_profile value for this entry
  *
  * With CONFIG_SKB_RECYCLER:
- *   value      = SKB_RECYCLE_SIZE for all profiles
- *   cache_size = __SKB_CACHE_SZ(2100)  for optimized/balanced (256M/512M)
- *   cache_size = SKB_RECYCLE_SIZE       for high (1G, both caches equal)
+ * value      = SKB_RECYCLE_SIZE for all profiles
+ * cache_size = __SKB_CACHE_SZ(__SKB_VAL_REDUCED) for optimized/balanced (256M/512M)
+ * cache_size = __SKB_CACHE_SZ(CONFIG_SKB_RECYCLE_SIZE) for high (1G)
+ *
+ * All three profiles produce cache_size = 2176 when CONFIG_SKB_RECYCLE_SIZE=1856.
  *
  * Without CONFIG_SKB_RECYCLER:
  *   value      = __SKB_CACHE_SZ(1984)  for 64-bit (LP64)
@@ -149,7 +151,7 @@ static unsigned int skb_recycle_size = CONFIG_SKB_RECYCLE_SIZE;
 #if defined(CONFIG_SKB_RECYCLER)
 #define __SKB_VAL		CONFIG_SKB_RECYCLE_SIZE
 #define __SKB_VAL_REDUCED	1856
-#define __SKB_CACHE_REDUCED	__SKB_CACHE_SZ(2100)
+#define __SKB_CACHE_REDUCED	__SKB_CACHE_SZ(__SKB_VAL_REDUCED)
 #define __SKB_CACHE_HIGH	__SKB_CACHE_SZ(CONFIG_SKB_RECYCLE_SIZE)
 #else /* !CONFIG_SKB_RECYCLER */
 #ifdef __LP64__
