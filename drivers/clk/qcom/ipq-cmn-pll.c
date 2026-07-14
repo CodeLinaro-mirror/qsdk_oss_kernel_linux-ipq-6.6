@@ -1302,7 +1302,7 @@ static struct clk_hw *ipq_cmn_pll_pon_refclk_register(struct platform_device *pd
 	init.parent_data = &pdata;
 	init.num_parents = 1;
 	init.ops = &clk_pon_refclk_ops;
-	init.flags = 0;
+	init.flags = CLK_IGNORE_UNUSED;
 
 	pon_clk->hw.init = &init;
 	pon_clk->regmap = regmap;
@@ -1407,7 +1407,7 @@ static struct clk_hw *ipq_cmn_pll_pcs_register(struct platform_device *pdev,
 	init.parent_data = &pdata;
 	init.num_parents = 1;
 	init.ops = &clk_pcs_clk_ops;
-	init.flags = 0;
+	init.flags = CLK_IGNORE_UNUSED;
 
 	pcs_clk->hw.init = &init;
 	pcs_clk->regmap = regmap;
@@ -1477,7 +1477,7 @@ static struct clk_hw *ipq_cmn_pll_eth_pon_register(struct platform_device *pdev,
 	init.parent_data = &pdata;
 	init.num_parents = 1;
 	init.ops = &clk_eth_pon_ops;
-	init.flags = 0;
+	init.flags = CLK_IGNORE_UNUSED;
 
 	eth_pon_clk->hw.init = &init;
 	eth_pon_clk->regmap = regmap;
@@ -1541,7 +1541,7 @@ static struct clk_hw *ipq_cmn_pll_register_fixed_gate(struct device *dev,
 						    NULL, NULL,
 						    &fixed->hw, &clk_fixed_rate_ops,
 						    &gate->hw, &clk_gate_ops,
-						    0);
+						    CLK_IGNORE_UNUSED);
 }
 
 static int ipq_cmn_pll_register_clks(struct platform_device *pdev)
