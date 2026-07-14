@@ -6,6 +6,8 @@
 #include <linux/acpi.h>
 #include <linux/adreno-smmu-priv.h>
 #include <linux/delay.h>
+#include <linux/gfp.h>
+#include <linux/mm.h>
 #include <linux/of_device.h>
 #include <linux/firmware/qcom/qcom_scm.h>
 #include <linux/pm_runtime.h>
@@ -381,10 +383,177 @@ static int qcom_smmu_init_context(struct arm_smmu_domain *smmu_domain,
 
 	smmu_domain->cfg.flush_walk_prefer_tlbiasid = true;
 
+	/*
+	 * If the S2 identity CB is active, switch Stage-1 context banks from
+	 * CBAR TYPE=1 (S1+S2-bypass) to TYPE=3 (nested S1+S2), pointing at
+	 * the shared identity-mapped Stage-2 CB.
+	 *
+	 * Scoped to fastrpc compute-cb clients only: other S1 masters (GPU,
+	 * display, USB, remoteproc PAS firmware loads, ...) hang when nested
+	 * under this identity S2 - PAS firmware boot in particular owns a
+	 * TZ-authenticated fixed-PA carveout that a non-secure S2 identity
+	 * translation underneath is not equivalent to bypass for.
+	 */
+	if (qsmmu->s2_identity_quirk &&
+	    smmu_domain->stage == ARM_SMMU_DOMAIN_S1 &&
+	    of_device_is_compatible(dev->of_node, "qcom,fastrpc-compute-cb")) {
+		smmu_domain->cfg.cbar = CBAR_TYPE_S1_TRANS_S2_TRANS;
+		smmu_domain->cfg.nested_cbndx = qsmmu->s2_identity_cbndx;
+		smmu_domain->cfg.nested_vmid = qsmmu->s2_identity_vmid;
+		dev_notice(smmu->dev,
+			   "S2-NEST: dev=%s cbndx=%d asid=%u nested_cbndx=%u nested_vmid=%u\n",
+			   dev_name(dev), cbndx, smmu_domain->cfg.asid,
+			   smmu_domain->cfg.nested_cbndx,
+			   smmu_domain->cfg.nested_vmid);
+	}
+
 	client_match = qsmmu->data->client_match;
 
 	if (client_match)
 		qcom_smmu_set_actlr_dev(dev, smmu, cbndx, client_match);
+
+	return 0;
+}
+
+/*
+ * ARM LPAE Stage-2 level-1 block entry attributes for an identity mapping.
+ *
+ * Bits[1:0]  = 01  (block descriptor, valid)
+ * Bits[5:2]  = 0xF (MemAttr = normal memory, inner/outer write-back)
+ * Bits[7:6]  = 11  (S2AP = read/write)
+ * Bits[9:8]  = 11  (SH = inner shareable)
+ * Bit[10]    = 1   (AF = access flag set)
+ *
+ * NOTE: value must be 0x7fd, not 0x77d.  0x77d clears bit7, yielding
+ * S2AP=01 (read-only), which faults/stalls on the first nested write from
+ * any master (DMA, codec, USB, remoteproc firmware load, display).
+ */
+#define QCOM_S2_IDENTITY_PTE_ATTRS	0x7fdULL
+
+/*
+ * VTCR for the S2 identity context bank:
+ *   T0SZ=24  (40-bit IPA, 64-40=24)
+ *   SL0=1    (start walk at level 1)
+ *   TG0=0    (4KB granule)
+ *   SH0=3    (inner shareable)
+ *   ORGN0=1  (write-back, read-allocate)
+ *   IRGN0=1  (write-back, read-allocate)
+ *   PS=2     (40-bit PA output)
+ *   RES1     (bit 31)
+ *
+ * With a 4KB granule and SL0=1 the level-1 lookup resolves IPA[39:30]
+ * (10 bits, 1024 entries).  A single 4KB table holds only 512 entries, so
+ * the level-1 table is 2 concatenated 4KB tables (8KB, 8KB-aligned) per the
+ * SMMUv2 stage-2 initial-level concatenation rules.
+ */
+#define QCOM_S2_IDENTITY_VTCR \
+	(ARM_SMMU_VTCR_RES1 | \
+	 FIELD_PREP(ARM_SMMU_VTCR_PS, 2) | \
+	 FIELD_PREP(ARM_SMMU_VTCR_SH0, 3) | \
+	 FIELD_PREP(ARM_SMMU_VTCR_ORGN0, 1) | \
+	 FIELD_PREP(ARM_SMMU_VTCR_IRGN0, 1) | \
+	 FIELD_PREP(ARM_SMMU_VTCR_SL0, 1) | \
+	 FIELD_PREP(ARM_SMMU_VTCR_T0SZ, 24))
+
+/* Number of level-1 entries covering a 40-bit IPA space (1024 × 1 GB) */
+#define QCOM_S2_IDENTITY_L1_ENTRIES	1024
+
+/* Order of the page allocation backing the level-1 table (1024 × 8B = 8KB) */
+#define QCOM_S2_IDENTITY_PGTBL_ORDER	1
+
+/**
+ * qcom_smmu_setup_s2_identity_cb() - Set up a shared Stage-2 identity-mapped context bank
+ * @smmu: the SMMU device
+ *
+ * Allocates the last available context bank as a Stage-2 CB configured with
+ * an identity-mapped page table (IPA == PA).  Stage-1 context banks can then
+ * be switched from CBAR TYPE=1 (S1+S2-bypass) to TYPE=3 (nested S1+S2),
+ * pointing at this CB via its VMID.
+ *
+ * Returns 0 on success, negative errno on failure.
+ */
+static int qcom_smmu_setup_s2_identity_cb(struct arm_smmu_device *smmu)
+{
+	struct qcom_smmu *qsmmu = to_qcom_smmu(smmu);
+	phys_addr_t pgtbl_phys;
+	u32 reg;
+	int i;
+
+	/*
+	 * Reserve the last context bank as the shared S2 identity CB.  This
+	 * must happen before any domain context banks are allocated.
+	 */
+	qsmmu->s2_identity_cbndx = smmu->num_context_banks - 1;
+	if (test_and_set_bit(qsmmu->s2_identity_cbndx, smmu->context_map)) {
+		dev_err(smmu->dev,
+			"S2 bypass: context bank %u already in use\n",
+			qsmmu->s2_identity_cbndx);
+		return -ENOSPC;
+	}
+
+	/* VMID 1 is dedicated to the S2 identity CB */
+	qsmmu->s2_identity_vmid = 3;
+
+	/*
+	 * Allocate the level-1 Stage-2 page table (1024 × 8B = 8KB, i.e. two
+	 * concatenated 4KB tables) and populate it with 1024 identity-mapped
+	 * 1 GB block entries so that every IPA in the 40-bit space passes
+	 * through unchanged (IPA == PA).  An order-1 allocation is naturally
+	 * 8KB-aligned, satisfying the VTTBR base-address alignment requirement.
+	 */
+	qsmmu->s2_identity_pgtbl =
+		(u64 *)__get_free_pages(GFP_KERNEL | __GFP_ZERO,
+					QCOM_S2_IDENTITY_PGTBL_ORDER);
+	if (!qsmmu->s2_identity_pgtbl) {
+		clear_bit(qsmmu->s2_identity_cbndx, smmu->context_map);
+		return -ENOMEM;
+	}
+
+	for (i = 0; i < QCOM_S2_IDENTITY_L1_ENTRIES; i++)
+		qsmmu->s2_identity_pgtbl[i] = ((u64)i << 30) |
+					     QCOM_S2_IDENTITY_PTE_ATTRS;
+
+	pgtbl_phys = virt_to_phys(qsmmu->s2_identity_pgtbl);
+
+	/* Disable the CB before programming it */
+	arm_smmu_cb_write(smmu, qsmmu->s2_identity_cbndx, ARM_SMMU_CB_SCTLR, 0);
+
+	/* CBA2R: 64-bit format; carry VMID for 16-bit VMID hardware */
+	if (smmu->version > ARM_SMMU_V1) {
+		reg = ARM_SMMU_CBA2R_VA64;
+		if (smmu->features & ARM_SMMU_FEAT_VMID16)
+			reg |= FIELD_PREP(ARM_SMMU_CBA2R_VMID16,
+					  qsmmu->s2_identity_vmid);
+		arm_smmu_gr1_write(smmu,
+				   ARM_SMMU_GR1_CBA2R(qsmmu->s2_identity_cbndx),
+				   reg);
+	}
+
+	/* CBAR: TYPE=S2_TRANS; VMID for 8-bit VMID hardware */
+	reg = FIELD_PREP(ARM_SMMU_CBAR_TYPE, CBAR_TYPE_S2_TRANS);
+	if (!(smmu->features & ARM_SMMU_FEAT_VMID16))
+		reg |= FIELD_PREP(ARM_SMMU_CBAR_VMID, qsmmu->s2_identity_vmid);
+	arm_smmu_gr1_write(smmu, ARM_SMMU_GR1_CBAR(qsmmu->s2_identity_cbndx),
+			   reg);
+
+	/* VTCR: 39-bit IPA, 4 KB granule, start at level 1, 40-bit PA */
+	arm_smmu_cb_write(smmu, qsmmu->s2_identity_cbndx,
+			  ARM_SMMU_CB_TCR, QCOM_S2_IDENTITY_VTCR);
+
+	/* VTTBR: physical address of the level-1 page table */
+	arm_smmu_cb_writeq(smmu, qsmmu->s2_identity_cbndx,
+			   ARM_SMMU_CB_TTBR0, pgtbl_phys);
+
+	/* SCTLR: enable translation, report faults */
+	reg = ARM_SMMU_SCTLR_CFIE | ARM_SMMU_SCTLR_CFRE | ARM_SMMU_SCTLR_M;
+	arm_smmu_cb_write(smmu, qsmmu->s2_identity_cbndx, ARM_SMMU_CB_SCTLR, reg);
+
+	dev_notice(smmu->dev,
+		   "S2-IDENT CB: cbndx=%u vmid=%u pgtbl_phys=%pa vtcr=0x%08x vmid16=%d entries=%d\n",
+		   qsmmu->s2_identity_cbndx, qsmmu->s2_identity_vmid, &pgtbl_phys,
+		   (u32)QCOM_S2_IDENTITY_VTCR,
+		   !!(smmu->features & ARM_SMMU_FEAT_VMID16),
+		   QCOM_S2_IDENTITY_L1_ENTRIES);
 
 	return 0;
 }
@@ -462,6 +631,25 @@ static int qcom_smmu_cfg_probe(struct arm_smmu_device *smmu)
 			smmu->s2crs[i].privcfg = S2CR_PRIVCFG_DEFAULT;
 			smmu->s2crs[i].cbndx = 0xff;
 		}
+	}
+
+	/*
+	 * Set up the shared Stage-2 identity CB if requested.  This must be
+	 * done after the bypass_quirk CB is reserved above so that the two
+	 * reservations do not collide.
+	 *
+	 * Exclude the Adreno (GPU) SMMU: it uses per-process page tables and
+	 * its own translation regime, so forcing nested S2 (and stealing its
+	 * last context bank) hangs it at probe.  On Glymur the glymur-smmu-500
+	 * compatible is shared by both apps_smmu and adreno_smmu.
+	 */
+	if (qsmmu->data && qsmmu->data->s2_identity &&
+	    !of_device_is_compatible(smmu->dev->of_node, "qcom,adreno-smmu")) {
+		int ret = qcom_smmu_setup_s2_identity_cb(smmu);
+
+		if (ret)
+			return ret;
+		qsmmu->s2_identity_quirk = true;
 	}
 
 	return 0;
@@ -559,6 +747,44 @@ static const struct arm_smmu_impl qcom_smmu_500_impl = {
 	.tlb_sync = qcom_smmu_tlb_sync,
 };
 
+/*
+ * arm_smmu_device_reset() clears SCTLR for all context banks after
+ * cfg_probe() sets up the S2 identity CB.  Re-enable it here so that
+ * the identity-mapped Stage-2 CB is active when the SMMU is enabled.
+ */
+static int qcs9100_smmu_500_reset(struct arm_smmu_device *smmu)
+{
+	struct qcom_smmu *qsmmu = to_qcom_smmu(smmu);
+	u32 reg;
+	int ret;
+
+	ret = arm_mmu500_reset(smmu);
+
+	if (qsmmu->s2_identity_quirk) {
+		reg = ARM_SMMU_SCTLR_CFIE | ARM_SMMU_SCTLR_CFRE | ARM_SMMU_SCTLR_M;
+		arm_smmu_cb_write(smmu, qsmmu->s2_identity_cbndx,
+				  ARM_SMMU_CB_SCTLR, reg);
+		dev_dbg(smmu->dev,
+			"S2 bypass CB %u re-enabled after reset (SCTLR=0x%08x)\n",
+			qsmmu->s2_identity_cbndx, reg);
+	}
+
+	return ret;
+}
+
+static const struct arm_smmu_impl qcs9100_smmu_500_impl = {
+	.init_context = qcom_smmu_init_context,
+	.cfg_probe = qcom_smmu_cfg_probe,
+	.def_domain_type = qcom_smmu_def_domain_type,
+	.reset = qcs9100_smmu_500_reset,
+	.write_s2cr = qcom_smmu_write_s2cr,
+	.tlb_sync = qcom_smmu_tlb_sync,
+#ifdef CONFIG_ARM_SMMU_QCOM_DEBUG
+	.context_fault = qcom_smmu_context_fault,
+	.context_fault_needs_threaded_irq = true,
+#endif
+};
+
 static const struct arm_smmu_impl sdm845_smmu_500_impl = {
 	.init_context = qcom_smmu_init_context,
 	.cfg_probe = qcom_smmu_cfg_probe,
@@ -604,8 +830,13 @@ static struct arm_smmu_device *qcom_smmu_create(struct arm_smmu_device *smmu,
 	if (!impl)
 		return smmu;
 
-	/* Check to make sure qcom_scm has finished probing */
-	if (!qcom_scm_is_available())
+	/*
+	 * Check to make sure qcom_scm has finished probing, but only when a
+	 * qcom,scm device node is present in the DT.  On platforms without
+	 * SCM (e.g. QEMU) there is no such node and the check is skipped.
+	 */
+	if (of_find_compatible_node(NULL, NULL, "qcom,scm") &&
+	    !qcom_scm_is_available())
 		return ERR_PTR(-EPROBE_DEFER);
 
 	qsmmu = devm_krealloc(smmu->dev, smmu, sizeof(*qsmmu), GFP_KERNEL);
@@ -659,6 +890,14 @@ static const struct qcom_smmu_match_data qcom_smmu_500_impl0_data = {
 	.client_match = qcom_smmu_actlr_client_of_match,
 };
 
+static const struct qcom_smmu_match_data qcs9100_smmu_500_data = {
+	.impl = &qcs9100_smmu_500_impl,
+	.adreno_impl = &qcom_adreno_smmu_500_impl,
+	.cfg = &qcom_smmu_impl0_cfg,
+	.client_match = qcom_smmu_actlr_client_of_match,
+	.s2_identity = true,
+};
+
 /*
  * Do not add any more qcom,SOC-smmu-500 entries to this list, unless they need
  * special handling and can not be covered by the qcom,smmu-500 entry.
@@ -686,6 +925,8 @@ static const struct of_device_id __maybe_unused qcom_smmu_impl_of_match[] = {
 	{ .compatible = "qcom,sm8150-smmu-500", .data = &qcom_smmu_500_impl0_data },
 	{ .compatible = "qcom,sm8250-smmu-500", .data = &qcom_smmu_500_impl0_data },
 	{ .compatible = "qcom,sm8350-smmu-500", .data = &qcom_smmu_500_impl0_data },
+	{ .compatible = "qcom,qcs9100-smmu-500", .data = &qcs9100_smmu_500_data },
+	{ .compatible = "qcom,glymur-smmu-500", .data = &qcs9100_smmu_500_data },
 	{ .compatible = "qcom,sm8450-smmu-500", .data = &qcom_smmu_500_impl0_data },
 	{ .compatible = "qcom,smmu-500", .data = &qcom_smmu_500_impl0_data },
 	{ }

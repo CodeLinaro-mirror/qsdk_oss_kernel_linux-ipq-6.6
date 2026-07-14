@@ -131,6 +131,7 @@ enum arm_smmu_cbar_type {
 };
 #define ARM_SMMU_CBAR_S1_MEMATTR	GENMASK(15, 12)
 #define ARM_SMMU_CBAR_S1_MEMATTR_WB	0xf
+#define ARM_SMMU_CBAR_S2_CBNDX		GENMASK(15, 8)  /* TYPE=S1_S2 only */
 #define ARM_SMMU_CBAR_S1_BPSHCFG	GENMASK(9, 8)
 #define ARM_SMMU_CBAR_S1_BPSHCFG_NSH	3
 #define ARM_SMMU_CBAR_VMID		GENMASK(7, 0)
@@ -346,6 +347,15 @@ struct arm_smmu_cfg {
 		u16			asid;
 		u16			vmid;
 	};
+	/*
+	 * For nested translation (CBAR_TYPE_S1_TRANS_S2_TRANS):
+	 *   nested_vmid  - VMID of the Stage-2 CB, written into CBAR[7:0]
+	 *   nested_cbndx - index of the Stage-2 CB, written into CBAR[15:8]
+	 * Both fields are required; S2_CBNDX is the direct CB index used by
+	 * the hardware for page-table lookup, VMID is used for TLB tagging.
+	 */
+	u8				nested_vmid;
+	u8				nested_cbndx;
 	enum arm_smmu_cbar_type		cbar;
 	enum arm_smmu_context_fmt	fmt;
 	bool				flush_walk_prefer_tlbiasid;
