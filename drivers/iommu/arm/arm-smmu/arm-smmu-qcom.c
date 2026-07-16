@@ -898,6 +898,13 @@ static const struct qcom_smmu_match_data qcs9100_smmu_500_data = {
 	.s2_identity = true,
 };
 
+static const struct qcom_smmu_match_data ipq9650_smmu_500_data = {
+	.impl = &qcs9100_smmu_500_impl,
+	.cfg = &qcom_smmu_impl0_cfg,
+	.client_match = qcom_smmu_actlr_client_of_match,
+	.s2_identity = true,
+};
+
 /*
  * Do not add any more qcom,SOC-smmu-500 entries to this list, unless they need
  * special handling and can not be covered by the qcom,smmu-500 entry.
@@ -927,6 +934,7 @@ static const struct of_device_id __maybe_unused qcom_smmu_impl_of_match[] = {
 	{ .compatible = "qcom,sm8350-smmu-500", .data = &qcom_smmu_500_impl0_data },
 	{ .compatible = "qcom,qcs9100-smmu-500", .data = &qcs9100_smmu_500_data },
 	{ .compatible = "qcom,glymur-smmu-500", .data = &qcs9100_smmu_500_data },
+	{ .compatible = "qcom,ipq9650-smmu-500", .data = &ipq9650_smmu_500_data },
 	{ .compatible = "qcom,sm8450-smmu-500", .data = &qcom_smmu_500_impl0_data },
 	{ .compatible = "qcom,smmu-500", .data = &qcom_smmu_500_impl0_data },
 	{ }
