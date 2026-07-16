@@ -88,6 +88,7 @@ struct nf_esp_net {
 	spinlock_t id_list_lock;
 	struct list_head id_list;
 	unsigned int esp_timeouts[ESP_CT_MAX];
+	int esp_enabled;
 };
 #endif
 
