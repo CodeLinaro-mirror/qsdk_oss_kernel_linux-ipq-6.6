@@ -1143,6 +1143,28 @@ static int arm_smmu_domain_add_master(struct arm_smmu_domain *smmu_domain,
 	return 0;
 }
 
+static void arm_smmu_set_platform_dma(struct device *dev)
+{
+	struct iommu_fwspec *fwspec = dev_iommu_fwspec_get(dev);
+	struct arm_smmu_master_cfg *cfg = dev_iommu_priv_get(dev);
+	struct arm_smmu_device *smmu = cfg->smmu;
+	struct arm_smmu_s2cr *s2cr = smmu->s2crs;
+	int i, idx, ret;
+
+	ret = arm_smmu_rpm_get(smmu);
+	if (ret < 0)
+		return;
+
+	mutex_lock(&smmu->stream_map_mutex);
+	for_each_cfg_sme(cfg, fwspec, i, idx) {
+		s2cr[idx] = s2cr_init_val;
+		arm_smmu_write_s2cr(smmu, idx);
+	}
+	mutex_unlock(&smmu->stream_map_mutex);
+
+	arm_smmu_rpm_put(smmu);
+}
+
 static int arm_smmu_attach_dev(struct iommu_domain *domain, struct device *dev)
 {
 	struct arm_smmu_domain *smmu_domain = to_smmu_domain(domain);
@@ -1615,6 +1637,7 @@ static struct iommu_ops arm_smmu_ops = {
 	.of_xlate		= arm_smmu_of_xlate,
 	.get_resv_regions	= arm_smmu_get_resv_regions,
 	.def_domain_type	= arm_smmu_def_domain_type,
+	.set_platform_dma_ops	= arm_smmu_set_platform_dma,
 	.pgsize_bitmap		= -1UL, /* Restricted during device attach */
 	.owner			= THIS_MODULE,
 	.default_domain_ops = &(const struct iommu_domain_ops) {
