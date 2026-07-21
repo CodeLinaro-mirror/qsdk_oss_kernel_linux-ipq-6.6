@@ -2060,6 +2060,34 @@ static ssize_t slot_remove_store(const struct bus_type *bus, const char *buf,
 }
 static BUS_ATTR_WO(slot_remove);
 
+/*
+ * qcom_pcie_rescan() / qcom_pcie_remove_bus()
+ *
+ * Public API for external drivers to trigger a PCIe rescan or
+ * bus removal by PCI domain number.  Since rc_idx == domain (set at probe
+ * time: pcie->rc_idx = pcie->domain), these simply delegate to the existing
+ * pcie_rescan()/pcie_remove_bus() helpers under the rescan/remove lock.
+ */
+int qcom_pcie_rescan(int domain)
+{
+	int ret;
+
+	pci_lock_rescan_remove();
+	ret = pcie_rescan(domain);
+	pci_unlock_rescan_remove();
+
+	return ret;
+}
+EXPORT_SYMBOL(qcom_pcie_rescan);
+
+void qcom_pcie_remove_bus(int domain)
+{
+	pci_lock_rescan_remove();
+	pcie_remove_bus(domain);
+	pci_unlock_rescan_remove();
+}
+EXPORT_SYMBOL(qcom_pcie_remove_bus);
+
 static int __qcom_pcie_probe(struct platform_device *pdev,
 			     bool reset_before_init)
 {

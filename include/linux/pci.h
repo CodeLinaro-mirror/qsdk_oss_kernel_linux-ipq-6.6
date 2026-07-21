@@ -1195,6 +1195,8 @@ void pci_sort_breadthfirst(void);
 #ifdef CONFIG_PCIE_QCOM
 int pcie_set_link_speed(struct pci_dev *dev, u16 target_link_speed);
 int pcie_set_link_width(struct pci_dev *dev, u16 target_link_width);
+int qcom_pcie_rescan(int domain);
+void qcom_pcie_remove_bus(int domain);
 #else
 static inline int pcie_set_link_speed(struct pci_dev *dev, u16 target_link_speed)
 {
@@ -1204,6 +1206,8 @@ static inline int pcie_set_link_width(struct pci_dev *dev, u16 target_link_width
 {
 	return -ENODEV;
 }
+static inline int qcom_pcie_rescan(int domain) { return -ENODEV; }
+static inline void qcom_pcie_remove_bus(int domain) { }
 #endif
 
 /* Generic PCI functions exported to card drivers */
