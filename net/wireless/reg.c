@@ -2597,7 +2597,7 @@ static void handle_band_custom(struct wiphy *wiphy,
 	 */
 	for (i = 0; i < sband->n_channels; i++)
 		handle_channel_custom(wiphy, &sband->channels[i], regd,
-				      MHZ_TO_KHZ(20));
+				      MHZ_TO_KHZ(10));
 }
 
 /* Used by drivers prior to wiphy registration */

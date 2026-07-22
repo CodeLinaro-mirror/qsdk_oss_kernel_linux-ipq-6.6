@@ -20,6 +20,11 @@
 #define DISABLED_SUB_CHAN(freq, start_freq, puncture_bitmap) \
 	((1 << (freq - start_freq)/MHZ_TO_KHZ(20)) & puncture_bitmap)
 
+/* Bandwidth-only restriction flags, as opposed to hard blocks like
+ * IEEE80211_CHAN_DISABLED/NO_IR/RADAR/NO_OFDM.
+ */
+#define BW_ONLY_CHAN_FLAGS (IEEE80211_CHAN_NO_20MHZ | IEEE80211_CHAN_NO_10MHZ)
+
 static bool cfg80211_valid_60g_freq(u32 freq)
 {
 	return freq >= 58320 && freq <= 70200;
@@ -1001,7 +1006,7 @@ static bool cfg80211_secondary_chans_ok(struct wiphy *wiphy,
 		if (DISABLED_SUB_CHAN(freq, start_freq, puncture_bitmap))
 			continue;
 		c = ieee80211_get_channel_khz(wiphy, freq);
-		if (!c || c->flags & prohibited_flags)
+		if (!c || (c->flags & prohibited_flags & ~BW_ONLY_CHAN_FLAGS))
 			return false;
 	}
 
