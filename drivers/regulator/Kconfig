@@ -1090,6 +1090,24 @@ config REGULATOR_QCOM_USB_VBUS
 	  Say M here if you want to include support for enabling the VBUS output
 	  as a module. The module will be named "qcom_usb_vbus_regulator".
 
+config REGULATOR_QCOM_OPEN_LOOP_CPR
+	tristate "Qualcomm Open Loop CPR regulator support"
+	depends on REGULATOR
+	depends on (ARCH_QCOM || COMPILE_TEST)
+	depends on OF
+	depends on NVMEM
+	help
+	  This driver provides open loop Core Power Reduction (CPR) voltage
+	  regulation for Qualcomm IPQ9650 Application Processor Cluster (APC).
+	  It reads fuse correction values from eFuse registers via NVMEM and
+	  calculates the final operating voltages for SVS, NOM, and TUR modes.
+	  The calculated voltages are supplied through the regulator framework
+	  when invoked by the CPUFREQ framework during dynamic voltage and
+	  frequency scaling (DVFS) operations.
+
+	  Say M here to build this driver as a module. The module will be
+	  named "qcom-open-loop-cpr-regulator".
+
 config REGULATOR_RAA215300
 	tristate "Renesas RAA215300 driver"
 	select REGMAP_I2C
