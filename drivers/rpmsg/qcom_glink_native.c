@@ -985,6 +985,29 @@ static int qcom_glink_rx_defer(struct qcom_glink *glink, size_t extra)
 
 	qcom_glink_rx_peek(glink, &dcmd->msg, 0, sizeof(dcmd->msg) + extra);
 
+	/*
+	 * For OPEN commands, the remote-supplied channel name must be
+	 * NUL-terminated within the declared length and must not exceed
+	 * GLINK_NAME_SIZE (matching the transmit-side check in
+	 * qcom_glink_send_open_req()).
+	 * Without this check, strcmp() and kstrdup() in qcom_glink_rx_open()
+	 * walk past the end of the dcmd allocation into the adjacent slab
+	 * object (heap disclosure / kernel fault on unmapped boundary).
+	 * Advance the FIFO before returning so the interrupt handler does
+	 * not re-process the same malformed message.
+	 */
+	if (le16_to_cpu(dcmd->msg.cmd) == GLINK_CMD_OPEN) {
+		if (extra == 0 || extra > GLINK_NAME_SIZE ||
+		    !memchr(dcmd->msg.data, '\0', extra)) {
+			dev_err(glink->dev,
+				"OPEN channel name invalid (len=%zu)\n", extra);
+			kfree(dcmd);
+			qcom_glink_rx_advance(glink,
+					      ALIGN(sizeof(struct glink_msg) + extra, 8));
+			return -EINVAL;
+		}
+	}
+
 	rx_defer.cmd = le16_to_cpu(dcmd->msg.cmd);
 	rx_defer.ktime = ktime_to_ms(ktime_get());
 	rx_defer.param1 = le16_to_cpu(dcmd->msg.param1);
