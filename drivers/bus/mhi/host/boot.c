@@ -1000,9 +1000,12 @@ skip_req_fw:
 
 			/* Determine scenario and find second ELF */
 			if (fw_data != original_fw_data) {
-				/* Dual ELF detected at sbl_size */
+				/* Dual ELF detected at sbl_size. fw_data/fw_sz were
+				 * already advanced past the SBL above, so the second
+				 * ELF starts at offset 0 relative to fw_data.
+				 */
 				elf2_data = fw_data;
-				elf2_offset = mhi_cntrl->sbl_size;
+				elf2_offset = 0;
 				dev_dbg(dev, "Dual ELF detected at sbl_size\n");
 			} else {
 				/* Need to find second ELF manually */
