@@ -317,8 +317,13 @@ static int dt_cpufreq_probe(struct platform_device *pdev)
 	struct cpufreq_dt_platform_data *data = dev_get_platdata(&pdev->dev);
 	int ret, cpu;
 
-	/* Request resources early so we can return in case of -EPROBE_DEFER */
-	for_each_present_cpu(cpu) {
+	/*
+	 * Init cpufreq only for online CPUs: a present-but-offline CPU
+	 * (maxcpus=N) may have no clock configured in hardware for
+	 * it, so probing it here would abort init for the CPUs that are
+	 * actually online.
+	 */
+	for_each_online_cpu(cpu) {
 		ret = dt_cpufreq_early_init(&pdev->dev, cpu);
 		if (ret)
 			goto err;

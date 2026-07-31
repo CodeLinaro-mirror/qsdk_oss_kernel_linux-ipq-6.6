@@ -310,7 +310,8 @@ static int qcom_cpufreq_probe(struct platform_device *pdev)
 	}
 	of_node_put(np);
 
-	for_each_present_cpu(cpu) {
+	/* Configure OPPs only for online CPUs */
+	for_each_online_cpu(cpu) {
 		struct dev_pm_opp_config config = {
 			.supported_hw = NULL,
 		};
@@ -355,7 +356,7 @@ static int qcom_cpufreq_probe(struct platform_device *pdev)
 	dev_err(cpu_dev, "Failed to register platform device\n");
 
 free_opp:
-	for_each_present_cpu(cpu)
+	for_each_online_cpu(cpu)
 		dev_pm_opp_clear_config(drv->cpus[cpu].opp_token);
 	return ret;
 }
@@ -367,7 +368,7 @@ static void qcom_cpufreq_remove(struct platform_device *pdev)
 
 	platform_device_unregister(cpufreq_dt_pdev);
 
-	for_each_present_cpu(cpu)
+	for_each_online_cpu(cpu)
 		dev_pm_opp_clear_config(drv->cpus[cpu].opp_token);
 }
 
