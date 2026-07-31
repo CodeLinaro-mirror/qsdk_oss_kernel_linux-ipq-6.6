@@ -104,33 +104,6 @@ struct kmem_cache *skb_data_cache_2100;
 #include "skbuff_recycle.h"
 #include "skbuff_debug.h"
 
-/*
- * struct skb_profile_size - per-profile slab size descriptor
- *
- * @name:       mem-profile name matched against "mem-profile=<name>" in cmdline
- * @value:      primary cache size (SKB_DATA_CACHE_SIZE)
- * @cache_size: secondary cache size (SKB_DATA_CACHE_SIZE_2100)
- * @profile:    enum skb_mem_profile value for this entry
- *
- * With CONFIG_SKB_RECYCLER:
- * value      = SKB_RECYCLE_SIZE for all profiles
- * cache_size = __SKB_CACHE_SZ(__SKB_VAL_REDUCED) for optimized/balanced (256M/512M)
- * cache_size = __SKB_CACHE_SZ(CONFIG_SKB_RECYCLE_SIZE) for high (1G)
- *
- * All three profiles produce cache_size = 2176 when CONFIG_SKB_RECYCLE_SIZE=1856.
- *
- * Without CONFIG_SKB_RECYCLER:
- *   value      = __SKB_CACHE_SZ(1984)  for 64-bit (LP64)
- *   value      = __SKB_CACHE_SZ(1856)  for 32-bit (ILP32)
- *   cache_size = __SKB_CACHE_SZ(2100)  for all profiles and both word widths
- */
-struct skb_profile_size {
-	const char *name;
-	const u32 value;
-	const u32 cache_size;
-	const enum skb_mem_profile profile;
-};
-
 #if defined(CONFIG_SKB_RECYCLER)
 static unsigned int skb_recycle_size = CONFIG_SKB_RECYCLE_SIZE;
 #define SKB_RECYCLE_SIZE skb_recycle_size
@@ -178,8 +151,9 @@ static const struct skb_profile_size skb_profile_table[] = {
  * Initialised to the "high" (last) entry so __get_cache_size() returns a
  * valid size even before the cmdline is parsed.
  */
-static const struct skb_profile_size *skb_active_profile =
+const struct skb_profile_size *skb_active_profile =
 	&skb_profile_table[SKB_MEM_PROFILE_HIGH];
+EXPORT_SYMBOL(skb_active_profile);
 
 /* SKB data cache size accessors.
  *
