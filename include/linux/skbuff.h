@@ -363,6 +363,45 @@ struct gem_skb_ext {
 
 struct sk_buff;
 
+/*
+ * Memory profile detected from kernel bootargs (mem-profile=<value>).
+ * SKB_MEM_PROFILE_HIGH : 1G  (default / no param)
+ * SKB_MEM_PROFILE_MEDIUM  : 512M (mem-profile=balanced)
+ * SKB_MEM_PROFILE_LOW     : 256M (mem-profile=optimized)
+ */
+enum skb_mem_profile {
+	SKB_MEM_PROFILE_LOW = 0,
+	SKB_MEM_PROFILE_MEDIUM,
+	SKB_MEM_PROFILE_HIGH,
+};
+
+/*
+ * struct skb_profile_size - per-profile slab size descriptor
+ *
+ * @name:       mem-profile name matched against "mem-profile=<name>" in cmdline
+ * @value:      primary cache size (SKB_DATA_CACHE_SIZE)
+ * @cache_size: secondary cache size (SKB_DATA_CACHE_SIZE_2100)
+ * @profile:    enum skb_mem_profile value for this entry
+ *
+ * With CONFIG_SKB_RECYCLER:
+ *   value      = SKB_RECYCLE_SIZE for all profiles
+ *   cache_size = __SKB_CACHE_SZ(2100)  for optimized/balanced (256M/512M)
+ *   cache_size = SKB_RECYCLE_SIZE       for high (1G, both caches equal)
+ *
+ * Without CONFIG_SKB_RECYCLER:
+ *   value      = __SKB_CACHE_SZ(1984)  for 64-bit (LP64)
+ *   value      = __SKB_CACHE_SZ(1856)  for 32-bit (ILP32)
+ *   cache_size = __SKB_CACHE_SZ(2100)  for all profiles and both word widths
+ */
+struct skb_profile_size {
+	const char *name;
+	const u32 value;
+	const u32 cache_size;
+	const enum skb_mem_profile profile;
+};
+
+extern const struct skb_profile_size *skb_active_profile;
+
 #ifndef CONFIG_MAX_SKB_FRAGS
 # define CONFIG_MAX_SKB_FRAGS 17
 #endif
