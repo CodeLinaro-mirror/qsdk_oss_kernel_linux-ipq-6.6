@@ -4869,8 +4869,13 @@ bool dev_fast_xmit(struct sk_buff *skb,
 
 	rcu_read_lock_bh();
 
+	/*
+	 * A packet that has already been decided to be fast forwarded/transmitted
+	 * has had its Tx/Rx PON editing taken care of on that path already, so
+	 * pon iftrap processing is not required for it.
+	 */
 #ifdef CONFIG_IPQ_PON
-	if (pon_iftrap_process_tx(skb, DEV_FAST_XMIT)) {
+	if (!(skb->fast_forwarded || skb->fast_xmit) && (pon_iftrap_process_tx(skb, DEV_FAST_XMIT))) {
 		rcu_read_unlock_bh();
 		return true;
 	}
@@ -4967,8 +4972,13 @@ int __dev_queue_xmit(struct sk_buff *skb, struct net_device *sb_dev)
 
 	skb_update_prio(skb);
 
+	/*
+	 * A packet that has already been decided to be fast forwarded/transmitted
+	 * has had its Tx/Rx PON editing taken care of on that path already, so
+	 * pon iftrap processing is not required for it.
+	 */
 #ifdef CONFIG_IPQ_PON
-	if (pon_iftrap_process_tx(skb, __DEV_QUEUE_XMIT)) {
+	if (!(skb->fast_forwarded || skb->fast_xmit) && pon_iftrap_process_tx(skb, __DEV_QUEUE_XMIT)) {
 		rc = NETDEV_TX_OK;
 		goto out;
 	}
@@ -6088,6 +6098,18 @@ another_round:
 		}
 	}
 
+	if (likely(!fast_tc_filter)) {
+		fast_recv = rcu_dereference(athrs_fast_nat_recv);
+		if (fast_recv) {
+			if (fast_recv(skb)) {
+				ret = NET_RX_SUCCESS;
+				goto out;
+			}
+		}
+	}
+
+	skb_recycler_clear_fast_flags(skb);
+
 #ifdef CONFIG_IPQ_PON
 	if (pon_iftrap_enable) {
 		int (*pon_uni_recv)(struct sk_buff *skb);
@@ -6101,18 +6123,6 @@ another_round:
 		}
 	}
 #endif
-
-	if (likely(!fast_tc_filter)) {
-		fast_recv = rcu_dereference(athrs_fast_nat_recv);
-		if (fast_recv) {
-			if (fast_recv(skb)) {
-				ret = NET_RX_SUCCESS;
-				goto out;
-			}
-		}
-	}
-
-	skb_recycler_clear_fast_flags(skb);
 
 	if (eth_type_vlan(skb->protocol)) {
 		skb = skb_vlan_untag(skb);
