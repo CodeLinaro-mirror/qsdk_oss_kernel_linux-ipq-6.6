@@ -20,27 +20,40 @@
 #include <linux/wait.h>
 #include "internal.h"
 
+/*
+ * Maximum number of distinct firmware images that can have their RO
+ * segments shared concurrently. Endpoints are only allowed to reuse RO
+ * segments saved by another endpoint loading the identical firmware
+ * image (matched by name); endpoints loading a firmware name beyond
+ * this limit simply fall back to unshared allocation.
+ */
+#define MHI_MAX_SHARED_RO_ENTRIES 3
+
 /**
  * struct mhi_shared_ro - Shared read-only firmware segments
  * @mhi_bufs: Array of RO segment DMA buffers
  * @num_segments: Number of RO segments being shared
  * @refcount: Reference count for tracking endpoint usage
  * @lock: Protects access to this structure during refcount operations
+ * @fw_name: Name of the firmware image these RO segments belong to
  *
  * When multiple endpoints use the same firmware, RO segments can be
  * shared to reduce memory usage. This structure tracks the shared
- * segments and ensures proper cleanup via refcounting.
+ * segments and ensures proper cleanup via refcounting. @fw_name is
+ * used to ensure segments are only shared across endpoints loading
+ * the identical firmware image.
  */
 struct mhi_shared_ro {
 	struct mhi_buf *mhi_bufs;
 	u32 num_segments;
 	refcount_t refcount;
 	struct mutex lock;	/* Protects structure during refcount ops */
+	char *fw_name;
 };
 
-/* Global shared RO segments - protected by mhi_shared_ro_lock */
+/* Shared RO segment table - protected by mhi_shared_ro_lock */
 static DEFINE_MUTEX(mhi_shared_ro_lock);
-static struct mhi_shared_ro *mhi_global_shared_ro;
+static struct mhi_shared_ro *mhi_shared_ro_table[MHI_MAX_SHARED_RO_ENTRIES];
 
 /* Setup RDDM vector table for RDDM transfer and program RXVEC */
 int mhi_rddm_prepare(struct mhi_controller *mhi_cntrl,
@@ -418,8 +431,8 @@ void mhi_free_bhie_table(struct mhi_controller *mhi_cntrl,
 		mutex_lock(&mhi_shared_ro_lock);
 		if (refcount_dec_and_test(&shared_ro->refcount)) {
 			/* Last EP: Free shared RO segments */
-			dev_info(dev, "Last EP: Freeing %u shared RO segments\n",
-				 num_ro_segments);
+			dev_info(dev, "Last EP: Freeing %u shared RO segments for fw '%s'\n",
+				 num_ro_segments, shared_ro->fw_name);
 
 			/* Free the actual DMA memory for RO segments */
 			for (i = 0; i < num_ro_segments; i++) {
@@ -429,12 +442,19 @@ void mhi_free_bhie_table(struct mhi_controller *mhi_cntrl,
 						     shared_ro->mhi_bufs[i].dma_addr);
 			}
 
+			for (i = 0; i < MHI_MAX_SHARED_RO_ENTRIES; i++) {
+				if (mhi_shared_ro_table[i] == shared_ro) {
+					mhi_shared_ro_table[i] = NULL;
+					break;
+				}
+			}
+
 			kfree(shared_ro->mhi_bufs);
+			kfree(shared_ro->fw_name);
 			kfree(shared_ro);
-			mhi_global_shared_ro = NULL;
 		} else {
-			dev_info(dev, "EP removed: %u RO segments still shared (refcount=%d)\n",
-				 num_ro_segments,
+			dev_info(dev, "EP removed: %u RO segments for fw '%s' still shared (refcount=%d)\n",
+				 num_ro_segments, shared_ro->fw_name,
 				 refcount_read(&shared_ro->refcount));
 		}
 		mhi_cntrl->shared_ro_segments = NULL;
@@ -860,6 +880,72 @@ static void mhi_firmware_copy(struct mhi_controller *mhi_cntrl,
 	}
 }
 
+/*
+ * mhi_save_shared_ro_segments - Save RO segments for sharing with
+ * subsequent endpoints loading the same firmware image
+ * @mhi_cntrl: MHI controller for the first endpoint that loaded this
+ *	firmware
+ * @fw_name: Name of the firmware image the RO segments belong to
+ * @num_ro_segments: Number of RO segments to save
+ *
+ * Claims a free slot in mhi_shared_ro_table for @fw_name and copies
+ * the RO segment buffer pointers so later endpoints loading the
+ * identical firmware can reuse them. If the table is full, falls
+ * back to unshared allocation for this endpoint instead of failing.
+ */
+static void mhi_save_shared_ro_segments(struct mhi_controller *mhi_cntrl,
+					const char *fw_name, u32 num_ro_segments)
+{
+	struct device *dev = &mhi_cntrl->mhi_dev->dev;
+	struct mhi_shared_ro *new_shared_ro;
+	int slot = -1;
+	int i;
+
+	new_shared_ro = kzalloc(sizeof(*new_shared_ro), GFP_KERNEL);
+	if (!new_shared_ro)
+		return;
+
+	new_shared_ro->mhi_bufs = kcalloc(num_ro_segments, sizeof(struct mhi_buf),
+					  GFP_KERNEL);
+	new_shared_ro->fw_name = kstrdup(fw_name, GFP_KERNEL);
+	if (!new_shared_ro->mhi_bufs || !new_shared_ro->fw_name) {
+		kfree(new_shared_ro->mhi_bufs);
+		kfree(new_shared_ro->fw_name);
+		kfree(new_shared_ro);
+		return;
+	}
+
+	memcpy(new_shared_ro->mhi_bufs, mhi_cntrl->fbc_image->mhi_buf,
+	       num_ro_segments * sizeof(struct mhi_buf));
+
+	new_shared_ro->num_segments = num_ro_segments;
+	refcount_set(&new_shared_ro->refcount, 1);
+	mutex_init(&new_shared_ro->lock);
+
+	mutex_lock(&mhi_shared_ro_lock);
+	for (i = 0; i < MHI_MAX_SHARED_RO_ENTRIES; i++) {
+		if (!mhi_shared_ro_table[i]) {
+			slot = i;
+			mhi_shared_ro_table[i] = new_shared_ro;
+			break;
+		}
+	}
+	mutex_unlock(&mhi_shared_ro_lock);
+
+	if (slot < 0) {
+		dev_warn(dev, "Shared RO table full (max %d fw variants), fw '%s' will not be shared\n",
+			 MHI_MAX_SHARED_RO_ENTRIES, fw_name);
+		kfree(new_shared_ro->mhi_bufs);
+		kfree(new_shared_ro->fw_name);
+		kfree(new_shared_ro);
+		return;
+	}
+
+	mhi_cntrl->shared_ro_segments = new_shared_ro;
+	dev_info(dev, "First EP: Saved %u RO segments for fw '%s' (slot %d)\n",
+		 num_ro_segments, fw_name, slot);
+}
+
 void mhi_fw_load_handler(struct mhi_controller *mhi_cntrl)
 {
 	const struct firmware *firmware = NULL;
@@ -1040,18 +1126,31 @@ skip_req_fw:
 				goto skip_optimization;
 			}
 
-			/* Check if we can reuse existing RO segments */
-			mutex_lock(&mhi_shared_ro_lock);
-			if (mhi_global_shared_ro) {
-				/* Subsequent EP: Reuse RO segments */
-				shared_ro = mhi_global_shared_ro;
-				refcount_inc(&shared_ro->refcount);
-				mhi_cntrl->shared_ro_segments = shared_ro;
-				dev_info(dev, "Subsequent EP: Reusing %u RO segments (refcount=%d)\n",
-					 shared_ro->num_segments,
-					 refcount_read(&shared_ro->refcount));
+			/*
+			 * Check if we can reuse existing RO segments already
+			 * saved for this exact firmware image. Segments saved
+			 * for a different firmware name must never be reused,
+			 * since their RO content would not match this EP's
+			 * firmware (e.g. amss.bin vs amss_dualmac.bin).
+			 */
+			if (fw_name) {
+				mutex_lock(&mhi_shared_ro_lock);
+				for (i = 0; i < MHI_MAX_SHARED_RO_ENTRIES; i++) {
+					if (mhi_shared_ro_table[i] &&
+					    !strcmp(mhi_shared_ro_table[i]->fw_name,
+						    fw_name)) {
+						shared_ro = mhi_shared_ro_table[i];
+						refcount_inc(&shared_ro->refcount);
+						mhi_cntrl->shared_ro_segments = shared_ro;
+						dev_info(dev, "Subsequent EP: Reusing %u RO segments for fw '%s' (refcount=%d)\n",
+							 shared_ro->num_segments,
+							 fw_name,
+							 refcount_read(&shared_ro->refcount));
+						break;
+					}
+				}
+				mutex_unlock(&mhi_shared_ro_lock);
 			}
-			mutex_unlock(&mhi_shared_ro_lock);
 		}
 
 skip_optimization:
@@ -1086,35 +1185,10 @@ skip_optimization:
 					  mhi_cntrl->fbc_image, 0);
 
 			/* First EP with optimization: Save RO segments */
-			if (mhi_cntrl->elf_fw_optimization && num_ro_segments > 0) {
-				struct mhi_shared_ro *new_shared_ro;
-
-				new_shared_ro = kzalloc(sizeof(*new_shared_ro), GFP_KERNEL);
-				if (new_shared_ro) {
-					new_shared_ro->mhi_bufs = kcalloc(num_ro_segments,
-									  sizeof(struct mhi_buf),
-									  GFP_KERNEL);
-					if (new_shared_ro->mhi_bufs) {
-						memcpy(new_shared_ro->mhi_bufs,
-						       mhi_cntrl->fbc_image->mhi_buf,
-						       num_ro_segments * sizeof(struct mhi_buf));
-
-						new_shared_ro->num_segments = num_ro_segments;
-						refcount_set(&new_shared_ro->refcount, 1);
-						mutex_init(&new_shared_ro->lock);
-
-						mutex_lock(&mhi_shared_ro_lock);
-						mhi_global_shared_ro = new_shared_ro;
-						mhi_cntrl->shared_ro_segments = new_shared_ro;
-						mutex_unlock(&mhi_shared_ro_lock);
-
-						dev_info(dev, "First EP: Saved %u RO segments for sharing\n",
-							 num_ro_segments);
-					} else {
-						kfree(new_shared_ro);
-					}
-				}
-			}
+			if (mhi_cntrl->elf_fw_optimization && num_ro_segments > 0 &&
+			    fw_name)
+				mhi_save_shared_ro_segments(mhi_cntrl, fw_name,
+							    num_ro_segments);
 		}
 	}
 
