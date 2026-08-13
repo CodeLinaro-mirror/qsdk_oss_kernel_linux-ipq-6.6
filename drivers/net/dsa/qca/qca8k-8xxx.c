@@ -1787,6 +1787,19 @@ static int qca_8k_config_hdr_by_tag_proto(struct dsa_switch *ds,
 	return 0;
 }
 
+/* The ATH header added by qca_4b always defeats the conduit's TX checksum
+ * engine. For qca_8021q, the ATH header is only present when HOLB is enabled
+ * (fc_group_arr set), which is the same condition under which
+ * .connect_tag_protocol installs tagger_data->fc_group.
+ */
+static bool qca8k_proto_needs_sw_csum(enum dsa_tag_protocol proto)
+{
+	if (proto == DSA_TAG_PROTO_4B_QCA)
+		return true;
+
+	return proto == DSA_TAG_PROTO_QCA_8021Q && fc_group_arr[0] != 0xff;
+}
+
 static int qca8k_change_tag_protocol(struct dsa_switch *ds,
 					 enum dsa_tag_protocol proto)
 {
@@ -1801,20 +1814,23 @@ static int qca8k_change_tag_protocol(struct dsa_switch *ds,
 	case DSA_TAG_PROTO_4B_QCA:
 		if (qca_8k_config_hdr_by_tag_proto(ds, proto))
 			goto fail;
-		if (fc_group_arr[0] != 0xff)
-			ds->fc_group = fc_group_arr;
 		dev_info(ds->dev, "Tag proto changed to qca_4b.\n");
 		break;
 	case DSA_TAG_PROTO_QCA_8021Q:
 		if (qca_8k_config_hdr_by_tag_proto(ds, proto))
 			goto fail;
-		if (fc_group_arr[0] != 0xff)
-			ds->fc_group = fc_group_arr;
 		dev_info(ds->dev, "Tag proto changed to qca_8021q.\n");
 		break;
 	default:
 		return -EPROTONOSUPPORT;
 	}
+
+	/* Assigned here, not in .connect_tag_protocol: dsa_slave_setup_tagger()
+	 * consumes this bit before the TAG_PROTO_CONNECT notifier runs.
+	 * Unconditional so switching back to a protocol that does not need it
+	 * clears the bit.
+	 */
+	ds->needs_sw_csum = qca8k_proto_needs_sw_csum(proto);
 
 	return 0;
 
@@ -1846,18 +1862,29 @@ qca8k_master_change(struct dsa_switch *ds, const struct net_device *master,
 static int qca8k_connect_tag_protocol(struct dsa_switch *ds,
 				      enum dsa_tag_protocol proto)
 {
-	struct qca_tagger_data *tagger_data;
+	struct qca_tagger_data *tagger_data = ds->tagger_data;
+
+	if (!tagger_data)
+		return 0;
 
 	switch (proto) {
 	case DSA_TAG_PROTO_QCA:
-		tagger_data = ds->tagger_data;
-
 		tagger_data->rw_reg_ack_handler = qca8k_rw_reg_ack_handler;
 		tagger_data->mib_autocast_handler = qca8k_mib_autocast_handler;
-
+		/* tagger_data is persistent across tag protocol switches, so
+		 * drop any fc_group installed by a previous protocol.
+		 */
+		tagger_data->fc_group = NULL;
 		break;
 	case DSA_TAG_PROTO_4B_QCA:
 	case DSA_TAG_PROTO_QCA_8021Q:
+		/* qca8k HW always uses the standard 802.1Q TPID; set it
+		 * explicitly for clarity even though it matches the tagger's
+		 * default fallback. (qce2204 selects the TPID by bp_mode.)
+		 */
+		tagger_data->xmit_tpid = ETH_P_8021Q;
+		tagger_data->fc_group = (fc_group_arr[0] != 0xff) ?
+					 fc_group_arr : NULL;
 		break;
 	default:
 		return -EOPNOTSUPP;

@@ -32,6 +32,7 @@ static struct sk_buff *_qca_tag_xmit(struct sk_buff *skb, struct net_device *dev
 	uint32_t hdr_len, bool is_v2)
 {
 	struct dsa_port *dp = dsa_slave_to_port(dev);
+	struct qca_tagger_data *tagger_data = dp->ds->tagger_data;
 	__be16 *phdr;
 	bool is_bpdu = qca_skb_is_bpdu(skb);
 
@@ -55,9 +56,12 @@ static struct sk_buff *_qca_tag_xmit(struct sk_buff *skb, struct net_device *dev
 		/* Set the version field, and set destination port information */
 		*phdr = FIELD_PREP(QCA_HDR_XMIT_VERSION, QCA_HDR_VERSION3);
 
-		if (unlikely(dp->ds->fc_group != NULL && dp->ds->fc_group[dp->index - 1] < QCE2204_FCGROUP_MAX)) {
+		if (unlikely(tagger_data && tagger_data->fc_group &&
+			     tagger_data->fc_group[dp->index - 1] < QCE2204_FCGROUP_MAX)) {
+			u8 fcg = tagger_data->fc_group[dp->index - 1];
+
 			skb->mark = ((HOLB_MHT_VALID_TAG << HOLB_MHT_TAG_SHIFT) | (dp->index - 1));
-			*phdr |= FIELD_PREP(QCA_HDR_XMIT_VCHANNEL, dp->ds->fc_group[dp->index - 1]);
+			*phdr |= FIELD_PREP(QCA_HDR_XMIT_VCHANNEL, fcg);
 		}
 
 		if (unlikely(dp->cpu_dp->tag_ops->proto == DSA_TAG_PROTO_4B_QCA || is_bpdu)) {
@@ -164,20 +168,26 @@ static struct sk_buff *qca_4b_tag_rcv(struct sk_buff *skb, struct net_device *de
 static struct sk_buff *qca_8021q_tag_xmit(struct sk_buff *skb, struct net_device *dev)
 {
 	struct dsa_port *dp = dsa_slave_to_port(dev);
+	struct qca_tagger_data *tagger_data = dp->ds->tagger_data;
 	u16 tx_vid = dsa_tag_8021q_standalone_vid(dp);
 	u16 queue_mapping = skb_get_queue_mapping(skb);
 	u8 pcp = netdev_txq_to_tc(dev, queue_mapping);
 	struct sk_buff *nskb;
+	u16 tpid = ETH_P_8021Q;
 
 	/* compatible with qca rstp resv fdb, bypass resv fdb by from_cpu = 1 */
 	if (unlikely(qca_skb_is_bpdu(skb)))
 		return qca_4b_tag_xmit(skb, dev);
 
-	nskb = dsa_8021q_xmit(skb, dev, ETH_P_8021Q, ((pcp << VLAN_PRIO_SHIFT) | tx_vid));
+	if (tagger_data && tagger_data->xmit_tpid)
+		tpid = tagger_data->xmit_tpid;
+
+	nskb = dsa_8021q_xmit(skb, dev, tpid, ((pcp << VLAN_PRIO_SHIFT) | tx_vid));
 	if (unlikely(!nskb))
 		return NULL;
 
-	if (unlikely(dp->ds->fc_group != NULL && dp->ds->fc_group[dp->index - 1] < QCE2204_FCGROUP_MAX)) {
+	if (unlikely(tagger_data && tagger_data->fc_group &&
+		     tagger_data->fc_group[dp->index - 1] < QCE2204_FCGROUP_MAX)) {
 		nskb = qca_4b_tag_xmit(nskb, dev);
 	}
 
@@ -216,21 +226,22 @@ static struct sk_buff *qca_8021q_tag_rcv(struct sk_buff *skb, struct net_device 
 
 static int qca_tag_connect(struct dsa_switch *ds)
 {
-	struct qca_tagger_data *tagger_data;
+	if (ds->tagger_data)
+		return 0;
 
-	tagger_data = kzalloc(sizeof(*tagger_data), GFP_KERNEL);
-	if (!tagger_data)
+	ds->tagger_data = devm_kzalloc(ds->dev, sizeof(struct qca_tagger_data),
+				       GFP_KERNEL);
+	if (!ds->tagger_data)
 		return -ENOMEM;
-
-	ds->tagger_data = tagger_data;
 
 	return 0;
 }
 
 static void qca_tag_disconnect(struct dsa_switch *ds)
 {
-	kfree(ds->tagger_data);
-	ds->tagger_data = NULL;
+	/* tagger_data is devm-managed and must survive tag protocol switches.
+	 * It is freed automatically on device teardown, not here.
+	 */
 }
 
 static const struct dsa_device_ops qca_netdev_ops = {
@@ -249,6 +260,8 @@ DSA_TAG_DRIVER(qca_netdev_ops);
 static const struct dsa_device_ops qca_4b_netdev_ops = {
 	.name	= QCA4B_NAME,
 	.proto	= DSA_TAG_PROTO_4B_QCA,
+	.connect = qca_tag_connect,
+	.disconnect = qca_tag_disconnect,
 	.xmit	= qca_4b_tag_xmit,
 	.rcv	= qca_4b_tag_rcv,
 	.needed_headroom = QCA_4B_HDR_LEN,
@@ -260,6 +273,8 @@ DSA_TAG_DRIVER(qca_4b_netdev_ops);
 static const struct dsa_device_ops qca_4b_v2_netdev_ops = {
 	.name	= QCA4B_V2_NAME,
 	.proto	= DSA_TAG_PROTO_4B_QCA,
+	.connect = qca_tag_connect,
+	.disconnect = qca_tag_disconnect,
 	.xmit	= qca_4b_tag_v2_xmit,
 	.rcv	= qca_4b_tag_rcv,
 	.needed_headroom = QCA_4B_HDR_LEN,
@@ -271,6 +286,8 @@ DSA_TAG_DRIVER(qca_4b_v2_netdev_ops);
 static const struct dsa_device_ops qca_8021q_netdev_ops = {
 	.name	= QCA8021Q_NAME,
 	.proto	= DSA_TAG_PROTO_QCA_8021Q,
+	.connect = qca_tag_connect,
+	.disconnect = qca_tag_disconnect,
 	.xmit	= qca_8021q_tag_xmit,
 	.rcv	= qca_8021q_tag_rcv,
 	.needed_headroom = VLAN_HLEN,

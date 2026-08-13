@@ -102,6 +102,8 @@ struct qca_tagger_data {
 				   struct sk_buff *skb);
 	void (*mib_autocast_handler)(struct dsa_switch *ds,
 				     struct sk_buff *skb);
+	u16 xmit_tpid; /* TPID for 8021Q DSA tag insertion (default ETH_P_8021Q) */
+	u8 *fc_group;  /* per-port PPE EDMA fc_group IDs, NULL if unused */
 };
 
 #endif /* __TAG_QCA_H */
