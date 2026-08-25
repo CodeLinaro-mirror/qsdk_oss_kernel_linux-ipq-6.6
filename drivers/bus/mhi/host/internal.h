@@ -295,6 +295,34 @@ int mhi_alloc_bhie_table(struct mhi_controller *mhi_cntrl,
 void mhi_free_bhie_table(struct mhi_controller *mhi_cntrl,
 			 struct image_info *image_info,
 			 enum image_type img_type);
+
+/**
+ * struct mhi_fw_mem_info - Memory usage breakdown for a loaded FBC image
+ * @total_bytes: Total memory consumed by this endpoint's firmware image
+ * @ro_bytes: Bytes held by shared RO segments (zero if RO segments are not
+ *            shared with other endpoints)
+ * @rw_bytes: Bytes held by RW segments (excludes the vector table)
+ * @vec_bytes: Bytes held by the BHIe vector table
+ * @total_segments: Total number of entries in the image (RO + RW + vector)
+ * @ro_segments: Number of RO segments
+ * @rw_segments: Number of RW segments
+ * @ro_shared: True if the RO segments are shared with other endpoints
+ * @ro_refcount: Refcount of the shared RO group (0 if not shared)
+ */
+struct mhi_fw_mem_info {
+	size_t total_bytes;
+	size_t ro_bytes;
+	size_t rw_bytes;
+	size_t vec_bytes;
+	u32 total_segments;
+	u32 ro_segments;
+	u32 rw_segments;
+	bool ro_shared;
+	u32 ro_refcount;
+};
+
+void mhi_get_fbc_mem_info(struct mhi_controller *mhi_cntrl,
+			  struct mhi_fw_mem_info *info);
 int mhi_handle_boot_args(struct mhi_controller *mhi_cntrl);
 void mhi_download_fw_license(struct mhi_controller *mhi_cntrl);
 void mhi_free_boot_args(struct mhi_controller *mhi_cntrl);
