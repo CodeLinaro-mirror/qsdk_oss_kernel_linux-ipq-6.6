@@ -495,6 +495,57 @@ void mhi_free_bhie_table(struct mhi_controller *mhi_cntrl,
 	kfree(image_info);
 }
 
+/*
+ * mhi_get_fbc_mem_info - Report memory usage breakdown for the currently
+ * loaded FBC image on this endpoint
+ * @mhi_cntrl: MHI controller
+ * @info: Output structure populated with the breakdown
+ *
+ * Reports this endpoint's own accounting: bytes it allocated for RW
+ * segments and the vector table, plus how many RO segments it is
+ * referencing (allocated by the first EP and shared/refcounted, or
+ * allocated locally if this EP never shared any).
+ */
+void mhi_get_fbc_mem_info(struct mhi_controller *mhi_cntrl,
+			  struct mhi_fw_mem_info *info)
+{
+	struct image_info *img_info = mhi_cntrl->fbc_image;
+	struct mhi_shared_segments *shared_segs;
+	u32 i;
+
+	memset(info, 0, sizeof(*info));
+
+	if (!img_info || !img_info->entries)
+		return;
+
+	info->total_segments = img_info->entries;
+
+	mutex_lock(&mhi_shared_segments_lock);
+	shared_segs = mhi_cntrl->shared_segments;
+	if (shared_segs) {
+		info->ro_segments = shared_segs->num_segments;
+		info->ro_shared = true;
+		info->ro_refcount = refcount_read(&shared_segs->refcount);
+	}
+	mutex_unlock(&mhi_shared_segments_lock);
+
+	/* Total entries = RO segments + RW segments + 1 vector table entry */
+	info->rw_segments = img_info->entries - info->ro_segments - 1;
+
+	for (i = 0; i < img_info->entries; i++) {
+		size_t len = img_info->mhi_buf[i].len;
+
+		info->total_bytes += len;
+
+		if (i == img_info->entries - 1)
+			info->vec_bytes += len;
+		else if (i < info->ro_segments)
+			info->ro_bytes += len;
+		else
+			info->rw_bytes += len;
+	}
+}
+
 /**
  * mhi_alloc_bhie_table_partial - Allocate BHIE table with shared segment reuse
  * @mhi_cntrl: MHI controller
