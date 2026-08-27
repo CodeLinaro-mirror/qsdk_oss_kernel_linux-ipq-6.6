@@ -21,6 +21,7 @@
 #define THRESHOLD_MIN_ADC_CODE	0x0
 
 #define MAX_SENSORS 16
+#define MAX_SENSOR_HW_ID	129
 
 #include <linux/interrupt.h>
 #include <linux/thermal.h>
@@ -81,6 +82,7 @@ struct tsens_ops {
 	int (*calibrate)(struct tsens_priv *priv);
 	int (*get_temp)(const struct tsens_sensor *s, int *temp);
 	/* optional callbacks */
+	int (*get_max_temp)(const struct tsens_sensor *s, int *temp);
 	int (*enable)(struct tsens_priv *priv, int i);
 	void (*disable)(struct tsens_priv *priv);
 	int (*suspend)(struct tsens_priv *priv);
@@ -463,6 +465,11 @@ enum regfield_ids {
 	CC_MON_CLEAR,
 	CC_MON_MASK,
 
+	/* HW-computed maximum temperature across all sensors */
+	TSENS_MAX_TEMP,
+	TSENS_MAX_TEMP_SENSOR_ID,
+	TSENS_MAX_TEMP_VALID,
+
 	MIN_STATUS_0,		/* MIN threshold violated */
 	MIN_STATUS_1,
 	MIN_STATUS_2,
@@ -509,9 +516,15 @@ enum regfield_ids {
  * @srot_split: does the IP neatly splits the register space into SROT and TM,
  *              with SROT only being available to secure boot firmware?
  * @has_watchdog: does this IP support watchdog functionality?
+ * @has_max_temp_reg: does the IP have a HW register that latches the max
+ *                     temperature across all sensors?
+ * @has_max_temp_valid_bit: does the MAX_TEMP register have a valid
+ *                     status bit that must be polled before reading?
  * @max_sensors: maximum sensors supported by this version of the IP
  * @trip_min_temp: minimum trip temperature supported by this version of the IP
  * @trip_max_temp: maximum trip temperature supported by this version of the IP
+ * @max_temp_reg_off: TM offset of the MAX_TEMP register;
+ *                    must be set whenever has_max_temp_reg is set
  */
 struct tsens_features {
 	unsigned int ver_major;
@@ -520,9 +533,12 @@ struct tsens_features {
 	unsigned int adc:1;
 	unsigned int srot_split:1;
 	unsigned int has_watchdog:1;
+	unsigned int has_max_temp_reg:1;
+	unsigned int has_max_temp_valid_bit:1;
 	unsigned int max_sensors;
 	int trip_min_temp;
 	int trip_max_temp;
+	u32 max_temp_reg_off;
 };
 
 /**
@@ -569,6 +585,7 @@ struct tsens_context {
  * @debug_root: pointer to debugfs dentry for all tsens
  * @debug: pointer to debugfs dentry for tsens controller
  * @sensor: list of sensors attached to this device
+ * @max_sensor: virtual sensor exposing the HW-computed max temperature
  */
 struct tsens_priv {
 	struct device			*dev;
@@ -588,6 +605,8 @@ struct tsens_priv {
 
 	struct dentry			*debug_root;
 	struct dentry			*debug;
+
+	struct tsens_sensor		*max_sensor;
 
 	struct tsens_sensor		sensor[];
 };
@@ -637,6 +656,7 @@ int tsens_calibrate_common(struct tsens_priv *priv);
 void compute_intercept_slope(struct tsens_priv *priv, u32 *pt1, u32 *pt2, u32 mode);
 int init_common(struct tsens_priv *priv);
 int get_temp_tsens_valid(const struct tsens_sensor *s, int *temp);
+int get_max_temp_tsens_valid(const struct tsens_sensor *s, int *temp);
 int get_temp_common(const struct tsens_sensor *s, int *temp);
 
 /* TSENS target */

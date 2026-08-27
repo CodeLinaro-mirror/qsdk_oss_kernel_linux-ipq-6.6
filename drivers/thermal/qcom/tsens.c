@@ -984,6 +984,32 @@ get_temp:
 	return 0;
 }
 
+int get_max_temp_tsens_valid(const struct tsens_sensor *s, int *temp)
+{
+	struct tsens_priv *priv = s->priv;
+	u32 valid, sensor_id;
+	int ret;
+
+	if (priv->feat->has_max_temp_valid_bit) {
+		/*
+		 * Valid bit is 0 for 6 AHB clock cycles, so poll until the
+		 * valid bit gets set before reading the temperature
+		 */
+		ret = regmap_field_read_poll_timeout(priv->rf[TSENS_MAX_TEMP_VALID], valid,
+						     valid, 1, 20 * USEC_PER_MSEC);
+		if (ret)
+			return ret;
+	}
+
+	*temp = tsens_hw_to_mC(s, TSENS_MAX_TEMP);
+
+	ret = regmap_field_read(priv->rf[TSENS_MAX_TEMP_SENSOR_ID], &sensor_id);
+	if (!ret)
+		dev_dbg(priv->dev, "max temp reported by sensor hw_id %u\n", sensor_id);
+
+	return 0;
+}
+
 int get_temp_common(const struct tsens_sensor *s, int *temp)
 {
 	struct tsens_priv *priv = s->priv;
@@ -1270,6 +1296,39 @@ int __init init_common(struct tsens_priv *priv)
 		regmap_field_write(priv->rf[CC_MON_MASK], 1);
 	}
 
+	if (priv->feat->has_max_temp_reg) {
+		struct reg_field rf_max_temp =
+			REG_FIELD(priv->feat->max_temp_reg_off, 0, 11);
+		struct reg_field rf_sensor_id =
+			REG_FIELD(priv->feat->max_temp_reg_off, 12, 15);
+
+		priv->rf[TSENS_MAX_TEMP] = devm_regmap_field_alloc(dev, priv->tm_map,
+								   rf_max_temp);
+		if (IS_ERR(priv->rf[TSENS_MAX_TEMP])) {
+			ret = PTR_ERR(priv->rf[TSENS_MAX_TEMP]);
+			goto err_put_device;
+		}
+
+		priv->rf[TSENS_MAX_TEMP_SENSOR_ID] =
+			devm_regmap_field_alloc(dev, priv->tm_map, rf_sensor_id);
+		if (IS_ERR(priv->rf[TSENS_MAX_TEMP_SENSOR_ID])) {
+			ret = PTR_ERR(priv->rf[TSENS_MAX_TEMP_SENSOR_ID]);
+			goto err_put_device;
+		}
+
+		if (priv->feat->has_max_temp_valid_bit) {
+			struct reg_field rf_valid =
+				REG_FIELD(priv->feat->max_temp_reg_off, 16, 16);
+
+			priv->rf[TSENS_MAX_TEMP_VALID] =
+				devm_regmap_field_alloc(dev, priv->tm_map, rf_valid);
+			if (IS_ERR(priv->rf[TSENS_MAX_TEMP_VALID])) {
+				ret = PTR_ERR(priv->rf[TSENS_MAX_TEMP_VALID]);
+				goto err_put_device;
+			}
+		}
+	}
+
 	spin_lock_init(&priv->ul_lock);
 
 	/* VER_0 interrupt doesn't need to be enabled */
@@ -1287,6 +1346,17 @@ static int tsens_get_temp(struct thermal_zone_device *tz, int *temp)
 	struct tsens_priv *priv = s->priv;
 
 	return priv->ops->get_temp(s, temp);
+}
+
+static int tsens_get_max_temp(struct thermal_zone_device *tz, int *temp)
+{
+	struct tsens_sensor *s = thermal_zone_device_priv(tz);
+	struct tsens_priv *priv = s->priv;
+
+	if (!priv->ops->get_max_temp)
+		return -EOPNOTSUPP;
+
+	return priv->ops->get_max_temp(s, temp);
 }
 
 static int  __maybe_unused tsens_suspend(struct device *dev)
@@ -1388,6 +1458,14 @@ static const struct thermal_zone_device_ops tsens_of_ops = {
 #endif
 };
 
+/*
+ * The virtual "max temperature" sensor only exposes a HW-latched value
+ * and has no thresholds or trips of its own to program.
+ */
+static const struct thermal_zone_device_ops tsens_max_of_ops = {
+	.get_temp = tsens_get_max_temp,
+};
+
 static int tsens_register_irq(struct tsens_priv *priv, char *irqname,
 			      irq_handler_t thread_fn)
 {
@@ -1446,6 +1524,24 @@ static int tsens_register(struct tsens_priv *priv)
 			priv->ops->enable(priv, i);
 
 		devm_thermal_add_hwmon_sysfs(priv->dev, tzd);
+	}
+
+	if (priv->feat->has_max_temp_reg && priv->ops->get_max_temp) {
+		priv->max_sensor = devm_kzalloc(priv->dev, sizeof(*priv->max_sensor),
+						GFP_KERNEL);
+		if (!priv->max_sensor)
+			return -ENOMEM;
+
+		priv->max_sensor->priv = priv;
+		priv->max_sensor->hw_id = MAX_SENSOR_HW_ID;
+
+		tzd = devm_thermal_of_zone_register(priv->dev, MAX_SENSOR_HW_ID,
+						    priv->max_sensor,
+						    &tsens_max_of_ops);
+		if (!IS_ERR(tzd)) {
+			priv->max_sensor->tzd = tzd;
+			devm_thermal_add_hwmon_sysfs(priv->dev, tzd);
+		}
 	}
 
 	/* VER_0 require to set MIN and MAX THRESH

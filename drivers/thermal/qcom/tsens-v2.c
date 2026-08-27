@@ -68,9 +68,26 @@ static struct tsens_features ipq5332_feat = {
 	.combo_int	= 1,
 	.adc		= 0,
 	.srot_split	= 1,
+	.has_max_temp_reg = 1,
+	.has_max_temp_valid_bit = 0,
+	.max_temp_reg_off = 0x00e0,
 	.max_sensors	= 16,
 	.trip_min_temp	= 0,
 	.trip_max_temp	= 204000,
+};
+
+static struct tsens_features ipq9650_feat = {
+	.ver_major		= VER_2_X_NO_RPM,
+	.crit_int		= 1,
+	.combo_int		= 1,
+	.adc			= 0,
+	.srot_split		= 1,
+	.has_max_temp_reg	= 1,
+	.has_max_temp_valid_bit	= 1,
+	.max_temp_reg_off	= 0x00e8,
+	.max_sensors		= 16,
+	.trip_min_temp		= 0,
+	.trip_max_temp		= 204000,
 };
 
 static const struct reg_field tsens_v2_regfields[MAX_REGFIELDS] = {
@@ -278,6 +295,7 @@ struct tsens_plat_data data_ipq8074 = {
 static const struct tsens_ops ops_ipq5332 = {
 	.init		= init_tsens_v2_no_rpm,
 	.get_temp	= get_temp_tsens_valid,
+	.get_max_temp	= get_max_temp_tsens_valid,
 	.calibrate	= tsens_v2_calibration,
 };
 
@@ -309,7 +327,7 @@ struct tsens_plat_data data_ipq9650 = {
 	.num_sensors	= 11,
 	.ops		= &ops_ipq5332,
 	.hw_ids		= (unsigned int []){5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
-	.feat		= &ipq5332_feat,
+	.feat		= &ipq9650_feat,
 	.fields		= tsens_v2_regfields,
 };
 
