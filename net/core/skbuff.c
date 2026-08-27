@@ -730,7 +730,12 @@ static void *kmalloc_reserve(unsigned int *size, gfp_t flags, int node,
 	unsigned int cache_size;
 
 	obj_size = SKB_HEAD_ALIGN(*size);
-	if ((obj_size <= SKB_SMALL_HEAD_CACHE_SIZE &&
+	if (flags & __GFP_RECYCLER) {
+		obj = kmem_cache_alloc_node(skb_data_cache, flags | __GFP_NOMEMALLOC |	\
+					__GFP_NOWARN, node);
+		*size = SKB_DATA_CACHE_SIZE;
+		goto out;
+	} else if ((obj_size <= SKB_SMALL_HEAD_CACHE_SIZE &&
 	    !(flags & KMALLOC_NOT_NORMAL_BITS)) ||
 	    (obj_size > SZ_2K && obj_size <= SKB_DATA_CACHE_SIZE_2100)) {
 		cache = skb_select_data_cache(obj_size, &cache_size);
@@ -879,38 +884,12 @@ struct sk_buff *__netdev_alloc_skb(struct net_device *dev,
 {
 	struct sk_buff *skb;
 	unsigned int len = length;
-
-#ifdef CONFIG_SKB_RECYCLER
-	bool reset_skb = true;
-	skb = skb_recycler_alloc(dev, length, reset_skb);
-	if (likely(skb)) {
-		skb_recycler_clear_flags(skb);
-#ifdef CONFIG_DEBUG_KMEMLEAK
-		kmemleak_update_trace(skb);
-		kmemleak_restore(skb, 1);
-		kmemleak_update_trace(skb->head);
-		kmemleak_restore(skb->head, 1);
-#endif
-		return skb;
-	}
-
-	len = SKB_RECYCLE_SIZE;
-	if (unlikely(length > SKB_RECYCLE_SIZE))
-		len = length;
-
-	skb = __alloc_skb(len + NET_SKB_PAD, gfp_mask,
-			  SKB_ALLOC_RX, NUMA_NO_NODE);
-	if (!skb)
-		goto skb_fail;
-	goto skb_success;
-#else
 	struct page_frag_cache *nc;
 	bool pfmemalloc;
 	bool page_frag_alloc_enable = true;
 	void *data;
 
 	len += NET_SKB_PAD;
-
 
 #ifdef CONFIG_ALLOC_SKB_PAGE_FRAG_DISABLE
 	page_frag_alloc_enable = false;
@@ -957,7 +936,6 @@ struct sk_buff *__netdev_alloc_skb(struct net_device *dev,
 	if (pfmemalloc)
 		skb->pfmemalloc = 1;
 	skb->head_frag = 1;
-#endif
 
 skb_success:
 	skb_reserve(skb, NET_SKB_PAD);
@@ -1004,6 +982,7 @@ struct sk_buff *__netdev_alloc_skb_fast(struct net_device *dev,
 	if (!skb)
 		goto skb_fail;
 
+	skb->is_from_custom_cache = 1;
 	goto skb_success;
 #else
 	struct page_frag_cache *nc;
@@ -1114,11 +1093,13 @@ struct sk_buff *__netdev_alloc_skb_no_skb_reset(struct net_device *dev,
 	if (unlikely(length > SKB_RECYCLE_SIZE))
 		len = length;
 
+	gfp_mask |= __GFP_RECYCLER;
 	skb = __alloc_skb(len + NET_SKB_PAD, gfp_mask,
 				SKB_ALLOC_RX, NUMA_NO_NODE);
 	if (!skb)
 		return NULL;
 
+	skb->is_from_custom_cache = 1;
 	skb_reserve(skb, NET_SKB_PAD);
 	skb->dev = dev;
 	return skb;

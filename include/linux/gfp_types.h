@@ -60,6 +60,11 @@ typedef unsigned int __bitwise gfp_t;
 #else
 #define ___GFP_NOLOCKDEP	0
 #endif
+#ifdef CONFIG_SKB_RECYCLER
+#define ___GFP_RECYCLER		0x8000000u
+#else
+#define ___GFP_RECYCLER		0
+#endif
 /* If the above are modified, __GFP_BITS_SHIFT may need updating */
 
 /*
@@ -250,8 +255,16 @@ typedef unsigned int __bitwise gfp_t;
 /* Disable lockdep for GFP context tracking */
 #define __GFP_NOLOCKDEP ((__force gfp_t)___GFP_NOLOCKDEP)
 
+/* Enabling recycler flag */
+#define __GFP_RECYCLER ((__force gfp_t)___GFP_RECYCLER)
+
 /* Room for N __GFP_FOO bits */
+#ifdef CONFIG_SKB_RECYCLER
+#define __GFP_BITS_SHIFT 28
+#else
 #define __GFP_BITS_SHIFT (26 + IS_ENABLED(CONFIG_LOCKDEP))
+#endif
+
 #define __GFP_BITS_MASK ((__force gfp_t)((1 << __GFP_BITS_SHIFT) - 1))
 
 /**
