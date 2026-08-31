@@ -1788,9 +1788,27 @@ static int fastrpc_device_release(struct inode *inode, struct file *file)
 {
 	struct fastrpc_user *fl = (struct fastrpc_user *)file->private_data;
 	struct fastrpc_channel_ctx *cctx = fl->cctx;
+	struct fastrpc_invoke_ctx *ctx, *n;
+	struct list_head leftover;
 	unsigned long flags;
 
 	fastrpc_release_current_dsp_process(fl);
+
+	/*
+	 * fastrpc_release_current_dsp_process() is expected to tear down the
+	 * DSP-side process counterpart, so anything still in fl->pending or
+	 * fl->interrupted is safe to reclaim now.
+	 */
+	INIT_LIST_HEAD(&leftover);
+	spin_lock(&fl->lock);
+	list_splice_tail_init(&fl->pending, &leftover);
+	list_splice_tail_init(&fl->interrupted, &leftover);
+	spin_unlock(&fl->lock);
+
+	list_for_each_entry_safe(ctx, n, &leftover, node) {
+		list_del(&ctx->node);
+		fastrpc_context_put(ctx);
+	}
 
 	spin_lock_irqsave(&cctx->lock, flags);
 	list_del(&fl->user);
