@@ -402,13 +402,6 @@ struct skb_profile_size {
 
 extern const struct skb_profile_size *skb_active_profile;
 
-#ifdef CONFIG_SKB_RECYCLER
-#if (CONFIG_IPQ_MEM_PROFILE == 256) && (CONFIG_SKB_RECYCLE_SIZE != 1664)
-#undef CONFIG_SKB_RECYCLE_SIZE
-#define CONFIG_SKB_RECYCLE_SIZE	1856
-#endif
-#endif
-
 #ifndef CONFIG_MAX_SKB_FRAGS
 # define CONFIG_MAX_SKB_FRAGS 17
 #endif
