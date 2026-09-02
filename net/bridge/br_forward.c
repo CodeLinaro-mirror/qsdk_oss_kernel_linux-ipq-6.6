@@ -249,8 +249,9 @@ void br_flood(struct net_bridge *br, struct sk_buff *skb,
 		     br_is_neigh_suppress_enabled(p, vid)))
 			continue;
 
+
 		/* Do not flood to non-upstream port and to ports in different sub bridge */
-		if (!local_rcv && srcp) {
+		if (srcp) {
 			if (!((p->flags & BR_UPSTREAM_PORT) || (srcp->flags & BR_UPSTREAM_PORT))) {
 				if (p->sub_br_id != srcp->sub_br_id)
 					continue;
