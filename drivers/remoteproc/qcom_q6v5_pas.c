@@ -26,7 +26,6 @@
 #include <linux/soc/qcom/mdt_loader.h>
 #include <linux/soc/qcom/smem.h>
 #include <linux/soc/qcom/smem_state.h>
-#include <linux/nvmem-consumer.h>
 
 #include "qcom_common.h"
 #include "qcom_pil_info.h"
@@ -34,12 +33,6 @@
 #include "remoteproc_internal.h"
 
 #define ADSP_DECRYPT_SHUTDOWN_DELAY_MS	100
-
-#define TCSR_SPARE_REG0		0x1959000
-#define TCSR_SPARE_REG0_SIZE	4
-
-static int debug_q6;
-module_param(debug_q6, int, 0644);
 
 struct adsp_data {
 	int crash_reason_smem;
@@ -72,7 +65,6 @@ struct qcom_adsp {
 	struct clk *aggre2_clk;
 
 	struct regulator *cx_supply;
-	struct regulator *mx_supply;
 	struct regulator *px_supply;
 
 	struct device *proxy_pds[3];
@@ -256,7 +248,6 @@ release_dtb_firmware:
 static int adsp_start(struct rproc *rproc)
 {
 	struct qcom_adsp *adsp = rproc->priv;
-	void *debug_q6_reg;
 	int ret;
 
 	ret = qcom_q6v5_prepare(&adsp->q6v5);
@@ -281,16 +272,10 @@ static int adsp_start(struct rproc *rproc)
 			goto disable_aggre2_clk;
 	}
 
-	if (adsp->mx_supply) {
-		ret = regulator_enable(adsp->mx_supply);
-		if (ret)
-			goto disable_cx_supply;
-	}
-
 	if (adsp->px_supply) {
 		ret = regulator_enable(adsp->px_supply);
 		if (ret)
-			goto disable_mx_supply;
+			goto disable_cx_supply;
 	}
 
 	if (adsp->dtb_pas_id) {
@@ -315,19 +300,6 @@ static int adsp_start(struct rproc *rproc)
 
 	qcom_pil_info_store(adsp->info_name, adsp->mem_phys, adsp->mem_size);
 
-	if (debug_q6) {
-		debug_q6_reg = ioremap(TCSR_SPARE_REG0, TCSR_SPARE_REG0_SIZE);
-		if (!debug_q6_reg) {
-			dev_err(adsp->dev, "Failed to ioremap debug_q6 register\n");
-			ret = PTR_ERR(debug_q6_reg);
-			goto release_pas_metadata;
-		}
-
-		writel(0x1, debug_q6_reg);
-		dev_info(adsp->dev, "Writing 1 to TCSR_SPARE_REG0\n");
-		iounmap(debug_q6_reg);
-	}
-
 	ret = qcom_pas_auth_and_reset(adsp->pas_id);
 	if (ret) {
 		dev_err(adsp->dev,
@@ -335,12 +307,8 @@ static int adsp_start(struct rproc *rproc)
 		goto release_pas_metadata;
 	}
 
-wait_for_start:
 	ret = qcom_q6v5_wait_for_start(&adsp->q6v5, msecs_to_jiffies(5000));
 	if (ret == -ETIMEDOUT) {
-		if (debug_q6)
-			goto wait_for_start;
-
 		dev_err(adsp->dev, "start timed out\n");
 		qcom_pas_shutdown(adsp->pas_id);
 		goto release_pas_metadata;
@@ -362,9 +330,6 @@ release_pas_metadata:
 disable_px_supply:
 	if (adsp->px_supply)
 		regulator_disable(adsp->px_supply);
-disable_mx_supply:
-	if (adsp->mx_supply)
-		regulator_disable(adsp->mx_supply);
 disable_cx_supply:
 	if (adsp->cx_supply)
 		regulator_disable(adsp->cx_supply);
@@ -389,8 +354,6 @@ static void qcom_pas_handover(struct qcom_q6v5 *q6v5)
 
 	if (adsp->px_supply)
 		regulator_disable(adsp->px_supply);
-	if (adsp->mx_supply)
-		regulator_disable(adsp->mx_supply);
 	if (adsp->cx_supply)
 		regulator_disable(adsp->cx_supply);
 	clk_disable_unprepare(adsp->aggre2_clk);
@@ -479,7 +442,7 @@ static int adsp_init_clock(struct qcom_adsp *adsp)
 {
 	int ret;
 
-	adsp->xo = devm_clk_get_optional(adsp->dev, "xo");
+	adsp->xo = devm_clk_get(adsp->dev, "xo");
 	if (IS_ERR(adsp->xo)) {
 		ret = PTR_ERR(adsp->xo);
 		if (ret != -EPROBE_DEFER)
@@ -511,14 +474,6 @@ static int adsp_init_regulator(struct qcom_adsp *adsp)
 
 	if (adsp->cx_supply)
 		regulator_set_load(adsp->cx_supply, 100000);
-
-	adsp->mx_supply = devm_regulator_get_optional(adsp->dev, "mx");
-	if (IS_ERR(adsp->mx_supply)) {
-		if (PTR_ERR(adsp->mx_supply) == -ENODEV)
-			adsp->mx_supply = NULL;
-		else
-			return PTR_ERR(adsp->mx_supply);
-	}
 
 	adsp->px_supply = devm_regulator_get_optional(adsp->dev, "px");
 	if (IS_ERR(adsp->px_supply)) {
@@ -703,29 +658,7 @@ static int adsp_probe(struct platform_device *pdev)
 	struct rproc *rproc;
 	const char *fw_name, *dtb_fw_name = NULL;
 	const struct rproc_ops *ops = &adsp_ops;
-	struct nvmem_cell *adsp_nvmem;
-	u8 *disable_status;
-	size_t len;
 	int ret;
-
-	/* If nvmem-cells present on NSP/Turing node in DTSI, check QFPROM fuse
-	 * for Turing SS disable status (SOFTSKU_STATUS_TURING, bit 0).
-	 * 0 = enabled, 1 = disabled.
-	 */
-	adsp_nvmem = devm_nvmem_cell_get(&pdev->dev, NULL);
-	if (IS_ERR(adsp_nvmem)) {
-		if (PTR_ERR(adsp_nvmem) == -EPROBE_DEFER)
-			return -EPROBE_DEFER;
-	} else {
-		disable_status = nvmem_cell_read(adsp_nvmem, &len);
-		devm_nvmem_cell_put(&pdev->dev, adsp_nvmem);
-		if (!IS_ERR(disable_status) && ((unsigned int)(*disable_status) == 1)) {
-			dev_info(&pdev->dev, "NSP/Turing disabled in qfprom efuse\n");
-			kfree(disable_status);
-			return -ENODEV;
-		}
-		kfree(disable_status);
-	}
 
 	desc = of_device_get_match_data(&pdev->dev);
 	if (!desc)
@@ -1315,20 +1248,6 @@ static const struct adsp_data sm8550_mpss_resource = {
 	.region_assign_idx = 2,
 };
 
-static const struct adsp_data ipq9650_cdsp_resource = {
-	.crash_reason_smem = 601,
-	.firmware_name = "cdsp.mbn",
-	.dtb_firmware_name = "cdsp_dtb.mbn",
-	.pas_id = 18,
-	.dtb_pas_id = 0x25,
-	.auto_boot = false,
-	.load_state = "cdsp",
-	.ssr_name = "cdsp",
-	.sysmon_name = "cdsp",
-	.ssctl_id = 0x17,
-	.dump_conf = RPROC_COREDUMP_INLINE,
-};
-
 static const struct of_device_id adsp_of_match[] = {
 	{ .compatible = "qcom,msm8226-adsp-pil", .data = &msm8996_adsp_resource},
 	{ .compatible = "qcom,msm8953-adsp-pil", .data = &msm8996_adsp_resource},
@@ -1384,7 +1303,6 @@ static const struct of_device_id adsp_of_match[] = {
 	{ .compatible = "qcom,sm8550-adsp-pas", .data = &sm8550_adsp_resource},
 	{ .compatible = "qcom,sm8550-cdsp-pas", .data = &sm8550_cdsp_resource},
 	{ .compatible = "qcom,sm8550-mpss-pas", .data = &sm8550_mpss_resource},
-	{ .compatible = "qcom,ipq9650-cdsp-pas", .data = &ipq9650_cdsp_resource},
 	{ },
 };
 MODULE_DEVICE_TABLE(of, adsp_of_match);
