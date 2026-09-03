@@ -137,6 +137,7 @@ static int qcom_cpufreq_kryo_name_version(struct device *cpu_dev,
 {
 	size_t len;
 	u32 msm_id;
+	u32 soc_version = 0;
 	u8 *speedbin;
 	int ret;
 	*pvs_name = NULL;
@@ -144,6 +145,10 @@ static int qcom_cpufreq_kryo_name_version(struct device *cpu_dev,
 	ret = qcom_smem_get_soc_id(&msm_id);
 	if (ret)
 		return ret;
+
+	ret = qcom_smem_get_soc_major_version(&soc_version);
+	if (ret)
+		dev_err(cpu_dev, "Unable to read SoC version, defaulting to 0!\n");
 
 	speedbin = nvmem_cell_read(speedbin_nvmem, &len);
 	if (IS_ERR(speedbin))
@@ -182,7 +187,13 @@ static int qcom_cpufreq_kryo_name_version(struct device *cpu_dev,
 	case QCOM_ID_IPQ9640:
 	case QCOM_ID_IPQ9650:
 	case QCOM_ID_IPQ9670:
-		drv->versions =  (*speedbin != 0x4b) ? BIT(0) : BIT(1);
+		/* SoC version based support for speedbin classification as
+		 * v1.0 and v2.0 now support different OPP frequencies for A78
+		 */
+		if (soc_version == 2)
+			drv->versions = (*speedbin != 0x4b) ? BIT(2) : BIT(3);
+		else
+			drv->versions = (*speedbin != 0x4b) ? BIT(0) : BIT(1);
 		break;
 	case QCOM_ID_MSM8996SG:
 	case QCOM_ID_APQ8096SG:
