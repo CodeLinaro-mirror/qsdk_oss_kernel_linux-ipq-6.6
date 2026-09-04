@@ -401,8 +401,18 @@ config QTI_LICENSE_MANAGER
 config QTI_HW_KEY
 	bool "QTI HW Key driver"
 	select KEYS
+	select QTI_HW_KEY_TME_DIST if OPTEE && QCOM_TMELCOM
 	help
 	  This driver requests HW Key and stores in kernel keyring
+
+config QTI_HW_KEY_TME_DIST
+	bool "Derive and distribute HW key to crypto engine via TME IPC"
+	depends on QTI_HW_KEY && OPTEE && QCOM_TMELCOM
+	help
+	  When enabled, hw_key.c derives the HW key via direct TME IPC and
+	  distributes it to GPCE, replacing the existing SCM-derived
+	  keyring path so that key material is never exposed to
+	  software.
 
 config QCOM_TMEL_LOG
 	tristate "QCOM TMEL Log driver"
