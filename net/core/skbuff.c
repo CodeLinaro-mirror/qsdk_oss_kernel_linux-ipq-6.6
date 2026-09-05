@@ -105,8 +105,12 @@ struct kmem_cache *skb_data_cache_2100;
 #include "skbuff_debug.h"
 
 #if defined(CONFIG_SKB_RECYCLER)
-static unsigned int skb_recycle_size = CONFIG_SKB_RECYCLE_SIZE;
-#define SKB_RECYCLE_SIZE skb_recycle_size
+#if (CONFIG_IPQ_MEM_PROFILE == 256) && (CONFIG_SKB_RECYCLE_SIZE != 1664)
+#define SKB_RECYCLE_SIZE	1856
+#else
+#define SKB_RECYCLE_SIZE	CONFIG_SKB_RECYCLE_SIZE
+#endif
+static unsigned int skb_recycle_size = SKB_RECYCLE_SIZE;
 #endif
 
 /*
@@ -130,16 +134,16 @@ static unsigned int skb_recycle_size = CONFIG_SKB_RECYCLE_SIZE;
 #endif
 
 #if defined(CONFIG_SKB_RECYCLER)
-#define __SKB_CACHE_HIGH	__SKB_CACHE_SZ(CONFIG_SKB_RECYCLE_SIZE)
+#define __SKB_CACHE_HIGH	__SKB_CACHE_SZ(SKB_RECYCLE_SIZE)
 #if (CONFIG_SKB_RECYCLE_SIZE == 1664)
 #define __SKB_CACHE_REDUCED	__SKB_CACHE_HIGH
 #undef __SKB_VAL
 #undef __SKB_VAL_REDUCED
-#define __SKB_VAL		CONFIG_SKB_RECYCLE_SIZE
+#define __SKB_VAL		SKB_RECYCLE_SIZE
 #define __SKB_VAL_REDUCED	__SKB_VAL
 
 #else /* CONFIG_SKB_RECYCLE_SIZE != 1664 */
-#define __SKB_CACHE_REDUCED	__SKB_CACHE_SZ(2100)
+#define __SKB_CACHE_REDUCED	__SKB_CACHE_SZ(__SKB_VAL_REDUCED)
 #endif
 
 #else /* !CONFIG_SKB_RECYCLER */
