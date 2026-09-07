@@ -61,6 +61,7 @@
 #include <dt-bindings/clock/qcom,ipq5210-cmn-pll.h>
 #include <dt-bindings/clock/qcom,ipq5332-cmn-pll.h>
 #include <dt-bindings/clock/qcom,ipq5424-cmn-pll.h>
+#include <dt-bindings/clock/qcom,ipq5610-cmn-pll.h>
 #include <dt-bindings/clock/qcom,ipq9650-cmn-pll.h>
 
 #define CMN_PLL_REFCLK_SRC_SELECTION		0x28
@@ -226,6 +227,22 @@ static const struct cmn_pll_fixed_output_clk ipq5210_output_clks[] = {
 	CLK_PLL_OUTPUT(IPQ5210_PPE_CLK, "ppe", 0),
 	CLK_PLL_OUTPUT(IPQ5210_PON_REFCLK, "pon", 0),
 	CLK_PLL_OUTPUT(IPQ5210_EPHY_RAW_CLK, "ephy-raw", 0),
+	{ /* Sentinel */ }
+};
+
+static const struct cmn_pll_fixed_output_clk ipq5610_output_clks[] = {
+	CLK_PLL_OUTPUT(IPQ5610_XO_24MHZ_CLK, "xo-24mhz", 24000000UL),
+	CLK_PLL_OUTPUT(IPQ5610_SLEEP_32KHZ_CLK, "sleep-32khz", 32000UL),
+	CLK_PLL_GATE(IPQ5610_PCS_31P25MHZ_CLK, "pcs-31p25mhz", 31250000UL, CLK31P25M_EN_BIT),
+	CLK_PLL_GATE(IPQ5610_ETH0_50MHZ_CLK, "eth0-50mhz", 50000000UL, CLK50M_EN_BIT),
+	CLK_PLL_GATE(IPQ5610_ETH1_50MHZ_CLK, "eth1-50mhz", 50000000UL, CLK50M_EN_BIT2_BIT),
+	CLK_PLL_GATE(IPQ5610_ETH2_50MHZ_CLK, "eth2-50mhz", 50000000UL, CLK50M_EN_BIT3_BIT),
+	CLK_PLL_GATE(IPQ5610_EPHY_50MHZ_CLK, "ephy-50mhz", 50000000UL, CLK250M_EN_BIT),
+	CLK_PLL_GATE(IPQ5610_ETH_25MHZ_CLK, "eth-25mhz", 25000000UL, CLK25M_EN_BIT),
+	CLK_PLL_OUTPUT(IPQ5610_NSS_CLK, "nss", 0),
+	CLK_PLL_OUTPUT(IPQ5610_PPE_CLK, "ppe", 0),
+	CLK_PLL_OUTPUT(IPQ5610_PON_CLK, "pon", 0),
+	CLK_PLL_OUTPUT(IPQ5610_EPHY_RAW_CLK, "ephy-raw", 0),
 	{ /* Sentinel */ }
 };
 
@@ -1733,6 +1750,7 @@ static const struct of_device_id ipq_cmn_pll_clk_ids[] = {
 	{ .compatible = "qcom,ipq5210-cmn-pll", .data = &ipq5210_output_clks },
 	{ .compatible = "qcom,ipq5332-cmn-pll", .data = &ipq5332_output_clks },
 	{ .compatible = "qcom,ipq5424-cmn-pll", .data = &ipq5424_output_clks },
+	{ .compatible = "qcom,ipq5610-cmn-pll", .data = &ipq5610_output_clks },
 	{ .compatible = "qcom,ipq9574-cmn-pll", .data = &ipq9574_output_clks },
 	{ .compatible = "qcom,ipq9650-cmn-pll", .data = &ipq9650_output_clks },
 	{ }
