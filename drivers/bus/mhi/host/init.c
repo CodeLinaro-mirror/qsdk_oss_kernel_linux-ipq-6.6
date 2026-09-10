@@ -129,10 +129,46 @@ static ssize_t soc_reset_store(struct device *dev,
 }
 static DEVICE_ATTR_WO(soc_reset);
 
+static ssize_t fbc_mem_size_show(struct device *dev,
+				 struct device_attribute *attr,
+				 char *buf)
+{
+	struct mhi_device *mhi_dev = to_mhi_device(dev);
+	struct mhi_controller *mhi_cntrl = mhi_dev->mhi_cntrl;
+	struct mhi_fw_mem_info info;
+	int cnt = 0;
+
+	mhi_get_fbc_mem_info(mhi_cntrl, &info);
+
+	if (!info.total_segments)
+		return sysfs_emit(buf, "No FBC image loaded\n");
+
+	cnt += sysfs_emit_at(buf, cnt, "Total size: %zu bytes (%zu KB)\n",
+			     info.total_bytes, info.total_bytes / 1024);
+	cnt += sysfs_emit_at(buf, cnt, "RO segments: %u, %zu bytes (%zu KB)%s\n",
+			     info.ro_segments, info.ro_bytes,
+			     info.ro_bytes / 1024,
+			     info.ro_shared ? " [shared]" : "");
+	if (info.ro_shared)
+		cnt += sysfs_emit_at(buf, cnt, "RO refcount: %u\n",
+				     info.ro_refcount);
+	cnt += sysfs_emit_at(buf, cnt, "RW segments: %u, %zu bytes (%zu KB)\n",
+			     info.rw_segments, info.rw_bytes,
+			     info.rw_bytes / 1024);
+	cnt += sysfs_emit_at(buf, cnt, "Vector table: %zu bytes\n",
+			     info.vec_bytes);
+	cnt += sysfs_emit_at(buf, cnt, "Total entries (incl. vector table): %u\n",
+			     info.total_segments);
+
+	return cnt;
+}
+static DEVICE_ATTR_RO(fbc_mem_size);
+
 static struct attribute *mhi_dev_attrs[] = {
 	&dev_attr_serial_number.attr,
 	&dev_attr_oem_pk_hash.attr,
 	&dev_attr_soc_reset.attr,
+	&dev_attr_fbc_mem_size.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(mhi_dev);
