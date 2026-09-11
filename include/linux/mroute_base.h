@@ -10,6 +10,16 @@
 #include <net/ip_fib.h>
 
 /**
+ * enum ipmr_overflow_policy - behaviour when unresolved MFC queue is overflow
+ * @IPMR_OVERFLOW_PURGE:  discard all queued SKBs on resolution (default, OFS-safe)
+ * @IPMR_OVERFLOW_REPLAY: replay surviving SKBs before publish (low-rate opt-in)
+ */
+enum ipmr_overflow_policy {
+	IPMR_OVERFLOW_PURGE  = 0,
+	IPMR_OVERFLOW_REPLAY = 1,
+};
+
+/**
  * struct vif_device - interface representor for multicast routing
  * @dev: network device being used
  * @dev_tracker: refcount tracker for @dev reference
@@ -141,6 +151,8 @@ struct mr_mfc {
 		struct {
 			unsigned long expires;
 			struct sk_buff_head unresolved;
+			bool overflow; /* If queue overflowed (qlen > 3), mark overflow. */
+			bool resolving; /* drain-before-publish phase active */
 		} unres;
 		struct {
 			unsigned long last_assert;

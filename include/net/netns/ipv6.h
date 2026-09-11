@@ -114,6 +114,7 @@ struct netns_ipv6 {
 	struct fib_notifier_ops	*notifier_ops;
 	struct fib_notifier_ops	*ip6mr_notifier_ops;
 	unsigned int ipmr_seq; /* protected by rtnl_mutex */
+	int sysctl_ip6mr_overflow_policy; /* 0=PURGE 1=REPLAY */
 	struct {
 		struct hlist_head head;
 		spinlock_t	lock;
