@@ -10,6 +10,7 @@
 #include <linux/seqlock.h>
 #include <linux/init.h>
 #include <linux/slab.h>
+#include <linux/mroute_base.h>
 #include <net/icmp.h>
 #include <net/ip.h>
 #include <net/ip_fib.h>
@@ -877,6 +878,17 @@ static struct ctl_table ipv4_net_table[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec
 	},
+#ifdef CONFIG_IP_MROUTE
+	{
+		.procname	= "ipmr_overflow_policy",
+		.data		= &init_net.ipv4.sysctl_ipmr_overflow_policy,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec_minmax,
+		.extra1		= SYSCTL_ZERO,	/* IPMR_OVERFLOW_PURGE  */
+		.extra2		= SYSCTL_ONE,	/* IPMR_OVERFLOW_REPLAY */
+	},
+#endif
 #ifdef CONFIG_IP_MULTICAST
 	{
 		.procname	= "igmp_qrv",
@@ -1528,6 +1540,7 @@ static __net_init int ipv4_sysctl_init_net(struct net *net)
 	if (!net->ipv4.sysctl_local_reserved_ports)
 		goto err_ports;
 
+	net->ipv4.sysctl_ipmr_overflow_policy = IPMR_OVERFLOW_PURGE;	/* default: safe */
 	return 0;
 
 err_ports:

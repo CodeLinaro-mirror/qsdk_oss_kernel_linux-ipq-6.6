@@ -12,6 +12,7 @@
 #include <linux/ipv6.h>
 #include <linux/slab.h>
 #include <linux/export.h>
+#include <linux/mroute_base.h>
 #include <net/ndisc.h>
 #include <net/ipv6.h>
 #include <net/addrconf.h>
@@ -224,6 +225,17 @@ static struct ctl_table ipv6_rotable[] = {
 		.mode		= 0644,
 		.proc_handler	= proc_dointvec
 	},
+#ifdef CONFIG_IPV6_MROUTE
+	{
+		.procname	= "ip6mr_overflow_policy",
+		.data		= &init_net.ipv6.sysctl_ip6mr_overflow_policy,
+		.maxlen		= sizeof(int),
+		.mode		= 0644,
+		.proc_handler	= proc_dointvec_minmax,
+		.extra1		= SYSCTL_ZERO,	/* IPMR_OVERFLOW_PURGE  */
+		.extra2		= SYSCTL_ONE,	/* IPMR_OVERFLOW_REPLAY */
+	},
+#endif
 	{
 		.procname	= "mld_qrv",
 		.data		= &sysctl_mld_qrv,
@@ -294,6 +306,8 @@ static int __net_init ipv6_sysctl_net_init(struct net *net)
 							   ipv6_icmp_sysctl_table_size());
 	if (!net->ipv6.sysctl.icmp_hdr)
 		goto out_unregister_route_table;
+
+	net->ipv6.sysctl_ip6mr_overflow_policy = IPMR_OVERFLOW_PURGE;	/* default: safe */
 
 	err = 0;
 out:
