@@ -149,25 +149,23 @@ static const struct reg_field tsens_v2_regfields[MAX_REGFIELDS] = {
 	[TRDY] = REG_FIELD(TM_TRDY_OFF, 0, 0),
 };
 
-static int tsens_v2_calibrate_sensor(struct device *dev, struct tsens_sensor *sensor,
+static int tsens_v2_calibrate_sensor(struct tsens_priv *priv, struct tsens_sensor *sensor,
 				     struct regmap *map,  u32 mode, u32 base0, u32 base1)
 {
 	u32 slope, czero, val;
-	char name[15];
 	int ret;
 
-	/* Read offset value */
-	ret = snprintf(name, sizeof(name), "s%d", sensor->hw_id);
-	if (ret < 0)
-		return ret;
-
-	ret = nvmem_cell_read_variable_le_u32(dev, name, &sensor->offset);
+	ret = tsens_read_sensor_offset(priv, sensor);
 	if (ret)
 		return ret;
 
 	/* Based on calib mode, program SHIFT, SLOPE and CZERO */
 	switch (mode) {
 	case TWO_PT_CALIB:
+		if (base1 == base0) {
+			dev_err(priv->dev, "TWO_PT_CALIB:invalid calib data\n");
+			return -EINVAL;
+		}
 		slope = (TWO_PT_SHIFTED_GAIN / (base1 - base0));
 
 		czero = (base0 + sensor->offset - ((base1 - base0) / 3));
@@ -175,7 +173,7 @@ static int tsens_v2_calibrate_sensor(struct device *dev, struct tsens_sensor *se
 		val = (V2_SHIFT_DEFAULT << CONVERSION_SHIFT_SHIFT) |
 		      (slope << CONVERSION_SLOPE_SHIFT) | czero;
 
-		fallthrough;
+		break;
 	case ONE_PT_CALIB2:
 		czero = base0 + sensor->offset - ONE_PT_CZERO_CONST;
 
@@ -184,7 +182,7 @@ static int tsens_v2_calibrate_sensor(struct device *dev, struct tsens_sensor *se
 
 		break;
 	default:
-		dev_dbg(dev, "calibrationless mode\n");
+		dev_dbg(priv->dev, "calibrationless mode\n");
 
 		val = (V2_SHIFT_DEFAULT << CONVERSION_SHIFT_SHIFT) |
 		      (V2_SLOPE_DEFAULT << CONVERSION_SLOPE_SHIFT) | V2_CZERO_DEFAULT;
@@ -197,7 +195,6 @@ static int tsens_v2_calibrate_sensor(struct device *dev, struct tsens_sensor *se
 
 static int tsens_v2_calibration(struct tsens_priv *priv)
 {
-	struct device *dev = priv->dev;
 	u32 mode, base0, base1;
 	int i, ret;
 
@@ -222,7 +219,7 @@ static int tsens_v2_calibration(struct tsens_priv *priv)
 
 	/* Calibrate each sensor */
 	for (i = 0; i < priv->num_sensors; i++) {
-		ret = tsens_v2_calibrate_sensor(dev, &priv->sensor[i], priv->srot_map, mode, base0, base1);
+		ret = tsens_v2_calibrate_sensor(priv, &priv->sensor[i], priv->srot_map, mode, base0, base1);
 		if (ret < 0)
 			return ret;
 	}
@@ -323,12 +320,25 @@ struct tsens_plat_data data_ipq5424 = {
 	.fields		= tsens_v2_regfields,
 };
 
+/*
+ * On IPQ9650, TSENS5 and TSENS12 have their calibration fuse offset split
+ * across two non-contiguous QFPROM registers; the DT models each as two
+ * cells ("s<hw_id>_low"/"s<hw_id>_high") which tsens_read_sensor_offset()
+ * recombines as (high << low_shift) | low.
+ */
+static const struct tsens_split_offset tsens_ipq9650_split_offsets[] = {
+	{ 5, 2 },
+	{ 12, 4 },
+};
+
 struct tsens_plat_data data_ipq9650 = {
 	.num_sensors	= 11,
 	.ops		= &ops_ipq5332,
 	.hw_ids		= (unsigned int []){5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15},
 	.feat		= &ipq9650_feat,
 	.fields		= tsens_v2_regfields,
+	.split_offsets		= tsens_ipq9650_split_offsets,
+	.num_split_offsets	= ARRAY_SIZE(tsens_ipq9650_split_offsets),
 };
 
 /* Kept around for backward compatibility with old msm8996.dtsi */
