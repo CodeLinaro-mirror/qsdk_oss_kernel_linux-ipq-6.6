@@ -236,6 +236,7 @@ struct netns_ipv4 {
 
 	struct fib_notifier_ops	*ipmr_notifier_ops;
 	unsigned int	ipmr_seq;	/* protected by rtnl_mutex */
+	int sysctl_ipmr_overflow_policy; /* 0=PURGE 1=REPLAY */
 
 	atomic_t	rt_genid;
 	siphash_key_t	ip_id_key;
