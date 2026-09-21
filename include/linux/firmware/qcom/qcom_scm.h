@@ -43,6 +43,8 @@
 #define NAND_BLOCK_SIZE			0x20000 /* 128K */
 #define SBL_MAGIC_NUM_OFFSET		0xC /* 12 Bytes of Magic Num */
 
+#define DDR_RETAIN_BIT			BIT(15)
+
 struct fuse_payload {
 	uint32_t fuse_addr;
 	uint32_t lsb_val;

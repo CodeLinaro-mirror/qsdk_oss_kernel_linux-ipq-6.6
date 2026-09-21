@@ -3447,15 +3447,67 @@ static ssize_t tcsr_boot_info_store(struct device *device,
 	return count;
 }
 
+static ssize_t ddr_retain_show(struct device *device,
+			       struct device_attribute *attr,
+			       char *buf)
+{
+	u32 val;
+	int ret;
+
+	ret = qcom_scm_io_readl(__scm->dload_mode_addr, &val);
+	if (ret) {
+		dev_err(__scm->dev,
+			"dload secure read failed with err: %d\n", ret);
+		return -EINVAL;
+	}
+
+	return sysfs_emit(buf, "%d\n", (val & DDR_RETAIN_BIT) ? 1 : 0);
+}
+
+static ssize_t ddr_retain_store(struct device *device,
+				struct device_attribute *attr,
+				const char *buf, size_t count)
+{
+	u32 val;
+	int ret;
+
+	if (kstrtouint(buf, 0, &val))
+		return -EINVAL;
+
+	if (val != 0)
+		return -EINVAL;
+
+	ret = qcom_scm_io_readl(__scm->dload_mode_addr, &val);
+	if (ret) {
+		dev_err(__scm->dev,
+			"dload secure read failed with err: %d\n", ret);
+		return -EINVAL;
+	}
+
+	val &= ~(DDR_RETAIN_BIT);
+
+	ret = qcom_scm_io_writel(__scm->dload_mode_addr, val);
+	if (ret) {
+		dev_err(__scm->dev,
+			"clearing ddr retain bit failed with err: %d\n", ret);
+		return -EINVAL;
+	}
+
+	return count;
+}
+
+
 static DEVICE_ATTR_RO(trymode_inprogress);
 static DEVICE_ATTR_RW(trybit);
 static DEVICE_ATTR_WO(tcsr_boot_info);
+static DEVICE_ATTR_RW(ddr_retain);
 
 static struct attribute *qcom_firmware_attrs[] = {
 	&dev_attr_hlos_done.attr,
 	&dev_attr_trymode_inprogress.attr,
 	&dev_attr_trybit.attr,
 	&dev_attr_tcsr_boot_info.attr,
+	&dev_attr_ddr_retain.attr,
 	NULL,
 };
 
