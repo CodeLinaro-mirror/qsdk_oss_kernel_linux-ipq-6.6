@@ -110,7 +110,7 @@ struct kmem_cache *skb_data_cache_2100;
 #else
 #define SKB_RECYCLE_SIZE	CONFIG_SKB_RECYCLE_SIZE
 #endif
-static unsigned int skb_recycle_size = SKB_RECYCLE_SIZE;
+unsigned int skb_recycle_size;
 #endif
 
 /*
@@ -143,7 +143,7 @@ static unsigned int skb_recycle_size = SKB_RECYCLE_SIZE;
 #define __SKB_VAL_REDUCED	__SKB_VAL
 
 #else /* CONFIG_SKB_RECYCLE_SIZE != 1664 */
-#define __SKB_CACHE_REDUCED	__SKB_CACHE_SZ(__SKB_VAL_REDUCED)
+#define __SKB_CACHE_REDUCED	__SKB_CACHE_SZ(1856)
 #endif
 
 #else /* !CONFIG_SKB_RECYCLER */
@@ -240,7 +240,10 @@ void skb_mem_profile_detect(void)
 
 done:
 #ifdef CONFIG_SKB_RECYCLER
-	skb_recycle_size = skb_active_profile->value;
+	if (skb_active_profile->profile != SKB_MEM_PROFILE_HIGH)
+		skb_recycle_size = skb_active_profile->value;
+	else
+		skb_recycle_size = SKB_RECYCLE_SIZE;
 #endif
 	skb_active_mem_profile = skb_active_profile->profile;
 	pr_info("Profile (%s) selected size = %d, 2100-cache size = %d\n",
@@ -989,8 +992,8 @@ struct sk_buff *__netdev_alloc_skb_fast(struct net_device *dev,
 		return skb;
 	}
 
-	len = SKB_RECYCLE_SIZE;
-	if (unlikely(length > SKB_RECYCLE_SIZE))
+	len = skb_recycle_size;
+	if (unlikely(length > skb_recycle_size))
 		len = length;
 
 	skb = __alloc_skb(len + NET_SKB_PAD, gfp_mask,
@@ -1105,8 +1108,8 @@ struct sk_buff *__netdev_alloc_skb_no_skb_reset(struct net_device *dev,
 		return skb;
 	}
 
-	len = SKB_RECYCLE_SIZE;
-	if (unlikely(length > SKB_RECYCLE_SIZE))
+	len = skb_recycle_size;
+	if (unlikely(length > skb_recycle_size))
 		len = length;
 
 	gfp_mask |= __GFP_RECYCLER;
