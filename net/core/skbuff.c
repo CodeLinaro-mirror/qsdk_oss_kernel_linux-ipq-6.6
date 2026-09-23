@@ -214,7 +214,7 @@ EXPORT_SYMBOL(skb_get_mem_profile);
  */
 void skb_mem_profile_detect(void)
 {
-	struct skb_profile_size *pr = skb_profile_table;
+	const struct skb_profile_size *pr = skb_profile_table;
 	const char *cmdline = saved_command_line;
 	const char *profile = "high";
 	const char *param;
