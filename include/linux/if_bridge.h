@@ -70,11 +70,9 @@ struct br_ip_list {
 
 struct net_bridge;
 struct net_bridge_port;
-void brioctl_set(int (*hook)(struct net *net, struct net_bridge *br,
-			     unsigned int cmd, struct ifreq *ifr,
+void brioctl_set(int (*hook)(struct net *net, unsigned int cmd,
 			     void __user *uarg));
-int br_ioctl_call(struct net *net, struct net_bridge *br, unsigned int cmd,
-		  struct ifreq *ifr, void __user *uarg);
+int br_ioctl_call(struct net *net, unsigned int cmd, void __user *uarg);
 
 extern struct net_device *br_port_dev_get(struct net_device *dev,
 					  unsigned char *addr,
