@@ -548,6 +548,9 @@ struct tsens_features {
  * @hw_ids: Subset of sensors ids supported by platform, if not the first n
  * @feat: features of the IP
  * @fields: bitfield locations
+ * @split_offsets: sensors on this platform whose calibration fuse offset
+ *                 is split across two nvmem cells, or NULL if none are
+ * @num_split_offsets: number of entries in @split_offsets
  */
 struct tsens_plat_data {
 	const u32		num_sensors;
@@ -555,6 +558,8 @@ struct tsens_plat_data {
 	unsigned int		*hw_ids;
 	struct tsens_features	*feat;
 	const struct reg_field		*fields;
+	const struct tsens_split_offset	*split_offsets;
+	u8				num_split_offsets;
 };
 
 /**
@@ -565,6 +570,21 @@ struct tsens_plat_data {
 struct tsens_context {
 	int	threshold;
 	int	control;
+};
+
+/**
+ * struct tsens_split_offset - describes a sensor whose calibration fuse
+ *                              offset is split across two non-contiguous
+ *                              nvmem cells ("<hw_id>_low"/"<hw_id>_high")
+ * @hw_id: hardware sensor id this split applies to
+ * @low_shift: bit-width of the "_low" cell; the "_high" cell is shifted
+ *             left by this amount before being OR'd with "_low"
+ *
+ * Set at compile time via struct tsens_plat_data, on platforms that need it.
+ */
+struct tsens_split_offset {
+	unsigned int	hw_id;
+	u8		low_shift;
 };
 
 /**
@@ -581,6 +601,8 @@ struct tsens_context {
  * @ctx: registers to be saved and restored during suspend/resume
  * @feat: features of the IP
  * @fields: bitfield locations
+ * @split_offsets: sensors with a split calibration fuse offset, from DT
+ * @num_split_offsets: number of entries in @split_offsets
  * @ops: pointer to list of callbacks supported by this device
  * @debug_root: pointer to debugfs dentry for all tsens
  * @debug: pointer to debugfs dentry for tsens controller
@@ -602,6 +624,9 @@ struct tsens_priv {
 	struct tsens_features		*feat;
 	const struct reg_field		*fields;
 	const struct tsens_ops		*ops;
+
+	const struct tsens_split_offset	*split_offsets;
+	u8				num_split_offsets;
 
 	struct dentry			*debug_root;
 	struct dentry			*debug;
@@ -651,6 +676,7 @@ int tsens_read_calibration_legacy(struct tsens_priv *priv,
 				  u32 *p1, u32 *p2,
 				  u32 *cdata, u32 *csel);
 int tsens_read_calibration(struct tsens_priv *priv, int shift, u32 *p1, u32 *p2, bool backup);
+int tsens_read_sensor_offset(struct tsens_priv *priv, struct tsens_sensor *sensor);
 int tsens_calibrate_nvmem(struct tsens_priv *priv, int shift);
 int tsens_calibrate_common(struct tsens_priv *priv);
 void compute_intercept_slope(struct tsens_priv *priv, u32 *pt1, u32 *pt2, u32 mode);
