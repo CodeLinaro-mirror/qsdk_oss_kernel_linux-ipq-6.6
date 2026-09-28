@@ -1232,7 +1232,7 @@ static int __hrtimer_start_range_ns_on_cpu(struct hrtimer *timer, ktime_t tim,
 				    struct hrtimer_clock_base *base)
 {
 	struct hrtimer_clock_base *new_base;
-	bool force_local, first;
+	bool force_local, first, was_armed;
 
 	/*
 	 * If the timer is on the local cpu base and is the first expiring
@@ -1256,7 +1256,7 @@ static int __hrtimer_start_range_ns_on_cpu(struct hrtimer *timer, ktime_t tim,
 	 * avoids programming the underlying clock event twice (once at
 	 * removal and once after enqueue).
 	 */
-	remove_hrtimer(timer, base, true, force_local);
+	was_armed = remove_hrtimer(timer, base, true, force_local);
 
 	if (mode & HRTIMER_MODE_REL)
 		tim = ktime_add_safe(tim, base->get_time());
@@ -1267,7 +1267,7 @@ static int __hrtimer_start_range_ns_on_cpu(struct hrtimer *timer, ktime_t tim,
 
 	new_base = base;
 
-	first = enqueue_hrtimer(timer, new_base, mode);
+	first = enqueue_hrtimer(timer, new_base, mode, was_armed);
 	if (!force_local)
 		return first;
 
