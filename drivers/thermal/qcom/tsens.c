@@ -178,6 +178,57 @@ int tsens_read_calibration(struct tsens_priv *priv, int shift, u32 *p1, u32 *p2,
 	return mode;
 }
 
+/*
+ * Read a sensor's calibration fuse offset, transparently combining it from
+ * two nvmem cells ("s<hw_id>_low"/"s<hw_id>_high") when the platform's
+ * tsens_plat_data lists it in priv->split_offsets.
+ */
+int tsens_read_sensor_offset(struct tsens_priv *priv, struct tsens_sensor *sensor)
+{
+	const struct tsens_split_offset *split = NULL;
+	char name[16];
+	u32 low, high;
+	int i, ret;
+
+	if (priv->num_split_offsets && !priv->split_offsets)
+		return -EINVAL;
+
+	for (i = 0; i < priv->num_split_offsets; i++) {
+		if (priv->split_offsets[i].hw_id == sensor->hw_id) {
+			split = &priv->split_offsets[i];
+			break;
+		}
+	}
+
+	if (!split) {
+		ret = snprintf(name, sizeof(name), "s%d", sensor->hw_id);
+		if (ret < 0 || ret >= sizeof(name))
+			return -EINVAL;
+
+		return nvmem_cell_read_variable_le_u32(priv->dev, name, &sensor->offset);
+	}
+
+	ret = snprintf(name, sizeof(name), "s%d_low", split->hw_id);
+	if (ret < 0 || ret >= sizeof(name))
+		return -EINVAL;
+
+	ret = nvmem_cell_read_variable_le_u32(priv->dev, name, &low);
+	if (ret)
+		return ret;
+
+	ret = snprintf(name, sizeof(name), "s%d_high", split->hw_id);
+	if (ret < 0 || ret >= sizeof(name))
+		return -EINVAL;
+
+	ret = nvmem_cell_read_variable_le_u32(priv->dev, name, &high);
+	if (ret)
+		return ret;
+
+	sensor->offset = (high << split->low_shift) | low;
+
+	return 0;
+}
+
 int tsens_calibrate_nvmem(struct tsens_priv *priv, int shift)
 {
 	u32 p1[MAX_SENSORS], p2[MAX_SENSORS];
@@ -1623,6 +1674,8 @@ static int tsens_probe(struct platform_device *pdev)
 	}
 	priv->feat = data->feat;
 	priv->fields = data->fields;
+	priv->split_offsets = data->split_offsets;
+	priv->num_split_offsets = data->num_split_offsets;
 
 	platform_set_drvdata(pdev, priv);
 
