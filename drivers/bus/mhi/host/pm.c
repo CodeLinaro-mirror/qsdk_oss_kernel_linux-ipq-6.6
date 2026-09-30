@@ -464,7 +464,8 @@ error_mission_mode:
 	read_unlock_bh(&mhi_cntrl->pm_lock);
 
 	/* Free NONCE and ECDSA buffer */
-	mhi_free_nonce_buffer(mhi_cntrl);
+	if (mhi_cntrl->device_number == QCN9224_DEVICE_NUM)
+		mhi_free_nonce_buffer(mhi_cntrl);
 
 	if (mhi_cntrl->license_buf) {
 		lm_free_license(mhi_cntrl->license_buf,
@@ -1239,7 +1240,8 @@ void mhi_power_down(struct mhi_controller *mhi_cntrl, bool graceful)
 
 	disable_irq(mhi_cntrl->irq[0]);
 
-	mhi_free_boot_args(mhi_cntrl);
+	if (mhi_cntrl->device_number == QCN9224_DEVICE_NUM)
+		mhi_free_boot_args(mhi_cntrl);
 }
 EXPORT_SYMBOL_GPL(mhi_power_down);
 
