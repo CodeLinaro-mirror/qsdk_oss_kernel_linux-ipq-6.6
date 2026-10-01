@@ -730,9 +730,10 @@ static void __dma_page_dev_to_cpu(struct page *page, unsigned long off,
 
 #ifdef CONFIG_ARM_DMA_USE_IOMMU
 
-static int __dma_info_to_prot(enum dma_data_direction dir, unsigned long attrs)
+static int __dma_info_to_prot(enum dma_data_direction dir, bool coherent,
+			      unsigned long attrs)
 {
-	int prot = 0;
+	int prot = coherent ? IOMMU_CACHE : 0;
 
 	if (attrs & DMA_ATTR_PRIVILEGED)
 		prot |= IOMMU_PRIV;
@@ -988,7 +989,8 @@ __iommu_create_mapping(struct device *dev, struct page **pages, size_t size,
 
 		len = (j - i) << PAGE_SHIFT;
 		ret = iommu_map(mapping->domain, iova, phys, len,
-				__dma_info_to_prot(DMA_BIDIRECTIONAL, attrs),
+				__dma_info_to_prot(DMA_BIDIRECTIONAL,
+						   dev->dma_coherent, attrs),
 				GFP_KERNEL);
 		if (ret < 0)
 			goto fail;
@@ -1210,7 +1212,7 @@ static int __map_sg_chunk(struct device *dev, struct scatterlist *sg,
 		if (!dev->dma_coherent && !(attrs & DMA_ATTR_SKIP_CPU_SYNC))
 			__dma_page_cpu_to_dev(sg_page(s), s->offset, s->length, dir);
 
-		prot = __dma_info_to_prot(dir, attrs);
+		prot = __dma_info_to_prot(dir, dev->dma_coherent, attrs);
 
 		ret = iommu_map(mapping->domain, iova, phys, len, prot,
 				GFP_KERNEL);
@@ -1383,7 +1385,7 @@ static dma_addr_t arm_iommu_map_page(struct device *dev, struct page *page,
 	if (dma_addr == DMA_MAPPING_ERROR)
 		return dma_addr;
 
-	prot = __dma_info_to_prot(dir, attrs);
+	prot = __dma_info_to_prot(dir, dev->dma_coherent, attrs);
 
 	ret = iommu_map(mapping->domain, dma_addr, page_to_phys(page), len,
 			prot, GFP_KERNEL);
@@ -1448,7 +1450,7 @@ static dma_addr_t arm_iommu_map_resource(struct device *dev,
 	if (dma_addr == DMA_MAPPING_ERROR)
 		return dma_addr;
 
-	prot = __dma_info_to_prot(dir, attrs) | IOMMU_MMIO;
+	prot = __dma_info_to_prot(dir, false, attrs) | IOMMU_MMIO;
 
 	ret = iommu_map(mapping->domain, dma_addr, addr, len, prot, GFP_KERNEL);
 	if (ret < 0)
