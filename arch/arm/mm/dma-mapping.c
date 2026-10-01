@@ -1080,7 +1080,7 @@ static void __iommu_free_atomic(struct device *dev, void *cpu_addr,
 static void *arm_iommu_alloc_attrs(struct device *dev, size_t size,
 	    dma_addr_t *handle, gfp_t gfp, unsigned long attrs)
 {
-	pgprot_t prot = __get_dma_pgprot(attrs, PAGE_KERNEL);
+	pgprot_t prot;
 	struct page **pages;
 	void *addr = NULL;
 	int coherent_flag = dev->dma_coherent ? COHERENT : NORMAL;
@@ -1088,7 +1088,7 @@ static void *arm_iommu_alloc_attrs(struct device *dev, size_t size,
 	*handle = DMA_MAPPING_ERROR;
 	size = PAGE_ALIGN(size);
 
-	if (coherent_flag  == COHERENT || !gfpflags_allow_blocking(gfp))
+	if (!gfpflags_allow_blocking(gfp))
 		return __iommu_alloc_simple(dev, size, gfp, handle,
 					    coherent_flag, attrs);
 
@@ -1103,6 +1103,9 @@ static void *arm_iommu_alloc_attrs(struct device *dev, size_t size,
 	if (attrs & DMA_ATTR_NO_KERNEL_MAPPING)
 		return pages;
 
+	/* Coherent devices snoop the CPU caches, use a cacheable mapping */
+	prot = coherent_flag == COHERENT ? PAGE_KERNEL :
+					   __get_dma_pgprot(attrs, PAGE_KERNEL);
 	addr = dma_common_pages_remap(pages, size, prot,
 				   __builtin_return_address(0));
 	if (!addr)
@@ -1152,7 +1155,13 @@ static void arm_iommu_free_attrs(struct device *dev, size_t size, void *cpu_addr
 	struct page **pages;
 	size = PAGE_ALIGN(size);
 
-	if (coherent_flag == COHERENT || __in_atomic_pool(cpu_addr, size)) {
+	/*
+	 * Atomic allocations come from the atomic pool or, for coherent
+	 * devices, from the linear mapping. Everything else was remapped.
+	 */
+	if (__in_atomic_pool(cpu_addr, size) ||
+	    (coherent_flag == COHERENT && !is_vmalloc_addr(cpu_addr) &&
+	     !(attrs & DMA_ATTR_NO_KERNEL_MAPPING))) {
 		__iommu_free_atomic(dev, cpu_addr, handle, size, coherent_flag);
 		return;
 	}
