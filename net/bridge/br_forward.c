@@ -24,7 +24,6 @@ static inline int should_deliver(const struct net_bridge_port *p,
 	struct net_bridge_vlan_group *vg;
 
 	vg = nbp_vlan_group_rcu(p);
-
 	/*
 	 * When hairpin enabled, don't allow multicast go back
 	 * to the original device that disabled hairpin flood.
@@ -33,8 +32,8 @@ static inline int should_deliver(const struct net_bridge_port *p,
 		&& (!(p->flags & BR_NO_HAIRPIN_FLOOD)
 			|| !is_multicast_ether_addr(eth_hdr(skb)->h_dest)))
 		|| (skb->dev != p->dev)) &&
-		br_allowed_egress(vg, skb) && (p->state == BR_STATE_FORWARDING) &&
-		nbp_switchdev_allowed_egress(p, skb) &&
+		(br_mst_is_enabled(p) || p->state == BR_STATE_FORWARDING) &&
+		br_allowed_egress(vg, skb) && nbp_switchdev_allowed_egress(p, skb) &&
 		!br_skb_isolated(p, skb);
 }
 
@@ -156,7 +155,8 @@ void br_forward(const struct net_bridge_port *to,
 		goto out;
 
 	/* redirect to backup link if the destination port is down */
-	if (rcu_access_pointer(to->backup_port) && !netif_carrier_ok(to->dev)) {
+	if (rcu_access_pointer(to->backup_port) &&
+	    (!netif_carrier_ok(to->dev) || !netif_running(to->dev))) {
 		struct net_bridge_port *backup_port;
 
 		backup_port = rcu_dereference(to->backup_port);
