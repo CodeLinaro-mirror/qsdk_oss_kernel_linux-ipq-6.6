@@ -178,6 +178,17 @@ static struct smp2p_log {
 
 static unsigned int smp2pintrindex;
 
+#ifdef CONFIG_QCA_MINIDUMP
+void minidump_get_smp2pintr(uint64_t *smp2pintr_base_addr, uint64_t *smp2pintr_size,
+			    uint64_t *smp2pintrindex_addr, uint64_t *smp2pintrindex_size)
+{
+	*smp2pintr_base_addr = (uintptr_t)smp2pintr;
+	*smp2pintr_size = sizeof(smp2pintr);
+	*smp2pintrindex_addr = (uintptr_t)&smp2pintrindex;
+	*smp2pintrindex_size = sizeof(smp2pintrindex);
+}
+#endif /* CONFIG_QCA_MINIDUMP */
+
 static void qcom_smp2p_kick(struct qcom_smp2p *smp2p)
 {
 	/* Make sure any updated data is written before the kick */
