@@ -290,6 +290,57 @@ static unsigned int glinkwork_cancel_index;
  */
 atomic_t glink_intr_cnt;
 
+#ifdef CONFIG_QCA_MINIDUMP
+void minidump_get_glinkintr(uint64_t *glinkintr_base_addr, uint64_t *glinkintr_size,
+			    uint64_t *glinkintrindex_base_addr, uint64_t *glinkintrindex_size)
+{
+	*glinkintr_base_addr = (uintptr_t)glinkintr;
+	*glinkintr_size = sizeof(glinkintr);
+	*glinkintrindex_base_addr = (uintptr_t)&glinkintrindex;
+	*glinkintrindex_size = sizeof(glinkintrindex);
+}
+
+void minidump_get_glinksend(uint64_t *glinksend_base_addr, uint64_t *glinksend_size,
+			    uint64_t *glinksendindex_base_addr, uint64_t *glinksendindex_size)
+{
+	*glinksend_base_addr = (uintptr_t)glinksend;
+	*glinksend_size = sizeof(glinksend);
+	*glinksendindex_base_addr = (uintptr_t)&glinksendindex;
+	*glinksendindex_size = sizeof(glinksendindex);
+}
+
+void minidump_get_glink_work(uint64_t *glink_work_base_addr, uint64_t *glink_work_size,
+			     uint64_t *glinkworkindex_base_addr, uint64_t *glinkworkindex_size)
+{
+	*glink_work_base_addr = (uintptr_t)glink_work;
+	*glink_work_size = sizeof(glink_work);
+	*glinkworkindex_base_addr = (uintptr_t)&glinkworkindex;
+	*glinkworkindex_size = sizeof(glinkworkindex);
+}
+
+void minidump_get_glinkwork_schedule(uint64_t *glinkwork_schedule_base_addr,
+				     uint64_t *glinkwork_schedule_size,
+				     uint64_t *glinkwork_sche_index_base_addr,
+				     uint64_t *glinkwork_sche_index_size)
+{
+	*glinkwork_schedule_base_addr = (uintptr_t)glinkwork_schedule;
+	*glinkwork_schedule_size = sizeof(glinkwork_schedule);
+	*glinkwork_sche_index_base_addr = (uintptr_t)&glinkwork_sche_index;
+	*glinkwork_sche_index_size = sizeof(glinkwork_sche_index);
+}
+
+void minidump_get_glinkwork_cancel(uint64_t *glinkwork_cancel_base_addr,
+				   uint64_t *glinkwork_cancel_size,
+				   uint64_t *glinkwork_cancel_index_base_addr,
+				   uint64_t *glinkwork_cancel_index_size)
+{
+	*glinkwork_cancel_base_addr = (uintptr_t)glinkwork_cancel;
+	*glinkwork_cancel_size = sizeof(glinkwork_cancel);
+	*glinkwork_cancel_index_base_addr = (uintptr_t)&glinkwork_cancel_index;
+	*glinkwork_cancel_index_size = sizeof(glinkwork_cancel_index);
+}
+#endif /* CONFIG_QCA_MINIDUMP */
+
 static struct glink_channel *qcom_glink_alloc_channel(struct qcom_glink *glink,
 						      const char *name)
 {
