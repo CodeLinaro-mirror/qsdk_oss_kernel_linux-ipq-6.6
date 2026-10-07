@@ -540,6 +540,7 @@ struct sock {
 
 	struct socket		*sk_socket;
 	void			*sk_user_data;
+	void			*sk_offload_ctx;
 #ifdef CONFIG_SECURITY
 	void			*sk_security;
 #endif
