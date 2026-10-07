@@ -1315,15 +1315,16 @@ int mhi_download_amss_image(struct mhi_controller *mhi_cntrl)
 	if (!image_info)
 		return -EIO;
 
-	ret = mhi_handle_boot_args(mhi_cntrl);
-	if(ret) {
-		dev_err(dev, "Failed to handle the boot-args, ret: %d\n",ret);
-		return ret;
-	}
+	if (mhi_cntrl->device_number == QCN9224_DEVICE_NUM) {
+		ret = mhi_handle_boot_args(mhi_cntrl);
+		if (ret) {
+			dev_err(dev, "Failed to handle the boot-args, ret: %d\n", ret);
+			return ret;
+		}
 
-	/* Download the License */
-	if (mhi_cntrl->device_number == QCN9224_DEVICE_NUM)
+		/* Download the License */
 		mhi_download_fw_license(mhi_cntrl);
+	}
 
 	ret = mhi_fw_load_bhie(mhi_cntrl,
 			       /* Vector table is the last entry */
