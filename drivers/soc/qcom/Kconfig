@@ -401,8 +401,18 @@ config QTI_LICENSE_MANAGER
 config QTI_HW_KEY
 	bool "QTI HW Key driver"
 	select KEYS
+	select QTI_HW_KEY_OPTEE if OPTEE
 	help
 	  This driver requests HW Key and stores in kernel keyring
+
+config QTI_HW_KEY_OPTEE
+	bool "QTI HW Key OP-TEE HUK key recovery"
+	depends on QTI_HW_KEY && OPTEE
+	help
+	  Recover the hw_key_o keyring entry via the OP-TEE HUK PTA: the
+	  key is re-derived from the SW contexts and used to decrypt the
+	  offline-encrypted blob passed as hw_key.enc_blob. When disabled,
+	  hw_key derives keys through SCM as before.
 
 config QCOM_TMEL_LOG
 	tristate "QCOM TMEL Log driver"
