@@ -235,6 +235,30 @@ config QCOM_Q6V5_PAS
 	  CDSP (Compute DSP), MPSS (Modem Peripheral SubSystem), and
 	  SLPI (Sensor Low Power Island).
 
+config QCOM_Q6V5_IPQ_CDSP
+	tristate "Qualcomm IPQ CDSP Peripheral Image Loader with Power Management"
+	depends on OF && ARCH_QCOM
+	depends on QCOM_SMEM
+	depends on RPMSG_QCOM_SMD || RPMSG_QCOM_SMD=n
+	depends on RPMSG_QCOM_GLINK_SMEM || RPMSG_QCOM_GLINK_SMEM=n
+	depends on QCOM_SYSMON || QCOM_SYSMON=n
+	depends on RPMSG_QCOM_GLINK || RPMSG_QCOM_GLINK=n
+	depends on QCOM_AOSS_QMP || QCOM_AOSS_QMP=n
+	depends on REGULATOR
+	select MFD_SYSCON
+	select QCOM_PIL_INFO
+	select QCOM_MDT_LOADER
+	select QCOM_Q6V5_COMMON
+	select QCOM_RPROC_COMMON
+	select QCOM_PAS
+	help
+	  Say y here to support the TrustZone based Peripheral Image Loader
+	  for the CDSP (Compute DSP) on IPQ platforms, combined with the
+	  DCVS (Dynamic Clock and Voltage Scaling) and LPM (Low Power Mode)
+	  power management for the same subsystem. This driver owns the
+	  CDSP cx/mx regulators directly, so PAS lifecycle and power
+	  management are serialized under a single lock.
+
 config QCOM_Q6V5_MPD
 	tristate "Qualcomm Hexagon based MPD model Peripheral Image Loader"
 	depends on OF && ARCH_QCOM
