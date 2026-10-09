@@ -233,7 +233,7 @@ int br_handle_frame_finish(struct net *net, struct sock *sk, struct sk_buff *skb
 			/* TODO: Check if sub bridge concept apply to hyfi */
 		} else {
 			dst = br_fdb_find_rcu(br, eth_hdr(skb)->h_dest, vid);
-			if (!local_rcv && dst && dst->dst) {
+			if (!local_rcv && dst && dst->dst && !test_bit(BR_FDB_LOCAL, &dst->flags)) {
 				/* Do not flood to non-upstream port and to ports in different sub bridge */
 				if (!((p->flags & BR_UPSTREAM_PORT) || (dst->dst->flags & BR_UPSTREAM_PORT))) {
 					if (dst->dst->sub_br_id !=  p->sub_br_id)
