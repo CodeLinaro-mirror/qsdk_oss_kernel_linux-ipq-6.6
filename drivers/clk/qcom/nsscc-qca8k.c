@@ -313,7 +313,7 @@ static struct clk_rcg2 nss_cc_mac1_tx_clk_src = {
 		.name = "nss_cc_mac1_tx_clk_src",
 		.parent_data = nss_cc_uniphy1_rx_tx312p5m_data,
 		.num_parents = ARRAY_SIZE(nss_cc_uniphy1_rx_tx312p5m_data),
-		.ops = &clk_rcg2_fm_ops,
+		.ops = &clk_rcg2_fm_prepare_ops,
 	},
 };
 
@@ -450,7 +450,7 @@ static struct clk_rcg2 nss_cc_mac1_rx_clk_src = {
 		.name = "nss_cc_mac1_rx_clk_src",
 		.parent_data = nss_cc_uniphy1_tx312p5m_prx_data,
 		.num_parents = ARRAY_SIZE(nss_cc_uniphy1_tx312p5m_prx_data),
-		.ops = &clk_rcg2_ops,
+		.ops = &clk_rcg2_prepare_ops,
 	},
 };
 
@@ -569,7 +569,7 @@ static struct clk_rcg2 nss_cc_mac2_tx_clk_src = {
 		.name = "nss_cc_mac2_tx_clk_src",
 		.parent_data = nss_cc_uniphy1_rx_tx312p5m_data,
 		.num_parents = ARRAY_SIZE(nss_cc_uniphy1_rx_tx312p5m_data),
-		.ops = &clk_rcg2_fm_ops,
+		.ops = &clk_rcg2_fm_prepare_ops,
 	},
 };
 
@@ -688,7 +688,7 @@ static struct clk_rcg2 nss_cc_mac2_rx_clk_src = {
 		.name = "nss_cc_mac2_rx_clk_src",
 		.parent_data = nss_cc_uniphy1_tx312p5m_prx_data,
 		.num_parents = ARRAY_SIZE(nss_cc_uniphy1_tx312p5m_prx_data),
-		.ops = &clk_rcg2_ops,
+		.ops = &clk_rcg2_prepare_ops,
 	},
 };
 
@@ -807,7 +807,7 @@ static struct clk_rcg2 nss_cc_mac3_tx_clk_src = {
 		.name = "nss_cc_mac3_tx_clk_src",
 		.parent_data = nss_cc_uniphy1_rx_tx312p5m_data,
 		.num_parents = ARRAY_SIZE(nss_cc_uniphy1_rx_tx312p5m_data),
-		.ops = &clk_rcg2_fm_ops,
+		.ops = &clk_rcg2_fm_prepare_ops,
 	},
 };
 
@@ -926,7 +926,7 @@ static struct clk_rcg2 nss_cc_mac3_rx_clk_src = {
 		.name = "nss_cc_mac3_rx_clk_src",
 		.parent_data = nss_cc_uniphy1_tx312p5m_prx_data,
 		.num_parents = ARRAY_SIZE(nss_cc_uniphy1_tx312p5m_prx_data),
-		.ops = &clk_rcg2_ops,
+		.ops = &clk_rcg2_prepare_ops,
 	},
 };
 
@@ -1087,7 +1087,7 @@ static struct clk_rcg2 nss_cc_mac4_tx_clk_src = {
 		.name = "nss_cc_mac4_tx_clk_src",
 		.parent_data = nss_cc_uniphy0_rx_uniphy1_rx_tx312p5m_data,
 		.num_parents = ARRAY_SIZE(nss_cc_uniphy0_rx_uniphy1_rx_tx312p5m_data),
-		.ops = &clk_rcg2_fm_ops,
+		.ops = &clk_rcg2_fm_prepare_ops,
 	},
 };
 
@@ -1243,7 +1243,7 @@ static struct clk_rcg2 nss_cc_mac4_rx_clk_src = {
 		.name = "nss_cc_mac4_rx_clk_src",
 		.parent_data = nss_cc_uniphy0_tx_uniphy1_tx312p5m_data,
 		.num_parents = ARRAY_SIZE(nss_cc_uniphy0_tx_uniphy1_tx312p5m_data),
-		.ops = &clk_rcg2_fm_ops,
+		.ops = &clk_rcg2_fm_prepare_ops,
 	},
 };
 
@@ -1575,7 +1575,7 @@ static struct clk_rcg2 nss_cc_ahb_clk_src = {
 		.name = "nss_cc_ahb_clk_src",
 		.parent_data = nss_cc_uniphy1_tx312p5m_data,
 		.num_parents = ARRAY_SIZE(nss_cc_uniphy1_tx312p5m_data),
-		.ops = &clk_rcg2_ops,
+		.ops = &clk_rcg2_prepare_ops,
 	},
 };
 
@@ -1727,7 +1727,7 @@ static struct clk_rcg2 nss_cc_sys_clk_src = {
 		.name = "nss_cc_sys_clk_src",
 		.parent_data = nss_cc_xo_data,
 		.num_parents = ARRAY_SIZE(nss_cc_xo_data),
-		.ops = &clk_rcg2_ops,
+		.ops = &clk_rcg2_prepare_ops,
 	},
 };
 
