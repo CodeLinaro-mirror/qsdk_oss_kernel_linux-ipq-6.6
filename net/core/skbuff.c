@@ -994,8 +994,19 @@ struct sk_buff *__netdev_alloc_skb_fast(struct net_device *dev,
 	}
 
 	len = skb_recycle_size;
-	if (unlikely(length > skb_recycle_size))
+	if (unlikely(length > skb_recycle_size)) {
 		len = length;
+		/*
+		 * The requested length is larger than the recycler data
+		 * cache object size. The recycler path in kmalloc_reserve()
+		 * always allocates a fixed SKB_DATA_CACHE_SIZE buffer when
+		 * __GFP_RECYCLER is set, which would be smaller than the
+		 * requested length and lead to a buffer overrun when the
+		 * hardware DMAs into it. Clear __GFP_RECYCLER so the larger
+		 * buffer is allocated correctly.
+		 */
+		gfp_mask = (gfp_mask & (~__GFP_RECYCLER));
+	}
 
 	skb = __alloc_skb(len + NET_SKB_PAD, gfp_mask,
 			  SKB_ALLOC_RX, NUMA_NO_NODE);
@@ -1110,10 +1121,21 @@ struct sk_buff *__netdev_alloc_skb_no_skb_reset(struct net_device *dev,
 	}
 
 	len = skb_recycle_size;
-	if (unlikely(length > skb_recycle_size))
-		len = length;
-
 	gfp_mask |= __GFP_RECYCLER;
+	if (unlikely(length > skb_recycle_size)) {
+		len = length;
+		/*
+		 * The requested length is larger than the recycler data
+		 * cache object size. The recycler path in kmalloc_reserve()
+		 * always allocates a fixed SKB_DATA_CACHE_SIZE buffer when
+		 * __GFP_RECYCLER is set, which would be smaller than the
+		 * requested length and lead to a buffer overrun when the
+		 * hardware DMAs into it. Clear __GFP_RECYCLER so the larger
+		 * buffer is allocated correctly.
+		 */
+		gfp_mask = (gfp_mask & (~__GFP_RECYCLER));
+	}
+
 	skb = __alloc_skb(len + NET_SKB_PAD, gfp_mask,
 				SKB_ALLOC_RX, NUMA_NO_NODE);
 	if (!skb)
