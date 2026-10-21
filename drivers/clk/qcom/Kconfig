@@ -269,6 +269,16 @@ config IPQ_NSSCC_5332
         help
           Support for NSS clock controller on ipq5332 devices.
 
+config IPQ_NSSCC_5610
+	tristate "IPQ5610 NSS Clock Controller"
+	depends on IPQ_GCC_5610
+	help
+	  Support for NSS clock controller on ipq5610 devices.
+	  NSSCC receives the clock sources from GCC, CMN PLL and UNIPHY (PCS).
+	  It in turn supplies the clocks and resets to the networking hardware.
+	  Say Y or M if you want to enable networking function on the
+	  IPQ5610 devices.
+
 config IPQ_NSSCC_9574
         tristate "IPQ9574 NSS Clock Controller"
         depends on IPQ_GCC_9574
