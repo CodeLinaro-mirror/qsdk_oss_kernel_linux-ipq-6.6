@@ -1799,23 +1799,33 @@ static int ip6mr_mfc_add(struct net *net, struct mr_table *mrt,
 	if (err) {
 		pr_err("ip6mr: rhtable insert error %d\n", err);
 		ip6mr_cache_free(c);
-		return err;
+		goto cleanup_unres;
 	}
 	list_add_tail_rcu(&c->_c.list, &mrt->mfc_cache_list);
 
+cleanup_unres:
 	/*
-	 * Delete the list.
+	 * Remove unresolved entry from the queue and free it.
+	 * This must run even when rhltable_insert_key() fails,
+	 * otherwise the entry stays stuck with resolving=true.
 	 */
 	if (found) {
 		spin_lock_bh(&mfc_unres_lock);
 		list_del(&uc->_c.list);
 		atomic_dec(&mrt->cache_resolve_queue_len);
+
 		if (list_empty(&mrt->mfc_unres_queue))
 			del_timer(&mrt->ipmr_expire_timer);
+
+		if (err)
+			mr6_netlink_event(mrt, uc, RTM_DELROUTE);
 
 		spin_unlock_bh(&mfc_unres_lock);
 		ip6mr_cache_free(uc);
 	}
+
+	if (err)
+		return err;
 
 	call_ip6mr_mfc_entry_notifiers(net, FIB_EVENT_ENTRY_ADD,
 				       c, mrt->id);
